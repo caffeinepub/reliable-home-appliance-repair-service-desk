@@ -1,0 +1,354 @@
+{
+  "schemaVersion": "1.0.0",
+  "projectStateVersion": 9,
+  "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae. Ryan is the authorized user with CRUD abilities. Starting with core job/client management and role-based access control, then building up to full feature set. Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
+  "architectural_notes": [
+    "Single canister ICP app: Motoko backend + responsive mobile-first frontend",
+    "Roles: stable var owner Principal + TrieMap<Principal, Role> where Role = {#owner, #admin, #authorized}. hasPermission checks owner first then map.",
+    "Only #owner can add/remove roles or change settings. #owner + #admin + #authorized get full CRUD on business data.",
+    "All stable storage: clients, jobs, inventory as stable vars/TrieMaps. Fully upgrade-safe.",
+    "Offline queue via localStorage sync for crash-proof mobile use.",
+    "Owner principal hardcoded/initialized as w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae. Ryan is the authorized (CRUD) user."
+  ],
+  "known_issues": [
+    "Initial full prompt was too complex to process in one pass — building incrementally starting with core job/client/roles.",
+    "Build failed twice when trying to add labor rates + on-screen signatures + appliance type in one pass — retry with smaller incremental prompts."
+  ],
+  "isFixRequest": false,
+  "existing_features": [
+    {
+      "id": "feature-build-a-responsive-mobile-first-react-frontend-with-a-professional-green-and-silver-visual-theme-use-a-deep-forest-green-primary-color-silver-light-gray-accents-and-clean-sans-serif-typography-apply-this-theme-consistently-across-all-screens-cards-buttons-and-navigation-the-layout-should-use-a-bottom-navigation-bar-on-mobile-with-tabs-dashboard-clients-jobs-and-settings",
+      "title": "Build a responsive mobile-first React frontend with a professional green and silver visual theme. Use a deep forest green primary color, silver/light gray accents, and clean sans-serif typography. Apply this theme consistently across all screens, cards, buttons, and navigation. The layout should use a bottom navigation bar on mobile with tabs: Dashboard, Clients, Jobs, and Settings.",
+      "reqIds": [
+        "REQ-4"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-build-a-clients-screen-that-lists-all-clients-with-a-search-filter-input-each-client-card-shows-name-phone-and-address-include-an-add-client-button-that-opens-a-form-to-create-a-new-client-name-phone-address-notes-email-googlereviewurl-fields-tapping-a-client-opens-an-edit-detail-view-with-all-fields-editable-and-a-delete-option-if-googlereviewurl-is-set-show-a-request-google-review-button-that-opens-that-url",
+      "title": "Build a Clients screen that lists all clients with a search/filter input. Each client card shows name, phone, and address. Include an Add Client button that opens a form to create a new client (name, phone, address, notes, email, googleReviewUrl fields). Tapping a client opens an Edit/Detail view with all fields editable and a Delete option. If googleReviewUrl is set, show a 'Request Google Review' button that opens that URL.",
+      "reqIds": [
+        "REQ-5"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-build-a-jobs-screen-that-lists-all-jobs-grouped-by-status-open-in-progress-complete-each-job-card-shows-the-associated-client-name-job-date-status-badge-and-tech-principal-truncated-include-an-add-job-button-that-opens-a-form-to-create-a-new-job-select-client-by-name-date-notes-waiver-type-maintenance-package-tapping-a-job-opens-a-detail-view-showing-all-fields-with-the-ability-to-update-status-and-notes-include-a-delete-option",
+      "title": "Build a Jobs screen that lists all jobs grouped by status (Open, In Progress, Complete). Each job card shows the associated client name, job date, status badge, and tech principal (truncated). Include an Add Job button that opens a form to create a new job (select client by name, date, notes, waiver type, maintenance package). Tapping a job opens a detail view showing all fields, with the ability to update status and notes. Include a Delete option.",
+      "reqIds": [
+        "REQ-6"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-build-a-dashboard-screen-that-displays-summary-metrics-total-open-jobs-total-jobs-and-a-count-of-jobs-by-status-show-a-list-of-recent-jobs-last-5-with-client-name-status-and-date",
+      "title": "Build a Dashboard screen that displays summary metrics: total open jobs, total jobs, and a count of jobs by status. Show a list of recent jobs (last 5) with client name, status, and date.",
+      "reqIds": [
+        "REQ-7"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-build-a-settings-screen-that-is-only-accessible-to-the-owner-role-display-the-current-caller-s-principal-show-a-role-management-section-where-the-owner-can-input-a-principal-text-and-assign-it-the-authorized-role-and-view-or-remove-existing-authorized-principals",
+      "title": "Build a Settings screen that is only accessible to the #owner role. Display the current caller's principal. Show a role management section where the owner can input a principal text and assign it the #authorized role, and view or remove existing authorized principals.",
+      "reqIds": [
+        "REQ-8"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-an-inventory-screen-to-the-frontend-under-a-new-inventory-tab-in-the-bottom-navigation-bar-the-screen-lists-all-parts-with-name-sku-quantity-and-a-low-stock-warning-badge-when-quantity-is-at-or-below-the-lowstockthreshold-include-an-add-part-button-that-opens-a-form-name-sku-quantity-lowstockthreshold-unitcost-tapping-a-part-opens-an-edit-detail-view-with-all-fields-editable-and-a-delete-option-include-a-use-on-job-action-on-the-detail-view-that-lets-the-user-specify-a-job-and-quantity-to-deduct",
+      "title": "Add an Inventory screen to the frontend under a new 'Inventory' tab in the bottom navigation bar. The screen lists all parts with name, SKU, quantity, and a low-stock warning badge when quantity is at or below the lowStockThreshold. Include an Add Part button that opens a form (name, SKU, quantity, lowStockThreshold, unitCost). Tapping a part opens an edit/detail view with all fields editable and a Delete option. Include a 'Use on Job' action on the detail view that lets the user specify a job and quantity to deduct.",
+      "reqIds": [
+        "REQ-13"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-scheduling-calendar-screen-to-the-frontend-display-jobs-in-a-weekly-calendar-view-where-each-day-column-shows-jobs-scheduled-for-that-day-using-scheduledstart-tapping-a-job-navigates-to-its-detail-page-include-controls-to-navigate-between-weeks-on-the-job-detail-page-add-fields-to-set-scheduledstart-and-scheduledend-using-a-date-time-picker",
+      "title": "Add a Scheduling / Calendar screen to the frontend. Display jobs in a weekly calendar view where each day column shows jobs scheduled for that day (using scheduledStart). Tapping a job navigates to its detail page. Include controls to navigate between weeks. On the job detail page, add fields to set scheduledStart and scheduledEnd using a date-time picker.",
+      "reqIds": [
+        "REQ-14"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-an-invoice-estimate-screen-to-the-frontend-from-a-job-detail-page-include-a-generate-invoice-button-that-opens-a-full-screen-invoice-preview-styled-in-the-professional-green-and-silver-theme-showing-business-name-reliable-home-appliance-repair-llc-client-name-and-address-job-date-job-notes-parts-used-from-inventory-usepartonjob-records-estimate-amount-and-tech-name-include-a-download-pdf-button-that-uses-html2canvas-jspdf-to-export-the-invoice-as-a-pdf-file",
+      "title": "Add an Invoice/Estimate screen to the frontend. From a job detail page, include a 'Generate Invoice' button that opens a full-screen invoice preview styled in the professional green and silver theme, showing: business name ('Reliable Home Appliance Repair LLC'), client name and address, job date, job notes, parts used (from inventory usePartOnJob records), estimate amount, and tech name. Include a 'Download PDF' button that uses html2canvas + jsPDF to export the invoice as a PDF file.",
+      "reqIds": [
+        "REQ-15"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-payments-section-to-the-job-detail-page-display-the-current-stripepaymentid-if-set-include-a-form-to-enter-a-stripe-payment-id-manually-the-id-obtained-externally-from-stripe-and-save-it-to-the-job-via-the-updatejobpayment-backend-endpoint-show-a-payment-status-badge-paid-unpaid-based-on-whether-a-stripepaymentid-is-present",
+      "title": "Add a Payments section to the job detail page. Display the current stripePaymentId if set. Include a form to enter a Stripe Payment ID manually (the ID obtained externally from Stripe) and save it to the job via the updateJobPayment backend endpoint. Show a payment status badge (Paid / Unpaid) based on whether a stripePaymentId is present.",
+      "reqIds": [
+        "REQ-16"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-the-settings-screen-owner-only-to-include-a-stripe-secret-key-input-field-that-saves-via-setstripekey-and-shows-a-masked-current-value-if-one-is-stored-a-maintenance-packages-management-section-where-the-owner-can-add-edit-and-delete-packages-name-description-intervaldays-price",
+      "title": "Update the Settings screen (owner-only) to include: a Stripe Secret Key input field that saves via setStripeKey and shows a masked current value if one is stored; a Maintenance Packages management section where the owner can add, edit, and delete packages (name, description, intervalDays, price).",
+      "reqIds": [
+        "REQ-17"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-the-add-job-and-job-detail-forms-to-include-a-maintenance-package-selector-that-lists-available-packages-from-the-backend-listpackages-and-allows-the-user-to-assign-one-to-the-job",
+      "title": "Update the Add Job and Job Detail forms to include a Maintenance Package selector that lists available packages from the backend (listPackages) and allows the user to assign one to the job.",
+      "reqIds": [
+        "REQ-18"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-labor-rates-management-section-to-the-settings-screen-owner-only-display-the-current-list-of-labor-rates-allow-the-owner-to-add-a-new-rate-name-type-hourly-or-flat-amount-in-dollars-edit-an-existing-rate-inline-and-delete-a-rate-use-the-createlaborrate-listlaborrates-updatelaborrate-and-deletelaborrate-backend-endpoints",
+      "title": "Add a Labor Rates management section to the Settings screen (owner-only). Display the current list of labor rates. Allow the owner to add a new rate (name, type: hourly or flat, amount in dollars), edit an existing rate inline, and delete a rate. Use the createLaborRate, listLaborRates, updateLaborRate, and deleteLaborRate backend endpoints.",
+      "reqIds": [
+        "REQ-20"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-invoice-preview-screen-add-a-share-button-that-uses-the-web-share-api-navigator-share-to-share-the-invoice-as-an-html-file-and-or-pdf-blob-on-supported-devices-fall-back-gracefully-hide-the-button-or-show-a-tooltip-on-browsers-that-do-not-support-navigator-share-the-shared-content-should-include-the-business-name-client-info-job-details-parts-used-labor-rates-applied-and-estimate-amount",
+      "title": "On the Invoice preview screen, add a 'Share' button that uses the Web Share API (navigator.share) to share the invoice as an HTML file and/or PDF blob on supported devices. Fall back gracefully (hide the button or show a tooltip) on browsers that do not support navigator.share. The shared content should include the business name, client info, job details, parts used, labor rates applied, and estimate amount.",
+      "reqIds": [
+        "REQ-21"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-scheduling-calendar-screen-display-a-note-or-badge-on-each-scheduled-job-card-indicating-the-job-s-last-known-location-if-available-add-a-view-on-map-link-per-job-card-that-opens-a-google-maps-url-https-www-google-com-maps-search-api-1-query-lat-lng-or-address-in-a-new-browser-tab-using-the-job-s-client-address-or-stored-location-do-not-integrate-live-gps-tracking-not-supported-but-surface-the-google-maps-deep-link-as-the-closest-available-substitute",
+      "title": "On the Scheduling/Calendar screen, display a note or badge on each scheduled job card indicating the job's last known location if available. Add a 'View on Map' link per job card that opens a Google Maps URL (https://www.google.com/maps/search/?api=1&query=LAT,LNG or address) in a new browser tab using the job's client address or stored location. Do not integrate live GPS tracking (not supported), but surface the Google Maps deep-link as the closest available substitute.",
+      "reqIds": [
+        "REQ-22"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-labor-rates-quick-access-card-or-section-on-the-dashboard-page-that-is-only-visible-to-the-owner-role-the-card-should-display-a-summary-of-existing-labor-rates-name-type-amount-and-include-a-button-that-navigates-to-the-labor-rates-management-section-in-settings-if-the-caller-is-not-owner-this-section-must-not-render",
+      "title": "Add a 'Labor Rates' quick-access card or section on the Dashboard page that is only visible to the #owner role. The card should display a summary of existing labor rates (name, type, amount) and include a button that navigates to the Labor Rates management section in Settings. If the caller is not #owner, this section must not render.",
+      "reqIds": [
+        "REQ-24"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-an-inventory-quick-access-card-or-section-on-the-dashboard-page-visible-to-both-owner-and-authorized-roles-the-card-should-display-a-summary-count-of-total-parts-number-of-low-stock-items-and-a-button-that-navigates-to-the-full-inventory-screen-low-stock-count-should-be-derived-from-listparts-results-where-quantity-lowstockthreshold",
+      "title": "Add an 'Inventory' quick-access card or section on the Dashboard page visible to both #owner and #authorized roles. The card should display a summary count of total parts, number of low-stock items, and a button that navigates to the full Inventory screen. Low-stock count should be derived from listParts results where quantity <= lowStockThreshold.",
+      "reqIds": [
+        "REQ-25"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-ensure-the-dashboard-metrics-section-open-jobs-count-in-progress-jobs-count-complete-jobs-count-total-clients-count-and-any-revenue-or-summary-statistics-is-only-visible-to-the-owner-role-authorized-users-navigating-to-the-dashboard-should-see-jobs-and-inventory-sections-but-not-the-owner-only-metrics-cards",
+      "title": "Ensure the Dashboard metrics section (open jobs count, in-progress jobs count, complete jobs count, total clients count, and any revenue or summary statistics) is only visible to the #owner role. Authorized users navigating to the Dashboard should see jobs and inventory sections but not the owner-only metrics cards.",
+      "reqIds": [
+        "REQ-26"
+      ],
+      "version": 1
+    }
+  ],
+  "new_feature_requests": [
+    {
+      "id": "AR-1",
+      "summary": "Core role-based access control: owner (stable var), admin, authorized roles via TrieMap. hasPermission helper. Only owner can manage roles/settings.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-2",
+      "summary": "Client management: CRUD for clients with id, name, phone, address, notes, email, googleReviewUrl. List/search/add/edit UI.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-3",
+      "summary": "Job management: CRUD for jobs with clientId, tech, date, status (open/inProgress/complete), notes, photos, estimate with signature, waiver type, custom fields.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-4",
+      "summary": "Dashboard with metrics: open/total jobs, revenue YTD, tech logins. GPS map with active job pins via Google Maps embed.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-5",
+      "summary": "Inventory management: parts list, add/edit/use-on-job (decrement qty), low-stock alerts.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-6",
+      "summary": "Invoice/estimate workflow: PDF generation (html2canvas + jsPDF), green & silver professional layout, email/SMS share options, attach to client record.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-7",
+      "summary": "Scheduling/Routing: calendar view, drag jobs to tech routes, GPS tracking, lastKnownLocation stored on job.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-8",
+      "summary": "Stripe payment integration: owner-stored secret key, create/confirm payment intent from backend, payment ID stored on job. Support for multiple Stripe keys.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-9",
+      "summary": "Maintenance packages: predefined and custom packages (e.g. Quarterly Laundry Maintenance), assignable to client/job.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-10",
+      "summary": "Settings tab (owner only): add tech principal as #authorized, global rates, Stripe key input, email/SMS API key slots (Twilio/SendGrid). Industry switcher between Reliable Home Appliance Repair and Reliable Refrigeration & Appliance Repair.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-11",
+      "summary": "Implement a single-actor Motoko backend with stable role-based access control. Store the owner principal in a stable var. Maintain a roles TrieMap<Principal, Role> where Role is a variant { #owner; #admin; #authorized }. Implement a hasPermission(caller: Principal, minRole: Role): Bool helper that checks owner first, then the map. Only the #owner principal can add or remove roles. All job and client CRUD operations require at minimum #authorized permission.",
+      "reqIds": [
+        "REQ-1"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-12",
+      "summary": "Implement stable storage and full CRUD backend functions for Clients. Each client record must have: id (Nat), name (Text), phone (Text), address (Text), notes (Text), email (optional Text), googleReviewUrl (optional Text). Expose createClient, getClient, listClients, updateClient, and deleteClient endpoints, all guarded by hasPermission(caller, #authorized).",
+      "reqIds": [
+        "REQ-2"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-13",
+      "summary": "Implement stable storage and full CRUD backend functions for Jobs. Each job record must have: id (Nat), clientId (Nat), tech (Principal), date (Time), status (variant { #open; #inProgress; #complete }), notes (Text), photos ([Blob]), estimate (optional { amount: Nat; sigData: Blob; sigTime: Time }), waiverType (optional variant { #preexisting; #potential; #general }), maintenancePackage (optional Text), stripePaymentId (optional Text). Expose createJob, getJob, listJobs, updateJob, updateJobStatus, and deleteJob endpoints, all guarded by hasPermission(caller, #authorized).",
+      "reqIds": [
+        "REQ-3"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-14",
+      "summary": "Extend the backend Job record to include a stripePaymentId (optional Text) field and add a Stripe configuration storage: allow the #owner to store and retrieve a Stripe secret key (stored as a stable var). Expose setStripeKey and getStripeKey endpoints restricted to #owner. Add updateJobPayment endpoint to store a stripePaymentId on a job, restricted to #authorized.",
+      "reqIds": [
+        "REQ-9"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-15",
+      "summary": "Add an Inventory module to the backend. Each part record must have: id (Nat), name (Text), sku (optional Text), quantity (Nat), lowStockThreshold (Nat), unitCost (optional Nat). Expose createPart, getPart, listParts, updatePart, deletePart, and usePartOnJob (decrements quantity by a given amount and records the jobId). All endpoints require at minimum #authorized permission.",
+      "reqIds": [
+        "REQ-10"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-16",
+      "summary": "Add a Maintenance Packages module to the backend. Each package record must have: id (Nat), name (Text), description (Text), intervalDays (Nat), price (optional Nat). Expose createPackage, listPackages, updatePackage, deletePackage endpoints restricted to #authorized. The existing job record's maintenancePackage field (optional Text) can reference a package name.",
+      "reqIds": [
+        "REQ-11"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-17",
+      "summary": "Add scheduling fields to the Job record: scheduledStart (optional Time) and scheduledEnd (optional Time). Expose a updateJobSchedule endpoint to set these fields, restricted to #authorized. Add a listJobsByDate query that returns all jobs whose scheduledStart falls within a given date range (startTime: Time, endTime: Time).",
+      "reqIds": [
+        "REQ-12"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-18",
+      "summary": "Scheduling/Calendar weekly view linked to live GPS tracker from Google Maps (show tech/job locations on map).",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-19",
+      "summary": "Labor rates: customizable labor rate settings (per hour or flat) stored in backend, editable from Settings screen.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-20",
+      "summary": "Send estimates/invoices via HTML, PDF, or native device share (Web Share API). Attach to client/job record.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-21",
+      "summary": "Add a Labor Rates module to the backend. Store a list of labor rate records, each with: id (Nat), name (Text), rateType (variant { #hourly; #flat }), and amount (Nat, in cents). Expose createLaborRate, listLaborRates, updateLaborRate, and deleteLaborRate endpoints restricted to #authorized. Store rates in a stable TrieMap.",
+      "reqIds": [
+        "REQ-19"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-22",
+      "summary": "Set owner principal to w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae in stable var. Ryan is the authorized user with CRUD abilities.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-23",
+      "summary": "Add Labor Rates section accessible under/from Dashboard. Only owner can change labor rates and view metrics.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-24",
+      "summary": "Add Inventory section accessible under/from Dashboard.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-25",
+      "summary": "On-screen signature capture on estimate/invoice screen (blob storage for signature).",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-26",
+      "summary": "Add appliance type dropdown menu to job creation/detail form.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-27",
+      "summary": "Add labor line items to the job detail screen (select labor rate, hours/flat, add to job).",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-28",
+      "summary": "Blob storage for job photos on the job detail screen.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-29",
+      "summary": "Update the backend stable owner principal variable to 'w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae'. Ensure all hasPermission checks for #owner role use this principal. The authorized user (Ryan) retains #authorized role with CRUD access to clients, jobs, inventory, and other standard operations, but cannot change labor rates or view owner-only metrics.",
+      "reqIds": [
+        "REQ-23"
+      ],
+      "status": "pending"
+    }
+  ],
+  "gameProjectType": "none",
+  "projectName": "Reliable Home Appliance Repair LLC Service Desk",
+  "clarification_mode": "instant",
+  "clarification_rounds": 0
+}

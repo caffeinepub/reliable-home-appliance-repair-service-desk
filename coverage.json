@@ -1,0 +1,78 @@
+{
+  "kind": "coverage_report",
+  "version": "1.0",
+  "generatedAt": "2026-02-28T20:57:05.020Z",
+  "sources": {
+    "buildRequest": true,
+    "implementationPlan": true
+  },
+  "requirements": {
+    "total": 4,
+    "implemented": 3,
+    "items": [
+      {
+        "id": "REQ-23",
+        "summary": "Update the backend stable owner principal variable to 'w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae'. Ensure all hasPermission checks for #owner role use this principal. The authorized user (Ryan) retains #authorized role with CRUD access to clients, jobs, inventory, and other standard operations, but cannot change labor rates or view owner-only metrics.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      },
+      {
+        "id": "REQ-24",
+        "summary": "Add a 'Labor Rates' quick-access card or section on the Dashboard page that is only visible to the #owner role. The card should display a summary of existing labor rates (name, type, amount) and include a button that navigates to the Labor Rates management section in Settings. If the caller is not #owner, this section must not render.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/DashboardPage.tsx",
+          "frontend/src/hooks/useQueries.ts"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/DashboardPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-25",
+        "summary": "Add an 'Inventory' quick-access card or section on the Dashboard page visible to both #owner and #authorized roles. The card should display a summary count of total parts, number of low-stock items, and a button that navigates to the full Inventory screen. Low-stock count should be derived from listParts results where quantity <= lowStockThreshold.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/DashboardPage.tsx",
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/pages/InventoryPage.tsx",
+          "frontend/src/App.tsx",
+          "frontend/src/components/Layout.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/DashboardPage.tsx",
+          "frontend/src/pages/InventoryPage.tsx",
+          "frontend/src/App.tsx",
+          "frontend/src/components/Layout.tsx"
+        ]
+      },
+      {
+        "id": "REQ-26",
+        "summary": "Ensure the Dashboard metrics section (open jobs count, in-progress jobs count, complete jobs count, total clients count, and any revenue or summary statistics) is only visible to the #owner role. Authorized users navigating to the Dashboard should see jobs and inventory sections but not the owner-only metrics cards.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/DashboardPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/DashboardPage.tsx"
+        ]
+      }
+    ]
+  },
+  "changedFiles": [
+    "backend/main.mo",
+    "build-request.json",
+    "feature_evidence.json",
+    "frontend-file-summaries.txt",
+    "frontend-implementation-plan.json",
+    "frontend/src/App.tsx",
+    "frontend/src/components/Layout.tsx",
+    "frontend/src/pages/DashboardPage.tsx",
+    "frontend/src/pages/InventoryPage.tsx",
+    "project_state.json",
+    "scratch/component-selection.json",
+    "spec.md",
+    "spec_vs_diff_report.json"
+  ]
+}

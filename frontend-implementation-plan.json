@@ -1,0 +1,84 @@
+{
+  "kind": "implementation_plan",
+  "version": "1.0",
+  "title": "Fix owner principal, surface Labor Rates & Inventory under Dashboard, enforce owner-only access to labor rates and metrics",
+  "requirements": [
+    {
+      "id": "REQ-24",
+      "summary": "Add owner-only Labor Rates quick-access card to Dashboard that displays summary of existing labor rates and navigates to Settings management section",
+      "acceptanceCriteria": [
+        "When logged in as the owner principal, the Dashboard shows a 'Labor Rates' card listing current rates fetched via listLaborRates.",
+        "The card includes a 'Manage Labor Rates' button that navigates to the Settings page's Labor Rates section.",
+        "When logged in as any non-owner principal, the Labor Rates card is completely hidden from the Dashboard.",
+        "The card matches the existing green and silver theme."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/pages/DashboardPage.tsx",
+          "operation": "modify",
+          "description": "Add a 'Labor Rates' summary card visible only to #owner role. Fetch labor rates using useListLaborRates hook. Display rate name, type, and amount in a card format. Include a 'Manage Labor Rates' button that navigates to /settings. Guard the card rendering with a role check using useGetCallerUserRole hook to ensure only #owner can see it. Position the card alongside the metrics cards in the dashboard grid."
+        },
+        {
+          "path": "frontend/src/hooks/useQueries.ts",
+          "operation": "modify",
+          "description": "Verify that useListLaborRates hook is exported and properly configured with React Query. If not present, add it following the existing pattern of other list hooks in this file, wrapping actor.listLaborRates() in a useQuery with queryKey ['laborRates']."
+        }
+      ]
+    },
+    {
+      "id": "REQ-25",
+      "summary": "Add Inventory quick-access card to Dashboard visible to both #owner and #authorized roles, showing total parts count, low-stock count, and navigation to full Inventory screen",
+      "acceptanceCriteria": [
+        "The Dashboard shows an 'Inventory' summary card displaying total part count and low-stock count.",
+        "Low-stock count correctly reflects parts where quantity is at or below lowStockThreshold.",
+        "The card includes a 'View Inventory' button that navigates to the Inventory screen.",
+        "The card is visible to both #owner and #authorized roles.",
+        "The card matches the existing green and silver theme."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/pages/DashboardPage.tsx",
+          "operation": "modify",
+          "description": "Add an 'Inventory' summary card visible to both #owner and #authorized roles. Fetch parts data using useListParts hook (to be created). Calculate total parts count and low-stock count (parts where quantity <= lowStockThreshold) from the fetched data. Display these metrics in a card format. Include a 'View Inventory' button that navigates to /inventory. Ensure the card is visible regardless of role (no role guard needed). Position appropriately in the dashboard layout."
+        },
+        {
+          "path": "frontend/src/hooks/useQueries.ts",
+          "operation": "modify",
+          "description": "Add useListParts hook following the existing pattern of other list hooks in this file. Wrap actor.listParts() (assumed backend capability based on inventory requirement) in a useQuery with queryKey ['parts']. Return the query object with proper typing for Part[] data."
+        },
+        {
+          "path": "frontend/src/pages/InventoryPage.tsx",
+          "operation": "create",
+          "description": "Create a new Inventory page component that displays a full list of parts with columns for name, SKU, quantity, lowStockThreshold, and status indicator. Use useListParts hook to fetch data. Include visual indicators for low-stock items. Add search/filter functionality. Include buttons for adding new parts and editing existing ones. Follow the existing page structure pattern from ClientsPage.tsx and JobsPage.tsx."
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "Register the /inventory route in the TanStack Router configuration. Import InventoryPage component and add it to the route tree alongside existing routes like /clients and /jobs. Ensure the route is accessible to authenticated users."
+        },
+        {
+          "path": "frontend/src/components/Layout.tsx",
+          "operation": "modify",
+          "description": "Add an 'Inventory' tab to the bottom navigation bar if not already present. The tab should navigate to /inventory. Position it logically within the existing five-tab layout (Dashboard, Clients, Jobs, Calendar, Settings). If five tabs already exist, replace or repurpose one tab to Inventory, or extend to six tabs while maintaining responsive design."
+        }
+      ]
+    },
+    {
+      "id": "REQ-26",
+      "summary": "Enforce owner-only visibility for Dashboard metrics section (open jobs, in-progress, complete, total clients counts); authorized users see jobs and inventory but not metrics cards",
+      "acceptanceCriteria": [
+        "When logged in as the owner principal, all metric cards (open jobs, in-progress, complete, total clients) are visible on the Dashboard.",
+        "When logged in as an authorized (non-owner) user, the metrics cards are hidden or replaced with a message indicating owner-only access.",
+        "The recent jobs list remains visible to #authorized users.",
+        "The Inventory summary card (REQ-25) remains visible to #authorized users."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/pages/DashboardPage.tsx",
+          "operation": "modify",
+          "description": "Guard the metrics cards section (open jobs count, in-progress jobs count, complete jobs count, total clients count) with a role check using useGetCallerUserRole hook. Only render the metrics cards if the user role is #owner (UserRole.admin in the backend interface). For non-owner authenticated users, hide the metrics cards entirely or display a subtle message like 'Metrics available to owner only'. Ensure the recent jobs list and Inventory card remain visible to all authenticated users. Preserve the existing green and silver theme styling."
+        }
+      ]
+    }
+  ]
+}
