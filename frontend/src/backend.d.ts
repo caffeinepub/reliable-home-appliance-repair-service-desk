@@ -7,6 +7,15 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
+export interface Part {
+    id: bigint;
+    partNumber: string;
+    name: string;
+    jobId?: bigint;
+    description: string;
+    quantityOnHand: bigint;
+    unitCost: bigint;
+}
 export interface Job {
     id: bigint;
     status: Variant_open_complete_inProgress;
@@ -67,21 +76,27 @@ export interface backendInterface {
     createClient(client: Client): Promise<bigint>;
     createJob(job: Job): Promise<bigint>;
     createLaborRate(laborRate: LaborRate): Promise<bigint>;
+    createPart(part: Part): Promise<bigint>;
     deleteClient(clientId: bigint): Promise<void>;
     deleteJob(jobId: bigint): Promise<void>;
     deleteLaborRate(laborRateId: bigint): Promise<void>;
+    deletePart(partId: bigint): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getClient(_clientId: bigint): Promise<Client>;
     getJob(_jobId: bigint): Promise<Job>;
+    getPart(partId: bigint): Promise<Part>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     listClients(): Promise<Array<Client>>;
     listJobs(): Promise<Array<Job>>;
     listLaborRates(): Promise<Array<LaborRate>>;
+    listParts(): Promise<Array<Part>>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     updateClient(client: Client): Promise<void>;
     updateJob(job: Job): Promise<void>;
     updateJobStatus(jobId: bigint, newStatus: Variant_open_complete_inProgress): Promise<void>;
     updateLaborRate(laborRate: LaborRate): Promise<void>;
+    updatePart(part: Part): Promise<void>;
+    usePartOnJob(partId: bigint, jobId: bigint, quantityUsed: bigint): Promise<void>;
 }

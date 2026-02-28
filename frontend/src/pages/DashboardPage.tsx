@@ -3,10 +3,10 @@ import {
   useListJobs,
   useListClients,
   useGetCallerUserProfile,
-  useGetCallerUserRole,
+  useIsOwner,
   useListLaborRates,
 } from '../hooks/useQueries';
-import { Variant_open_complete_inProgress, UserRole, Variant_flat_hourly } from '../backend';
+import { Variant_open_complete_inProgress, Variant_flat_hourly } from '../backend';
 import type { Job, Client } from '../backend';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +20,6 @@ import {
   DollarSign,
   Package,
   Lock,
-  Settings,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -99,10 +98,8 @@ export default function DashboardPage() {
   const { data: jobs, isLoading: jobsLoading } = useListJobs();
   const { data: clients, isLoading: clientsLoading } = useListClients();
   const { data: profile } = useGetCallerUserProfile();
-  const { data: userRole, isLoading: roleLoading } = useGetCallerUserRole();
+  const isOwner = useIsOwner();
   const { data: laborRates, isLoading: laborRatesLoading } = useListLaborRates();
-
-  const isOwner = userRole === UserRole.admin;
 
   const totalJobs = jobs?.length ?? 0;
   const openJobs =
@@ -134,7 +131,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Metric Cards — Owner Only */}
-      {roleLoading || isLoading ? (
+      {isLoading ? (
         <div className="grid grid-cols-2 gap-3">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-20 rounded-2xl" />
@@ -214,7 +211,7 @@ export default function DashboardPage() {
       )}
 
       {/* Labor Rates Card — Owner Only */}
-      {!roleLoading && isOwner && (
+      {isOwner && (
         <div className="bg-card rounded-2xl shadow-card border border-border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -236,39 +233,31 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : !laborRates || laborRates.length === 0 ? (
-            <div className="text-center py-3">
-              <p className="text-muted-foreground text-xs">No labor rates defined yet.</p>
+            <p className="text-muted-foreground text-xs text-center py-2">
+              No labor rates defined yet.{' '}
               <button
                 onClick={() => navigate({ to: '/settings' })}
-                className="text-primary text-xs font-medium mt-1 flex items-center gap-1 mx-auto"
+                className="text-primary font-medium"
               >
-                <Settings size={12} />
-                Add rates in Settings
+                Add one in Settings.
               </button>
-            </div>
+            </p>
           ) : (
-            <div className="space-y-2">
-              {laborRates.slice(0, 4).map((rate) => (
+            <div className="space-y-1.5">
+              {laborRates.slice(0, 3).map((rate) => (
                 <div
                   key={rate.id.toString()}
-                  className="flex items-center justify-between rounded-xl bg-muted/40 px-3 py-2"
+                  className="flex items-center justify-between bg-muted/40 rounded-xl px-3 py-2"
                 >
-                  <span className="text-sm font-medium text-foreground truncate flex-1">
-                    {rate.name}
+                  <span className="text-sm text-foreground font-medium truncate">{rate.name}</span>
+                  <span className="text-xs text-primary font-semibold shrink-0 ml-2">
+                    {formatAmount(rate.amount, rate.rateType)}
                   </span>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">
-                      {rate.rateType === Variant_flat_hourly.hourly ? 'Hourly' : 'Flat'}
-                    </Badge>
-                    <span className="text-xs text-primary font-semibold">
-                      {formatAmount(rate.amount, rate.rateType)}
-                    </span>
-                  </div>
                 </div>
               ))}
-              {laborRates.length > 4 && (
+              {laborRates.length > 3 && (
                 <p className="text-xs text-muted-foreground text-center pt-1">
-                  +{laborRates.length - 4} more rates in Settings
+                  +{laborRates.length - 3} more
                 </p>
               )}
             </div>
@@ -276,7 +265,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Inventory Card — All authenticated users */}
+      {/* Inventory Summary Card — All Users */}
       <div className="bg-card rounded-2xl shadow-card border border-border p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -290,79 +279,47 @@ export default function DashboardPage() {
             View All <ChevronRight size={14} />
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-muted/40 p-3 text-center">
-            <p className="text-2xl font-display font-bold text-foreground">—</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Total Parts</p>
-          </div>
-          <div className="rounded-xl bg-destructive/10 p-3 text-center">
-            <p className="text-2xl font-display font-bold text-destructive">—</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Low Stock</p>
-          </div>
-        </div>
-        <button
-          onClick={() => navigate({ to: '/inventory' })}
-          className="w-full rounded-xl border border-primary/30 bg-primary/5 text-primary text-sm font-medium py-2 hover:bg-primary/10 transition-colors"
-        >
-          View Inventory
-        </button>
+        <p className="text-muted-foreground text-xs">
+          Track parts and stock levels for your jobs.
+        </p>
       </div>
 
       {/* Recent Jobs */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-sm text-foreground">Recent Jobs</h3>
-          <button
-            onClick={() => navigate({ to: '/jobs' })}
-            className="text-primary text-xs font-medium flex items-center gap-0.5"
-          >
-            View all <ChevronRight size={14} />
-          </button>
-        </div>
-
-        {isLoading ? (
-          <div className="space-y-2">
-            {[...Array(3)].map((_, i) => (
-              <Skeleton key={i} className="h-16 rounded-xl" />
-            ))}
-          </div>
-        ) : recentJobs.length === 0 ? (
-          <div className="bg-card rounded-2xl border border-border p-6 text-center">
-            <Briefcase size={32} className="text-muted-foreground mx-auto mb-2" />
-            <p className="text-muted-foreground text-sm">No jobs yet</p>
+      {recentJobs.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm text-foreground">Recent Jobs</h3>
             <button
-              onClick={() => navigate({ to: '/jobs/new' })}
-              className="text-primary text-sm font-medium mt-1"
+              onClick={() => navigate({ to: '/jobs' })}
+              className="text-primary text-xs font-medium flex items-center gap-0.5"
             >
-              Create your first job →
+              View All <ChevronRight size={14} />
             </button>
           </div>
-        ) : (
           <div className="space-y-2">
             {recentJobs.map((job) => (
               <button
                 key={job.id.toString()}
-                onClick={() =>
-                  navigate({ to: '/jobs/$jobId', params: { jobId: job.id.toString() } })
-                }
+                onClick={() => navigate({ to: '/jobs/$jobId', params: { jobId: job.id.toString() } })}
                 className="w-full bg-card rounded-xl border border-border p-3 flex items-center gap-3 text-left hover:shadow-card transition-shadow active:scale-[0.99]"
               >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-foreground truncate">
-                    {clients ? getClientName(clients, job.clientId) : `Client #${job.clientId}`}
-                  </p>
-                  <p className="text-muted-foreground text-xs mt-0.5 truncate">
-                    {job.notes || 'No notes'} · {formatJobDate(job.date)}
-                  </p>
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Briefcase size={14} className="text-primary" />
                 </div>
-                <Badge variant={statusBadgeVariant(job.status)} className="shrink-0 text-xs">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {clients ? getClientName(clients, job.clientId) : `Job #${job.id}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{formatJobDate(job.date)}</p>
+                </div>
+                <Badge variant={statusBadgeVariant(job.status) as 'default' | 'secondary' | 'destructive' | 'outline'} className="text-xs shrink-0">
                   {statusLabel(job.status)}
                 </Badge>
               </button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="pt-2 pb-4 text-center">

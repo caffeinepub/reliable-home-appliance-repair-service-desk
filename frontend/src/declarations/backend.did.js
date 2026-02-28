@@ -58,6 +58,15 @@ export const LaborRate = IDL.Record({
   'amount' : IDL.Nat,
   'rateType' : IDL.Variant({ 'flat' : IDL.Null, 'hourly' : IDL.Null }),
 });
+export const Part = IDL.Record({
+  'id' : IDL.Nat,
+  'partNumber' : IDL.Text,
+  'name' : IDL.Text,
+  'jobId' : IDL.Opt(IDL.Nat),
+  'description' : IDL.Text,
+  'quantityOnHand' : IDL.Nat,
+  'unitCost' : IDL.Nat,
+});
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
 
 export const idlService = IDL.Service({
@@ -66,13 +75,16 @@ export const idlService = IDL.Service({
   'createClient' : IDL.Func([Client], [IDL.Nat], []),
   'createJob' : IDL.Func([Job], [IDL.Nat], []),
   'createLaborRate' : IDL.Func([LaborRate], [IDL.Nat], []),
+  'createPart' : IDL.Func([Part], [IDL.Nat], []),
   'deleteClient' : IDL.Func([IDL.Nat], [], []),
   'deleteJob' : IDL.Func([IDL.Nat], [], []),
   'deleteLaborRate' : IDL.Func([IDL.Nat], [], []),
+  'deletePart' : IDL.Func([IDL.Nat], [], []),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getClient' : IDL.Func([IDL.Nat], [Client], ['query']),
   'getJob' : IDL.Func([IDL.Nat], [Job], ['query']),
+  'getPart' : IDL.Func([IDL.Nat], [Part], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
@@ -82,6 +94,7 @@ export const idlService = IDL.Service({
   'listClients' : IDL.Func([], [IDL.Vec(Client)], ['query']),
   'listJobs' : IDL.Func([], [IDL.Vec(Job)], ['query']),
   'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
+  'listParts' : IDL.Func([], [IDL.Vec(Part)], ['query']),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'updateClient' : IDL.Func([Client], [], []),
   'updateJob' : IDL.Func([Job], [], []),
@@ -98,6 +111,8 @@ export const idlService = IDL.Service({
       [],
     ),
   'updateLaborRate' : IDL.Func([LaborRate], [], []),
+  'updatePart' : IDL.Func([Part], [], []),
+  'usePartOnJob' : IDL.Func([IDL.Nat, IDL.Nat, IDL.Nat], [], []),
 });
 
 export const idlInitArgs = [];
@@ -153,6 +168,15 @@ export const idlFactory = ({ IDL }) => {
     'amount' : IDL.Nat,
     'rateType' : IDL.Variant({ 'flat' : IDL.Null, 'hourly' : IDL.Null }),
   });
+  const Part = IDL.Record({
+    'id' : IDL.Nat,
+    'partNumber' : IDL.Text,
+    'name' : IDL.Text,
+    'jobId' : IDL.Opt(IDL.Nat),
+    'description' : IDL.Text,
+    'quantityOnHand' : IDL.Nat,
+    'unitCost' : IDL.Nat,
+  });
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
   
   return IDL.Service({
@@ -161,13 +185,16 @@ export const idlFactory = ({ IDL }) => {
     'createClient' : IDL.Func([Client], [IDL.Nat], []),
     'createJob' : IDL.Func([Job], [IDL.Nat], []),
     'createLaborRate' : IDL.Func([LaborRate], [IDL.Nat], []),
+    'createPart' : IDL.Func([Part], [IDL.Nat], []),
     'deleteClient' : IDL.Func([IDL.Nat], [], []),
     'deleteJob' : IDL.Func([IDL.Nat], [], []),
     'deleteLaborRate' : IDL.Func([IDL.Nat], [], []),
+    'deletePart' : IDL.Func([IDL.Nat], [], []),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getClient' : IDL.Func([IDL.Nat], [Client], ['query']),
     'getJob' : IDL.Func([IDL.Nat], [Job], ['query']),
+    'getPart' : IDL.Func([IDL.Nat], [Part], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
@@ -177,6 +204,7 @@ export const idlFactory = ({ IDL }) => {
     'listClients' : IDL.Func([], [IDL.Vec(Client)], ['query']),
     'listJobs' : IDL.Func([], [IDL.Vec(Job)], ['query']),
     'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
+    'listParts' : IDL.Func([], [IDL.Vec(Part)], ['query']),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'updateClient' : IDL.Func([Client], [], []),
     'updateJob' : IDL.Func([Job], [], []),
@@ -193,6 +221,8 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'updateLaborRate' : IDL.Func([LaborRate], [], []),
+    'updatePart' : IDL.Func([Part], [], []),
+    'usePartOnJob' : IDL.Func([IDL.Nat, IDL.Nat, IDL.Nat], [], []),
   });
 };
 

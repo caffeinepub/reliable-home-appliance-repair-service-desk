@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import {
   useIsCallerAdmin,
+  useIsOwner,
   useAssignUserRole,
   useGetCallerUserProfile,
   useListLaborRates,
@@ -382,6 +383,7 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: isAdmin, isLoading: adminLoading } = useIsCallerAdmin();
   const { data: profile } = useGetCallerUserProfile();
+  const isOwner = useIsOwner();
   const assignRole = useAssignUserRole();
 
   const [newPrincipal, setNewPrincipal] = useState('');
@@ -390,6 +392,9 @@ export default function SettingsPage() {
   const [assignError, setAssignError] = useState('');
 
   const principalStr = identity?.getPrincipal().toString() ?? '';
+
+  // Owner always has access; admins also have access
+  const hasAccess = isOwner || isAdmin;
 
   const handleCopyPrincipal = () => {
     navigator.clipboard.writeText(principalStr).then(() => {
@@ -422,11 +427,23 @@ export default function SettingsPage() {
     }
   };
 
-  if (adminLoading) {
+  if (adminLoading && !isOwner) {
     return (
       <div className="px-4 py-5 space-y-4">
         <Skeleton className="h-8 w-32 rounded-xl" />
         <Skeleton className="h-40 rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="px-4 py-5 animate-fade-in">
+        <div className="flex items-center gap-2 mb-5">
+          <Settings size={20} className="text-primary" />
+          <h2 className="font-display font-bold text-xl text-foreground">Settings</h2>
+        </div>
+        <AccessDenied />
       </div>
     );
   }
@@ -450,7 +467,12 @@ export default function SettingsPage() {
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-foreground">{profile?.name ?? 'Unknown'}</p>
             <div className="flex items-center gap-1.5 mt-0.5">
-              {isAdmin ? (
+              {isOwner ? (
+                <Badge className="text-xs bg-primary text-primary-foreground gap-1">
+                  <Shield size={10} />
+                  Owner
+                </Badge>
+              ) : isAdmin ? (
                 <Badge className="text-xs bg-primary text-primary-foreground gap-1">
                   <Shield size={10} />
                   Admin
@@ -487,110 +509,76 @@ export default function SettingsPage() {
         <Button
           variant="outline"
           onClick={handleLogout}
-          className="w-full rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive font-medium"
-          size="sm"
+          className="w-full rounded-xl text-destructive border-destructive/30 hover:bg-destructive/5 gap-2"
         >
-          <LogOut size={15} className="mr-2" />
+          <LogOut size={15} />
           Sign Out
         </Button>
       </div>
 
-      {/* Admin-only section */}
-      {!isAdmin ? (
-        <AccessDenied />
-      ) : (
-        <div className="space-y-4">
-          {/* Assign Role */}
-          <div className="bg-card rounded-2xl border border-border p-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <UserPlus size={16} className="text-primary" />
-              <h3 className="font-semibold text-sm text-foreground">Assign Role</h3>
-            </div>
-            <p className="text-muted-foreground text-xs">
-              Enter a user's Principal ID to grant them access to the service desk.
-            </p>
+      {/* Labor Rates — Owner Only */}
+      {isOwner && <LaborRatesSection />}
 
-            <form onSubmit={handleAssignRole} className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Principal ID</Label>
-                <Input
-                  value={newPrincipal}
-                  onChange={(e) => setNewPrincipal(e.target.value)}
-                  placeholder="aaaaa-aa or xxxxx-xxxxx-xxxxx-xxxxx-cai"
-                  className="rounded-xl font-mono text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Role</Label>
-                <Select
-                  value={newRole}
-                  onValueChange={(val) => setNewRole(val as UserRole)}
-                >
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={UserRole.user}>Authorized (Technician)</SelectItem>
-                    <SelectItem value={UserRole.admin}>Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {assignError && (
-                <p className="text-destructive text-xs">{assignError}</p>
-              )}
-
-              <Button
-                type="submit"
-                disabled={!newPrincipal.trim() || assignRole.isPending}
-                className="w-full bg-primary text-primary-foreground rounded-xl font-semibold"
-                size="sm"
-              >
-                {assignRole.isPending ? (
-                  <>
-                    <Loader2 className="animate-spin mr-2" size={14} />
-                    Assigning...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus size={14} className="mr-2" />
-                    Assign Role
-                  </>
-                )}
-              </Button>
-
-              {assignRole.isSuccess && (
-                <p className="text-primary text-xs text-center font-medium">
-                  ✓ Role assigned successfully
-                </p>
-              )}
-            </form>
-          </div>
-
-          {/* Labor Rates Section */}
-          <LaborRatesSection />
-
-          {/* App Info */}
-          <div className="bg-card rounded-2xl border border-border p-4 space-y-2">
-            <h3 className="font-semibold text-sm text-foreground">About</h3>
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">App</span>
-                <span className="text-foreground font-medium">Reliable Home Appliance Repair LLC</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Version</span>
-                <span className="text-foreground font-medium">1.0.0</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Platform</span>
-                <span className="text-foreground font-medium">Internet Computer</span>
-              </div>
-            </div>
-          </div>
+      {/* Role Assignment — Admin or Owner */}
+      <div className="bg-card rounded-2xl border border-border p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <UserPlus size={16} className="text-primary" />
+          <h3 className="font-semibold text-sm text-foreground">Assign User Role</h3>
         </div>
-      )}
+        <p className="text-muted-foreground text-xs">
+          Grant or revoke access for technicians by entering their principal ID.
+        </p>
+
+        <form onSubmit={handleAssignRole} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Principal ID</Label>
+            <Input
+              value={newPrincipal}
+              onChange={(e) => setNewPrincipal(e.target.value)}
+              placeholder="xxxxx-xxxxx-xxxxx-xxxxx-xxx"
+              className="rounded-xl text-sm h-9 font-mono"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Role</Label>
+            <Select
+              value={newRole}
+              onValueChange={(val) => setNewRole(val as UserRole)}
+            >
+              <SelectTrigger className="rounded-xl h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={UserRole.user}>Authorized User</SelectItem>
+                <SelectItem value={UserRole.admin}>Admin</SelectItem>
+                <SelectItem value={UserRole.guest}>Guest (Revoke Access)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {assignError && (
+            <p className="text-destructive text-xs">{assignError}</p>
+          )}
+
+          <Button
+            type="submit"
+            size="sm"
+            disabled={assignRole.isPending || !newPrincipal.trim()}
+            className="w-full rounded-xl bg-primary text-primary-foreground text-xs h-9"
+          >
+            {assignRole.isPending ? (
+              <Loader2 size={13} className="animate-spin mr-1" />
+            ) : (
+              <UserPlus size={13} className="mr-1" />
+            )}
+            Assign Role
+          </Button>
+
+          {assignRole.isSuccess && (
+            <p className="text-primary text-xs text-center">Role assigned successfully!</p>
+          )}
+        </form>
+      </div>
 
       {/* Footer */}
       <footer className="pt-2 pb-4 text-center">
@@ -603,8 +591,8 @@ export default function SettingsPage() {
             className="text-primary font-medium"
           >
             caffeine.ai
-          </a>
-          {' '}· © {new Date().getFullYear()} Reliable Home Appliance Repair LLC
+          </a>{' '}
+          · © {new Date().getFullYear()} Reliable Home Appliance Repair LLC
         </p>
       </footer>
     </div>

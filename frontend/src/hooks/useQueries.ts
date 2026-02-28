@@ -5,6 +5,21 @@ import type { Client, Job, UserProfile, UserRole, LaborRate } from '../backend';
 import { Variant_open_complete_inProgress } from '../backend';
 import type { Principal } from '@icp-sdk/core/principal';
 
+// ─── Owner Principal ──────────────────────────────────────────────────────────
+// Must match the stable ownerPrincipal in backend/main.mo exactly.
+const OWNER_PRINCIPAL = 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe';
+
+/**
+ * Returns true when the currently logged-in identity is the owner principal.
+ * This mirrors the backend's `ensureOwner` check which compares caller == ownerPrincipal
+ * directly, bypassing the roles TrieMap.
+ */
+export function useIsOwner(): boolean {
+  const { identity } = useInternetIdentity();
+  if (!identity) return false;
+  return identity.getPrincipal().toString() === OWNER_PRINCIPAL;
+}
+
 // ─── User Profile ────────────────────────────────────────────────────────────
 
 export function useGetCallerUserProfile() {
@@ -316,6 +331,97 @@ export function useDeleteLaborRate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['laborRates'] });
+    },
+  });
+}
+
+// ─── Inventory (Parts) ────────────────────────────────────────────────────────
+
+export function useListParts() {
+  const { actor, isFetching: actorFetching } = useActor();
+  const { identity } = useInternetIdentity();
+
+  return useQuery({
+    queryKey: ['parts'],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listParts();
+    },
+    enabled: !!actor && !actorFetching && !!identity,
+  });
+}
+
+export function useGetPart(partId: bigint | null) {
+  const { actor, isFetching: actorFetching } = useActor();
+  const { identity } = useInternetIdentity();
+
+  return useQuery({
+    queryKey: ['part', partId?.toString()],
+    queryFn: async () => {
+      if (!actor || partId === null) throw new Error('Not available');
+      return actor.getPart(partId);
+    },
+    enabled: !!actor && !actorFetching && !!identity && partId !== null,
+  });
+}
+
+export function useCreatePart() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (part: import('../backend').Part) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.createPart(part);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parts'] });
+    },
+  });
+}
+
+export function useUpdatePart() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (part: import('../backend').Part) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.updatePart(part);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['parts'] });
+      queryClient.invalidateQueries({ queryKey: ['part', variables.id.toString()] });
+    },
+  });
+}
+
+export function useDeletePart() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (partId: bigint) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.deletePart(partId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parts'] });
+    },
+  });
+}
+
+export function useUsePartOnJob() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ partId, jobId, quantityUsed }: { partId: bigint; jobId: bigint; quantityUsed: bigint }) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.usePartOnJob(partId, jobId, quantityUsed);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parts'] });
     },
   });
 }

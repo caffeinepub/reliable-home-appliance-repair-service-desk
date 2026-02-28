@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 11,
+  "projectStateVersion": 13,
   "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal, replaces NNS principal). Ryan is the authorized user with CRUD abilities. Starting with core job/client management and role-based access control, then building up to full feature set. Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
   "architectural_notes": [
     "Single canister ICP app: Motoko backend + responsive mobile-first frontend",
@@ -12,7 +12,8 @@
   ],
   "known_issues": [
     "Initial full prompt was too complex to process in one pass — building incrementally starting with core job/client/roles.",
-    "Build failed twice when trying to add labor rates + on-screen signatures + appliance type in one pass — retry with smaller incremental prompts."
+    "Build failed twice when trying to add labor rates + on-screen signatures + appliance type in one pass — retry with smaller incremental prompts.",
+    "Owner principal fix failing repeatedly — owner access still restricted after deployment; CRUD on inventory also not working for owner."
   ],
   "isFixRequest": true,
   "existing_features": [
@@ -357,6 +358,22 @@
       "summary": "Update the stable owner principal variable in the Motoko backend to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This is the app-derived Internet Identity principal for the owner. All hasPermission checks for the #owner role must use this principal. Remove or replace any previously hardcoded principal value.",
       "reqIds": [
         "REQ-27"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-32",
+      "summary": "In backend/main.mo, update the stable owner principal variable to the exact text value 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This must be set using Principal.fromText(\"q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe\") in the stable var initializer. All hasPermission checks for the #owner role must compare the caller against this principal. Remove any previously hardcoded principal value. Do not rely on a roles TrieMap entry for owner — the owner check must be a direct equality comparison against this stable var so it cannot be overwritten.",
+      "reqIds": [
+        "REQ-28"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-33",
+      "summary": "In backend/main.mo, ensure that all inventory endpoints (createPart, getPart, listParts, updatePart, deletePart, usePartOnJob) correctly accept calls from principals with at minimum the #authorized role, and also from the #owner principal. Verify the hasPermission guard on every inventory function uses the updated owner principal so the owner can perform all inventory CRUD operations.",
+      "reqIds": [
+        "REQ-29"
       ],
       "status": "pending"
     }

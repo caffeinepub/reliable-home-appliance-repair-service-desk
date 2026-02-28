@@ -1,23 +1,29 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-02-28T21:11:16.914Z",
-  "summary": "The diff updates the stable owner principal in backend/main.mo to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe' as required by REQ-27. The principal is set as a let binding and used in ensureOwner checks. A migration module was also added. The project_state.json reflects the updated principal. No frontend files were modified.",
+  "generatedAt": "2026-02-28T21:25:07.828Z",
+  "summary": "The diff implements both REQ-28 and REQ-29 with high fidelity. The stable owner principal is set to the exact required value using Principal.fromText, the ensureOwner helper does a direct equality comparison against the stable var, and inventory endpoints include authorization guards. However, the diff shows frontend files were also modified (useQueries.ts, DashboardPage.tsx, InventoryPage.tsx, SettingsPage.tsx), which the build request explicitly prohibits as a non-goal and constraint.",
   "missing_requirements": [],
   "hallucinated_features": [
     {
-      "description": "A new migration module (backend/migration.mo) was added with a Migration.run function and type definitions for the actor state.",
-      "reason": "REQ-27 only requested updating the stable owner principal value. Adding a migration module with a migration runner was not requested in the build requirements.",
+      "description": "Frontend files were modified including useQueries.ts (adding useIsOwner hook and OWNER_PRINCIPAL constant), DashboardPage.tsx, InventoryPage.tsx, and SettingsPage.tsx",
+      "reason": "The build request explicitly states 'Do not change any frontend files for this fix' and 'Do not change any frontend immutable paths' as both a non-goal and a hard constraint. The diff modifies at least four frontend files.",
       "evidence": [
-        "backend/migration.mo",
-        "backend/main.mo"
+        "frontend/src/hooks/useQueries.ts",
+        "frontend/src/pages/DashboardPage.tsx",
+        "frontend/src/pages/InventoryPage.tsx",
+        "frontend/src/pages/SettingsPage.tsx"
       ]
     }
   ],
-  "confidence": 0.85,
+  "confidence": 0.8,
   "changed_files": [
     "backend/main.mo",
-    "backend/migration.mo",
+    "frontend-file-summaries.txt",
+    "frontend/src/hooks/useQueries.ts",
+    "frontend/src/pages/DashboardPage.tsx",
+    "frontend/src/pages/InventoryPage.tsx",
+    "frontend/src/pages/SettingsPage.tsx",
     "project_state.json"
   ]
 }

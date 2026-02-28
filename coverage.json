@@ -1,18 +1,25 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-02-28T21:11:16.917Z",
+  "generatedAt": "2026-02-28T21:25:07.832Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 1,
+    "total": 2,
     "implemented": 0,
     "items": [
       {
-        "id": "REQ-27",
-        "summary": "Update the stable owner principal variable in the Motoko backend to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This is the app-derived Internet Identity principal for the owner. All hasPermission checks for the #owner role must use this principal. Remove or replace any previously hardcoded principal value.",
+        "id": "REQ-28",
+        "summary": "In backend/main.mo, update the stable owner principal variable to the exact text value 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This must be set using Principal.fromText(\"q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe\") in the stable var initializer. All hasPermission checks for the #owner role must compare the caller against this principal. Remove any previously hardcoded principal value. Do not rely on a roles TrieMap entry for owner — the owner check must be a direct equality comparison against this stable var so it cannot be overwritten.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      },
+      {
+        "id": "REQ-29",
+        "summary": "In backend/main.mo, ensure that all inventory endpoints (createPart, getPart, listParts, updatePart, deletePart, usePartOnJob) correctly accept calls from principals with at minimum the #authorized role, and also from the #owner principal. Verify the hasPermission guard on every inventory function uses the updated owner principal so the owner can perform all inventory CRUD operations.",
         "status": "unknown",
         "plannedFiles": [],
         "matchedFiles": []
@@ -21,14 +28,18 @@
   },
   "changedFiles": [
     "backend/main.mo",
-    "backend/migration.mo",
     "build-request.json",
     "feature_evidence.json",
+    "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
     "frontend/src/backend.d.ts",
     "frontend/src/backend.ts",
     "frontend/src/declarations/backend.did.d.ts",
     "frontend/src/declarations/backend.did.js",
+    "frontend/src/hooks/useQueries.ts",
+    "frontend/src/pages/DashboardPage.tsx",
+    "frontend/src/pages/InventoryPage.tsx",
+    "frontend/src/pages/SettingsPage.tsx",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

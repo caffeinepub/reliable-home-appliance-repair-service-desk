@@ -47,6 +47,15 @@ export interface LaborRate {
   'rateType' : { 'flat' : null } |
     { 'hourly' : null },
 }
+export interface Part {
+  'id' : bigint,
+  'partNumber' : string,
+  'name' : string,
+  'jobId' : [] | [bigint],
+  'description' : string,
+  'quantityOnHand' : bigint,
+  'unitCost' : bigint,
+}
 export type Time = bigint;
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
@@ -58,18 +67,22 @@ export interface _SERVICE {
   'createClient' : ActorMethod<[Client], bigint>,
   'createJob' : ActorMethod<[Job], bigint>,
   'createLaborRate' : ActorMethod<[LaborRate], bigint>,
+  'createPart' : ActorMethod<[Part], bigint>,
   'deleteClient' : ActorMethod<[bigint], undefined>,
   'deleteJob' : ActorMethod<[bigint], undefined>,
   'deleteLaborRate' : ActorMethod<[bigint], undefined>,
+  'deletePart' : ActorMethod<[bigint], undefined>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getClient' : ActorMethod<[bigint], Client>,
   'getJob' : ActorMethod<[bigint], Job>,
+  'getPart' : ActorMethod<[bigint], Part>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'listClients' : ActorMethod<[], Array<Client>>,
   'listJobs' : ActorMethod<[], Array<Job>>,
   'listLaborRates' : ActorMethod<[], Array<LaborRate>>,
+  'listParts' : ActorMethod<[], Array<Part>>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'updateClient' : ActorMethod<[Client], undefined>,
   'updateJob' : ActorMethod<[Job], undefined>,
@@ -83,6 +96,8 @@ export interface _SERVICE {
     undefined
   >,
   'updateLaborRate' : ActorMethod<[LaborRate], undefined>,
+  'updatePart' : ActorMethod<[Part], undefined>,
+  'usePartOnJob' : ActorMethod<[bigint, bigint, bigint], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

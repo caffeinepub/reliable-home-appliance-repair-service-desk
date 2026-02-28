@@ -6,14 +6,14 @@ import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  let ownerPrincipal : Principal = Principal.fromText("q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe");
+  stable let ownerPrincipal : Principal = Principal.fromText("q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe");
 
   public type UserProfile = { name : Text };
   let userProfiles = Map.empty<Principal, UserProfile>();
@@ -63,8 +63,19 @@ actor {
     stripePaymentId : ?Text;
   };
 
+  public type Part = {
+    id : Nat;
+    name : Text;
+    partNumber : Text;
+    description : Text;
+    quantityOnHand : Nat;
+    unitCost : Nat;
+    jobId : ?Nat;
+  };
+
   let clientStore = Map.empty<Nat, Client>();
   let jobStore = Map.empty<Nat, Job>();
+  let partStore = Map.empty<Nat, Part>();
 
   public type LaborRate = {
     id : Nat;
@@ -75,6 +86,16 @@ actor {
 
   let laborRatesStore = Map.empty<Nat, LaborRate>();
 
+  // Checks that caller is an authorized user (at minimum #user role) OR is the owner principal
+  func ensureAuthorizedOrOwner(caller : Principal) {
+    if (caller == ownerPrincipal) {
+      return;
+    };
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only authorized users can perform this action");
+    };
+  };
+
   func ensureAuthorized(caller : Principal) {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only authorized users can perform this action");
@@ -82,7 +103,7 @@ actor {
   };
 
   func ensureOwner(caller : Principal) {
-    if (caller != ownerPrincipal and not AccessControl.isAdmin(accessControlState, caller)) {
+    if (caller != ownerPrincipal) {
       Runtime.trap("Unauthorized: Only the owner can perform this action");
     };
   };
@@ -168,6 +189,63 @@ actor {
       Runtime.trap("Job not found");
     };
     jobStore.remove(jobId);
+  };
+
+  // Inventory (Part) operations - accessible by authorized users and owner
+  public shared ({ caller }) func createPart(part : Part) : async Nat {
+    ensureAuthorizedOrOwner(caller);
+    partStore.add(part.id, part);
+    part.id;
+  };
+
+  public query ({ caller }) func getPart(partId : Nat) : async Part {
+    ensureAuthorizedOrOwner(caller);
+    switch (partStore.get(partId)) {
+      case (null) { Runtime.trap("Part not found") };
+      case (?part) { part };
+    };
+  };
+
+  public query ({ caller }) func listParts() : async [Part] {
+    ensureAuthorizedOrOwner(caller);
+    partStore.values().toArray();
+  };
+
+  public shared ({ caller }) func updatePart(part : Part) : async () {
+    ensureAuthorizedOrOwner(caller);
+    if (not partStore.containsKey(part.id)) {
+      Runtime.trap("Part not found");
+    };
+    partStore.add(part.id, part);
+  };
+
+  public shared ({ caller }) func deletePart(partId : Nat) : async () {
+    ensureAuthorizedOrOwner(caller);
+    if (not partStore.containsKey(partId)) {
+      Runtime.trap("Part not found");
+    };
+    partStore.remove(partId);
+  };
+
+  public shared ({ caller }) func usePartOnJob(partId : Nat, jobId : Nat, quantityUsed : Nat) : async () {
+    ensureAuthorizedOrOwner(caller);
+    switch (partStore.get(partId)) {
+      case (null) { Runtime.trap("Part not found") };
+      case (?part) {
+        if (not jobStore.containsKey(jobId)) {
+          Runtime.trap("Job not found");
+        };
+        if (part.quantityOnHand < quantityUsed) {
+          Runtime.trap("Insufficient quantity on hand");
+        };
+        let updatedPart = {
+          part with
+          quantityOnHand = part.quantityOnHand - quantityUsed;
+          jobId = ?jobId;
+        };
+        partStore.add(partId, updatedPart);
+      };
+    };
   };
 
   // Labor Rate operations - only owner

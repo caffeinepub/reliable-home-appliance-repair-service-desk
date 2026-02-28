@@ -1,6 +1,6 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Update backend owner principal to app-derived principal",
+  "title": "Fix owner principal in backend stable var - Frontend Plan",
   "requirements": []
 }

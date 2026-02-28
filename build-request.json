@@ -1,39 +1,57 @@
 {
   "kind": "build_request",
-  "title": "Update backend owner principal to app-derived principal",
-  "projectName": "Reliable Service Desk",
+  "title": "Fix owner principal in backend stable var",
+  "projectName": "Reliable Home Appliance Repair",
   "priority": "high",
   "requirements": [
     {
-      "id": "REQ-27",
-      "text": "Update the stable owner principal variable in the Motoko backend to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This is the app-derived Internet Identity principal for the owner. All hasPermission checks for the #owner role must use this principal. Remove or replace any previously hardcoded principal value.",
+      "id": "REQ-28",
+      "text": "In backend/main.mo, update the stable owner principal variable to the exact text value 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This must be set using Principal.fromText(\"q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe\") in the stable var initializer. All hasPermission checks for the #owner role must compare the caller against this principal. Remove any previously hardcoded principal value. Do not rely on a roles TrieMap entry for owner — the owner check must be a direct equality comparison against this stable var so it cannot be overwritten.",
       "target": "backend",
       "source": {
         "messageIds": [
-          "msg-recent-1"
+          "msg-1"
         ],
         "quotes": [
-          "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe Ok understood my fault. That's the principle then I want to be owner."
+          "Fix the owner principal please same issue."
         ]
       },
       "acceptanceCriteria": [
-        "The stable owner variable in backend/main.mo is set to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'",
-        "Logging in with this principal grants full #owner access including Settings screen, labor rates management, and owner-only dashboard metrics",
-        "The Settings screen no longer shows 'Access Restricted' for this principal",
-        "All hasPermission(caller, #owner) checks resolve to true for this principal",
-        "Previously authorized users (e.g. Ryan) retain their #authorized role and CRUD access unaffected"
+        "The stable owner principal variable in main.mo is set to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe' using Principal.fromText.",
+        "hasPermission(caller, #owner) returns true when and only when caller equals this principal.",
+        "No other principal value (old NNS principal or any other) appears as the owner in the codebase.",
+        "The owner principal check is a direct equality comparison against the stable var and cannot be overridden by the roles TrieMap.",
+        "Logging in with the app-derived Internet Identity principal grants full owner access including Settings, labor rate management, and owner-only metrics."
+      ]
+    },
+    {
+      "id": "REQ-29",
+      "text": "In backend/main.mo, ensure that all inventory endpoints (createPart, getPart, listParts, updatePart, deletePart, usePartOnJob) correctly accept calls from principals with at minimum the #authorized role, and also from the #owner principal. Verify the hasPermission guard on every inventory function uses the updated owner principal so the owner can perform all inventory CRUD operations.",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-1"
+        ],
+        "quotes": [
+          "Fix the owner principal please same issue."
+        ]
+      },
+      "acceptanceCriteria": [
+        "The owner principal can call createPart, updatePart, deletePart, usePartOnJob, listParts, and getPart without receiving an access-denied error.",
+        "Authorized users (non-owner) can also call these endpoints successfully.",
+        "Unauthorized callers receive an access-denied error from all inventory endpoints."
       ]
     }
   ],
   "constraints": [
-    "Do not change any frontend logic or UI",
-    "Do not alter the roles TrieMap or any existing authorized principal entries",
-    "Only update the stable owner principal value — no other backend logic changes"
+    "The owner principal value must be exactly 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe' — do not alter or truncate it.",
+    "Do not change any frontend immutable paths.",
+    "All Motoko logic must remain in backend/main.mo as a single actor."
   ],
   "nonGoals": [
-    "Adding new features or screens",
-    "Changing role structures or permission logic",
-    "Modifying any frontend files"
+    "Do not change any frontend files for this fix.",
+    "Do not add new features or screens.",
+    "Do not modify the roles TrieMap logic beyond ensuring the owner stable var is used correctly for #owner checks."
   ],
   "imageRequirements": {
     "required": [],
