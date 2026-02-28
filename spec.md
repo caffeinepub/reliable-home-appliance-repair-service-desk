@@ -1,14 +1,10 @@
 # Specification
 
 ## Summary
-**Goal:** Fix the owner principal to the correct value, restrict labor rate mutations and Dashboard metrics to the owner role only, and surface Labor Rates and Inventory summary cards on the Dashboard.
+**Goal:** Update the hardcoded owner principal in the Motoko backend to the app-derived Internet Identity principal for the actual owner.
 
 **Planned changes:**
-- Update the stable owner principal in `backend/main.mo` to `w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae` so all `#owner` permission checks use the correct identity
-- Block `#authorized` (non-owner) callers from calling `createLaborRate`, `updateLaborRate`, `deleteLaborRate`, and `setStripeKey`
-- Add a **Labor Rates** summary card on the Dashboard, visible only to `#owner`, listing current rates (name, type, amount) with a "Manage Labor Rates" button linking to Settings → Labor Rates
-- Add an **Inventory** summary card on the Dashboard, visible to both `#owner` and `#authorized`, showing total part count and low-stock count (parts where quantity ≤ lowStockThreshold) with a "View Inventory" button
-- Hide the existing Dashboard metrics cards (open jobs, in-progress, complete, total clients, revenue) from `#authorized` users; only `#owner` sees them
-- `#authorized` users on the Dashboard continue to see the recent jobs list and the Inventory card
+- Update the stable owner principal variable in `backend/main.mo` to `q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe`
+- All `hasPermission(caller, #owner)` checks will now resolve to true for this principal
 
-**User-visible outcome:** The correct owner (Ryan's principal) has exclusive access to labor rate management and Dashboard metrics, while the authorized user retains standard CRUD access. Both roles see an Inventory summary on the Dashboard, and only the owner sees Labor Rates and metrics cards.
+**User-visible outcome:** Logging in with the principal `q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe` grants full owner access, including the Settings screen, labor rates management, and owner-only dashboard metrics. The "Access Restricted" message will no longer appear for this user.

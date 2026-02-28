@@ -1,102 +1,39 @@
 {
   "kind": "build_request",
-  "title": "Fix owner principal, surface Labor Rates & Inventory under Dashboard, enforce owner-only access to labor rates and metrics",
-  "projectName": "Reliable Home Appliance Repair",
+  "title": "Update backend owner principal to app-derived principal",
+  "projectName": "Reliable Service Desk",
   "priority": "high",
   "requirements": [
     {
-      "id": "REQ-23",
-      "text": "Update the backend stable owner principal variable to 'w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae'. Ensure all hasPermission checks for #owner role use this principal. The authorized user (Ryan) retains #authorized role with CRUD access to clients, jobs, inventory, and other standard operations, but cannot change labor rates or view owner-only metrics.",
+      "id": "REQ-27",
+      "text": "Update the stable owner principal variable in the Motoko backend to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This is the app-derived Internet Identity principal for the owner. All hasPermission checks for the #owner role must use this principal. Remove or replace any previously hardcoded principal value.",
       "target": "backend",
       "source": {
         "messageIds": [
-          "msg-latest"
+          "msg-recent-1"
         ],
         "quotes": [
-          "That's not my Principal id my principal ID is w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae",
-          "I'm the owner, he'll be the authorized user."
+          "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe Ok understood my fault. That's the principle then I want to be owner."
         ]
       },
       "acceptanceCriteria": [
-        "The stable owner principal var in main.mo is set to 'w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae'.",
-        "Calling getCallerRole() with that principal returns #owner.",
-        "An authorized user (non-owner principal) cannot call setStripeKey, createLaborRate, updateLaborRate, or deleteLaborRate without receiving an access-denied error.",
-        "An authorized user can still call createClient, updateClient, createJob, updateJob, createPart, updatePart, and other #authorized-gated endpoints."
-      ]
-    },
-    {
-      "id": "REQ-24",
-      "text": "Add a 'Labor Rates' quick-access card or section on the Dashboard page that is only visible to the #owner role. The card should display a summary of existing labor rates (name, type, amount) and include a button that navigates to the Labor Rates management section in Settings. If the caller is not #owner, this section must not render.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-latest"
-        ],
-        "quotes": [
-          "add labor rates under dashboard",
-          "I have full access to change labor rates and view metrics."
-        ]
-      },
-      "acceptanceCriteria": [
-        "When logged in as the owner principal, the Dashboard shows a 'Labor Rates' card listing current rates fetched via listLaborRates.",
-        "The card includes a 'Manage Labor Rates' button that navigates to the Settings page's Labor Rates section.",
-        "When logged in as any non-owner principal, the Labor Rates card is completely hidden from the Dashboard.",
-        "The card matches the existing green and silver theme."
-      ]
-    },
-    {
-      "id": "REQ-25",
-      "text": "Add an 'Inventory' quick-access card or section on the Dashboard page visible to both #owner and #authorized roles. The card should display a summary count of total parts, number of low-stock items, and a button that navigates to the full Inventory screen. Low-stock count should be derived from listParts results where quantity <= lowStockThreshold.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-latest"
-        ],
-        "quotes": [
-          "add inventory under dashboard"
-        ]
-      },
-      "acceptanceCriteria": [
-        "The Dashboard shows an 'Inventory' summary card displaying total part count and low-stock count.",
-        "Low-stock count correctly reflects parts where quantity is at or below lowStockThreshold.",
-        "The card includes a 'View Inventory' button that navigates to the Inventory screen.",
-        "The card is visible to both #owner and #authorized roles.",
-        "The card matches the existing green and silver theme."
-      ]
-    },
-    {
-      "id": "REQ-26",
-      "text": "Ensure the Dashboard metrics section (open jobs count, in-progress jobs count, complete jobs count, total clients count, and any revenue or summary statistics) is only visible to the #owner role. Authorized users navigating to the Dashboard should see jobs and inventory sections but not the owner-only metrics cards.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-latest"
-        ],
-        "quotes": [
-          "I have full access to change labor rates and view metrics."
-        ]
-      },
-      "acceptanceCriteria": [
-        "When logged in as the owner principal, all metric cards (open jobs, in-progress, complete, total clients) are visible on the Dashboard.",
-        "When logged in as an authorized (non-owner) user, the metrics cards are hidden or replaced with a message indicating owner-only access.",
-        "The recent jobs list remains visible to #authorized users.",
-        "The Inventory summary card (REQ-25) remains visible to #authorized users."
+        "The stable owner variable in backend/main.mo is set to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'",
+        "Logging in with this principal grants full #owner access including Settings screen, labor rates management, and owner-only dashboard metrics",
+        "The Settings screen no longer shows 'Access Restricted' for this principal",
+        "All hasPermission(caller, #owner) checks resolve to true for this principal",
+        "Previously authorized users (e.g. Ryan) retain their #authorized role and CRUD access unaffected"
       ]
     }
   ],
   "constraints": [
-    "Owner principal must be exactly 'w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae' — do not change it.",
-    "Do not modify files under frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, or frontend/src/components/ui.",
-    "All Motoko logic must remain in the single backend/main.mo actor.",
-    "Only the #owner role can create, update, or delete labor rates — #authorized role must be blocked from these mutations.",
-    "Only the #owner role can view Dashboard metrics cards."
+    "Do not change any frontend logic or UI",
+    "Do not alter the roles TrieMap or any existing authorized principal entries",
+    "Only update the stable owner principal value — no other backend logic changes"
   ],
   "nonGoals": [
-    "Adding new backend labor rate or inventory endpoints (already implemented).",
-    "Changing the labor rates management UI in Settings (already implemented).",
-    "Adding blob photo storage, on-screen signatures, or appliance type dropdown in this pass.",
-    "Real-time GPS tracking or map integrations beyond existing Google Maps deep-links.",
-    "Any email, SMS, or push notification features."
+    "Adding new features or screens",
+    "Changing role structures or permission logic",
+    "Modifying any frontend files"
   ],
   "imageRequirements": {
     "required": [],

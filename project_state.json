@@ -1,20 +1,20 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 9,
-  "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae. Ryan is the authorized user with CRUD abilities. Starting with core job/client management and role-based access control, then building up to full feature set. Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
+  "projectStateVersion": 11,
+  "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal, replaces NNS principal). Ryan is the authorized user with CRUD abilities. Starting with core job/client management and role-based access control, then building up to full feature set. Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
   "architectural_notes": [
     "Single canister ICP app: Motoko backend + responsive mobile-first frontend",
     "Roles: stable var owner Principal + TrieMap<Principal, Role> where Role = {#owner, #admin, #authorized}. hasPermission checks owner first then map.",
     "Only #owner can add/remove roles or change settings. #owner + #admin + #authorized get full CRUD on business data.",
     "All stable storage: clients, jobs, inventory as stable vars/TrieMaps. Fully upgrade-safe.",
     "Offline queue via localStorage sync for crash-proof mobile use.",
-    "Owner principal hardcoded/initialized as w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae. Ryan is the authorized (CRUD) user."
+    "Owner principal updated to app-derived principal q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe. Internet Identity generates a different derived principal per canister — the NNS principal (w3w26-...) differs from the in-app principal."
   ],
   "known_issues": [
     "Initial full prompt was too complex to process in one pass — building incrementally starting with core job/client/roles.",
     "Build failed twice when trying to add labor rates + on-screen signatures + appliance type in one pass — retry with smaller incremental prompts."
   ],
-  "isFixRequest": false,
+  "isFixRequest": true,
   "existing_features": [
     {
       "id": "feature-build-a-responsive-mobile-first-react-frontend-with-a-professional-green-and-silver-visual-theme-use-a-deep-forest-green-primary-color-silver-light-gray-accents-and-clean-sans-serif-typography-apply-this-theme-consistently-across-all-screens-cards-buttons-and-navigation-the-layout-should-use-a-bottom-navigation-bar-on-mobile-with-tabs-dashboard-clients-jobs-and-settings",
@@ -343,6 +343,20 @@
       "summary": "Update the backend stable owner principal variable to 'w3w26-hrxnk-kfpaw-7trqf-ngcqt-xm3i3-qebzp-vtech-eqcjs-nahkw-fae'. Ensure all hasPermission checks for #owner role use this principal. The authorized user (Ryan) retains #authorized role with CRUD access to clients, jobs, inventory, and other standard operations, but cannot change labor rates or view owner-only metrics.",
       "reqIds": [
         "REQ-23"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-30",
+      "summary": "Update backend stable owner principal to q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal). This replaces the previously hardcoded NNS principal. All hasPermission #owner checks must use this new principal.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-31",
+      "summary": "Update the stable owner principal variable in the Motoko backend to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This is the app-derived Internet Identity principal for the owner. All hasPermission checks for the #owner role must use this principal. Remove or replace any previously hardcoded principal value.",
+      "reqIds": [
+        "REQ-27"
       ],
       "status": "pending"
     }
