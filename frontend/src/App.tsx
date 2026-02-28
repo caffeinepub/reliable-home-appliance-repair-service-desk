@@ -1,4 +1,4 @@
-import { RouterProvider, createRouter, createRoute, createRootRoute, Outlet } from '@tanstack/react-router';
+import { RouterProvider, createRouter, createRoute, createRootRoute } from '@tanstack/react-router';
 import Layout from './components/Layout';
 import DashboardPage from './pages/DashboardPage';
 import ClientsPage from './pages/ClientsPage';
@@ -32,13 +32,13 @@ const clientsRoute = createRoute({
 const clientNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients/new',
-  component: () => <ClientDetailPage mode="create" />,
+  component: ClientDetailPage,
 });
 
 const clientDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients/$clientId',
-  component: () => <ClientDetailPage mode="edit" />,
+  component: ClientDetailPage,
 });
 
 const jobsRoute = createRoute({
@@ -50,13 +50,13 @@ const jobsRoute = createRoute({
 const jobNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/jobs/new',
-  component: () => <JobDetailPage mode="create" />,
+  component: JobDetailPage,
 });
 
 const jobDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/jobs/$jobId',
-  component: () => <JobDetailPage mode="edit" />,
+  component: JobDetailPage,
 });
 
 const invoiceRoute = createRoute({

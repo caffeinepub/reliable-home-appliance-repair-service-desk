@@ -22,16 +22,24 @@ export const _CaffeineStorageRefillResult = IDL.Record({
 export const ExternalBlob = IDL.Vec(IDL.Nat8);
 export const RateType = IDL.Variant({ 'flat' : IDL.Null, 'hourly' : IDL.Null });
 export const LaborLineItem = IDL.Record({
-  'hours' : IDL.Opt(IDL.Float64),
-  'laborRateId' : IDL.Nat,
+  'hours' : IDL.Float64,
+  'name' : IDL.Text,
   'description' : IDL.Text,
-  'amount' : IDL.Nat,
+  'totalAmount' : IDL.Nat,
+  'rateAmount' : IDL.Nat,
   'rateType' : RateType,
 });
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
   'user' : IDL.Null,
   'guest' : IDL.Null,
+});
+export const ShoppingItem = IDL.Record({
+  'productName' : IDL.Text,
+  'currency' : IDL.Text,
+  'quantity' : IDL.Nat,
+  'priceInCents' : IDL.Nat,
+  'productDescription' : IDL.Text,
 });
 export const Client = IDL.Record({
   'id' : IDL.Nat,
@@ -68,7 +76,6 @@ export const Job = IDL.Record({
   'estimate' : IDL.Opt(Estimate),
   'notes' : IDL.Text,
   'stripePaymentId' : IDL.Opt(IDL.Text),
-  'maintenancePackage' : IDL.Opt(IDL.Text),
   'laborLineItems' : IDL.Vec(LaborLineItem),
   'photos' : IDL.Vec(ExternalBlob),
 });
@@ -88,6 +95,35 @@ export const Part = IDL.Record({
   'unitCost' : IDL.Nat,
 });
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
+export const StripeSessionStatus = IDL.Variant({
+  'completed' : IDL.Record({
+    'userPrincipal' : IDL.Opt(IDL.Text),
+    'response' : IDL.Text,
+  }),
+  'failed' : IDL.Record({ 'error' : IDL.Text }),
+});
+export const StripeConfiguration = IDL.Record({
+  'allowedCountries' : IDL.Vec(IDL.Text),
+  'secretKey' : IDL.Text,
+});
+export const http_header = IDL.Record({
+  'value' : IDL.Text,
+  'name' : IDL.Text,
+});
+export const http_request_result = IDL.Record({
+  'status' : IDL.Nat,
+  'body' : IDL.Vec(IDL.Nat8),
+  'headers' : IDL.Vec(http_header),
+});
+export const TransformationInput = IDL.Record({
+  'context' : IDL.Vec(IDL.Nat8),
+  'response' : http_request_result,
+});
+export const TransformationOutput = IDL.Record({
+  'status' : IDL.Nat,
+  'body' : IDL.Vec(IDL.Nat8),
+  'headers' : IDL.Vec(http_header),
+});
 
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -120,6 +156,11 @@ export const idlService = IDL.Service({
   'addJobPhoto' : IDL.Func([IDL.Nat, ExternalBlob], [], []),
   'addLaborLineItem' : IDL.Func([IDL.Nat, LaborLineItem], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'createCheckoutSession' : IDL.Func(
+      [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
+      [IDL.Text],
+      [],
+    ),
   'createClient' : IDL.Func([Client], [IDL.Nat], []),
   'createJob' : IDL.Func([Job], [IDL.Nat], []),
   'createLaborRate' : IDL.Func([LaborRate], [IDL.Nat], []),
@@ -133,6 +174,7 @@ export const idlService = IDL.Service({
   'getClient' : IDL.Func([IDL.Nat], [Client], ['query']),
   'getJob' : IDL.Func([IDL.Nat], [Job], ['query']),
   'getPart' : IDL.Func([IDL.Nat], [Part], ['query']),
+  'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
@@ -140,6 +182,7 @@ export const idlService = IDL.Service({
     ),
   'getUserSignature' : IDL.Func([], [IDL.Opt(IDL.Vec(IDL.Nat8))], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
   'listClients' : IDL.Func([], [IDL.Vec(Client)], ['query']),
   'listJobs' : IDL.Func([], [IDL.Vec(Job)], ['query']),
   'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
@@ -147,8 +190,15 @@ export const idlService = IDL.Service({
   'removeJobPhoto' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
   'removeLaborLineItem' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
   'storeUserSignature' : IDL.Func([IDL.Vec(IDL.Nat8)], [], []),
+  'transform' : IDL.Func(
+      [TransformationInput],
+      [TransformationOutput],
+      ['query'],
+    ),
   'updateClient' : IDL.Func([Client], [], []),
+  'updateEstimate' : IDL.Func([IDL.Nat, Estimate], [], []),
   'updateJob' : IDL.Func([Job], [], []),
   'updateJobStatus' : IDL.Func([IDL.Nat, JobStatus], [], []),
   'updateLaborRate' : IDL.Func([LaborRate], [], []),
@@ -173,16 +223,24 @@ export const idlFactory = ({ IDL }) => {
   const ExternalBlob = IDL.Vec(IDL.Nat8);
   const RateType = IDL.Variant({ 'flat' : IDL.Null, 'hourly' : IDL.Null });
   const LaborLineItem = IDL.Record({
-    'hours' : IDL.Opt(IDL.Float64),
-    'laborRateId' : IDL.Nat,
+    'hours' : IDL.Float64,
+    'name' : IDL.Text,
     'description' : IDL.Text,
-    'amount' : IDL.Nat,
+    'totalAmount' : IDL.Nat,
+    'rateAmount' : IDL.Nat,
     'rateType' : RateType,
   });
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
     'user' : IDL.Null,
     'guest' : IDL.Null,
+  });
+  const ShoppingItem = IDL.Record({
+    'productName' : IDL.Text,
+    'currency' : IDL.Text,
+    'quantity' : IDL.Nat,
+    'priceInCents' : IDL.Nat,
+    'productDescription' : IDL.Text,
   });
   const Client = IDL.Record({
     'id' : IDL.Nat,
@@ -219,7 +277,6 @@ export const idlFactory = ({ IDL }) => {
     'estimate' : IDL.Opt(Estimate),
     'notes' : IDL.Text,
     'stripePaymentId' : IDL.Opt(IDL.Text),
-    'maintenancePackage' : IDL.Opt(IDL.Text),
     'laborLineItems' : IDL.Vec(LaborLineItem),
     'photos' : IDL.Vec(ExternalBlob),
   });
@@ -239,6 +296,32 @@ export const idlFactory = ({ IDL }) => {
     'unitCost' : IDL.Nat,
   });
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
+  const StripeSessionStatus = IDL.Variant({
+    'completed' : IDL.Record({
+      'userPrincipal' : IDL.Opt(IDL.Text),
+      'response' : IDL.Text,
+    }),
+    'failed' : IDL.Record({ 'error' : IDL.Text }),
+  });
+  const StripeConfiguration = IDL.Record({
+    'allowedCountries' : IDL.Vec(IDL.Text),
+    'secretKey' : IDL.Text,
+  });
+  const http_header = IDL.Record({ 'value' : IDL.Text, 'name' : IDL.Text });
+  const http_request_result = IDL.Record({
+    'status' : IDL.Nat,
+    'body' : IDL.Vec(IDL.Nat8),
+    'headers' : IDL.Vec(http_header),
+  });
+  const TransformationInput = IDL.Record({
+    'context' : IDL.Vec(IDL.Nat8),
+    'response' : http_request_result,
+  });
+  const TransformationOutput = IDL.Record({
+    'status' : IDL.Nat,
+    'body' : IDL.Vec(IDL.Nat8),
+    'headers' : IDL.Vec(http_header),
+  });
   
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -271,6 +354,11 @@ export const idlFactory = ({ IDL }) => {
     'addJobPhoto' : IDL.Func([IDL.Nat, ExternalBlob], [], []),
     'addLaborLineItem' : IDL.Func([IDL.Nat, LaborLineItem], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'createCheckoutSession' : IDL.Func(
+        [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
+        [IDL.Text],
+        [],
+      ),
     'createClient' : IDL.Func([Client], [IDL.Nat], []),
     'createJob' : IDL.Func([Job], [IDL.Nat], []),
     'createLaborRate' : IDL.Func([LaborRate], [IDL.Nat], []),
@@ -284,6 +372,7 @@ export const idlFactory = ({ IDL }) => {
     'getClient' : IDL.Func([IDL.Nat], [Client], ['query']),
     'getJob' : IDL.Func([IDL.Nat], [Job], ['query']),
     'getPart' : IDL.Func([IDL.Nat], [Part], ['query']),
+    'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
@@ -291,6 +380,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getUserSignature' : IDL.Func([], [IDL.Opt(IDL.Vec(IDL.Nat8))], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
     'listClients' : IDL.Func([], [IDL.Vec(Client)], ['query']),
     'listJobs' : IDL.Func([], [IDL.Vec(Job)], ['query']),
     'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
@@ -298,8 +388,15 @@ export const idlFactory = ({ IDL }) => {
     'removeJobPhoto' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
     'removeLaborLineItem' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
     'storeUserSignature' : IDL.Func([IDL.Vec(IDL.Nat8)], [], []),
+    'transform' : IDL.Func(
+        [TransformationInput],
+        [TransformationOutput],
+        ['query'],
+      ),
     'updateClient' : IDL.Func([Client], [], []),
+    'updateEstimate' : IDL.Func([IDL.Nat, Estimate], [], []),
     'updateJob' : IDL.Func([Job], [], []),
     'updateJobStatus' : IDL.Func([IDL.Nat, JobStatus], [], []),
     'updateLaborRate' : IDL.Func([LaborRate], [], []),

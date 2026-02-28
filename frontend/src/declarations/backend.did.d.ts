@@ -35,7 +35,6 @@ export interface Job {
   'estimate' : [] | [Estimate],
   'notes' : string,
   'stripePaymentId' : [] | [string],
-  'maintenancePackage' : [] | [string],
   'laborLineItems' : Array<LaborLineItem>,
   'photos' : Array<ExternalBlob>,
 }
@@ -43,10 +42,11 @@ export type JobStatus = { 'open' : null } |
   { 'complete' : null } |
   { 'inProgress' : null };
 export interface LaborLineItem {
-  'hours' : [] | [number],
-  'laborRateId' : bigint,
+  'hours' : number,
+  'name' : string,
   'description' : string,
-  'amount' : bigint,
+  'totalAmount' : bigint,
+  'rateAmount' : bigint,
   'rateType' : RateType,
 }
 export interface LaborRate {
@@ -66,7 +66,31 @@ export interface Part {
 }
 export type RateType = { 'flat' : null } |
   { 'hourly' : null };
+export interface ShoppingItem {
+  'productName' : string,
+  'currency' : string,
+  'quantity' : bigint,
+  'priceInCents' : bigint,
+  'productDescription' : string,
+}
+export interface StripeConfiguration {
+  'allowedCountries' : Array<string>,
+  'secretKey' : string,
+}
+export type StripeSessionStatus = {
+    'completed' : { 'userPrincipal' : [] | [string], 'response' : string }
+  } |
+  { 'failed' : { 'error' : string } };
 export type Time = bigint;
+export interface TransformationInput {
+  'context' : Uint8Array,
+  'response' : http_request_result,
+}
+export interface TransformationOutput {
+  'status' : bigint,
+  'body' : Uint8Array,
+  'headers' : Array<http_header>,
+}
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -84,6 +108,12 @@ export interface _CaffeineStorageRefillInformation {
 export interface _CaffeineStorageRefillResult {
   'success' : [] | [boolean],
   'topped_up_amount' : [] | [bigint],
+}
+export interface http_header { 'value' : string, 'name' : string }
+export interface http_request_result {
+  'status' : bigint,
+  'body' : Uint8Array,
+  'headers' : Array<http_header>,
 }
 export interface _SERVICE {
   '_caffeineStorageBlobIsLive' : ActorMethod<[Uint8Array], boolean>,
@@ -105,6 +135,10 @@ export interface _SERVICE {
   'addJobPhoto' : ActorMethod<[bigint, ExternalBlob], undefined>,
   'addLaborLineItem' : ActorMethod<[bigint, LaborLineItem], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'createCheckoutSession' : ActorMethod<
+    [Array<ShoppingItem>, string, string],
+    string
+  >,
   'createClient' : ActorMethod<[Client], bigint>,
   'createJob' : ActorMethod<[Job], bigint>,
   'createLaborRate' : ActorMethod<[LaborRate], bigint>,
@@ -118,9 +152,11 @@ export interface _SERVICE {
   'getClient' : ActorMethod<[bigint], Client>,
   'getJob' : ActorMethod<[bigint], Job>,
   'getPart' : ActorMethod<[bigint], Part>,
+  'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getUserSignature' : ActorMethod<[], [] | [Uint8Array]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'isStripeConfigured' : ActorMethod<[], boolean>,
   'listClients' : ActorMethod<[], Array<Client>>,
   'listJobs' : ActorMethod<[], Array<Job>>,
   'listLaborRates' : ActorMethod<[], Array<LaborRate>>,
@@ -128,8 +164,11 @@ export interface _SERVICE {
   'removeJobPhoto' : ActorMethod<[bigint, bigint], undefined>,
   'removeLaborLineItem' : ActorMethod<[bigint, bigint], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
   'storeUserSignature' : ActorMethod<[Uint8Array], undefined>,
+  'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
   'updateClient' : ActorMethod<[Client], undefined>,
+  'updateEstimate' : ActorMethod<[bigint, Estimate], undefined>,
   'updateJob' : ActorMethod<[Job], undefined>,
   'updateJobStatus' : ActorMethod<[bigint, JobStatus], undefined>,
   'updateLaborRate' : ActorMethod<[LaborRate], undefined>,

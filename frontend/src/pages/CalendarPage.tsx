@@ -1,312 +1,519 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-import { useListJobs, useListClients } from '../hooks/useQueries';
-import type { Job, Client } from '../backend';
-import { JobStatus } from '../backend';
+import React, { useState, useRef } from 'react';
+import { ChevronLeft, ChevronRight, MapPin, GripVertical, X, Navigation, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Calendar,
-  MapPin,
-  Briefcase,
-  Clock,
-  AlertCircle,
-  CheckCircle2,
-} from 'lucide-react';
-import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay } from 'date-fns';
+import { useListJobs, useListClients } from '../hooks/useQueries';
+import { JobStatus } from '../backend';
+import type { Job, Client } from '../backend';
 
-function getJobDate(timestamp: bigint): Date {
-  const ms = Number(timestamp / BigInt(1_000_000));
+// ── Configurable constants ────────────────────────────────────────────────────
+const TAX_RATE = 0.08875; // 8.875%
+const DEFAULT_DIAGNOSTIC_FEE_CENTS = 8500; // $85.00
+
+// ── EST timezone helpers ──────────────────────────────────────────────────────
+const EST_TZ = 'America/New_York';
+
+function toESTDate(timestamp: bigint): Date {
+  const ms = Number(timestamp) / 1_000_000;
   return new Date(ms);
 }
 
-function getClientForJob(clients: Client[] | undefined, clientId: bigint): Client | undefined {
-  return clients?.find((c) => c.id === clientId);
+function formatESTDate(date: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: EST_TZ,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
 }
 
-const STATUS_CONFIG = {
-  [JobStatus.open]: {
-    label: 'Open',
-    icon: AlertCircle,
-    badgeVariant: 'destructive' as const,
-    dotColor: 'bg-destructive',
-  },
-  [JobStatus.inProgress]: {
-    label: 'In Progress',
-    icon: Clock,
-    badgeVariant: 'secondary' as const,
-    dotColor: 'bg-primary',
-  },
-  [JobStatus.complete]: {
-    label: 'Complete',
-    icon: CheckCircle2,
-    badgeVariant: 'default' as const,
-    dotColor: 'bg-accent-foreground',
-  },
-};
-
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-interface JobCardProps {
-  job: Job;
-  client: Client | undefined;
-  onClick: () => void;
+function formatESTTime(date: Date): string {
+  return (
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: EST_TZ,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date) + ' EST'
+  );
 }
 
-function JobCard({ job, client, onClick }: JobCardProps) {
-  const config = STATUS_CONFIG[job.status];
-  const StatusIcon = config.icon;
-  const hasAddress = !!(client?.address?.trim());
-  const mapsUrl = hasAddress
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(client!.address)}`
-    : null;
+function getESTWeekStart(date: Date): Date {
+  // Get the Sunday of the current week in EST
+  const estStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: EST_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+  const [month, day, year] = estStr.split('/').map(Number);
+  const estDate = new Date(year, month - 1, day);
+  const dow = estDate.getDay();
+  estDate.setDate(estDate.getDate() - dow);
+  return estDate;
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function isSameESTDay(jobDate: Date, calDay: Date): boolean {
+  const jobStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: EST_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(jobDate);
+  const calStr = `${String(calDay.getMonth() + 1).padStart(2, '0')}/${String(calDay.getDate()).padStart(2, '0')}/${calDay.getFullYear()}`;
+  return jobStr === calStr;
+}
+
+// ── Cost calculation ──────────────────────────────────────────────────────────
+function calcJobCosts(job: Job) {
+  const diagnosticFee = job.estimate ? Number(job.estimate.amount) : DEFAULT_DIAGNOSTIC_FEE_CENTS;
+  const laborSubtotal = job.laborLineItems.reduce((sum, item) => sum + Number(item.totalAmount), 0);
+  const preTax = diagnosticFee + laborSubtotal;
+  const tax = Math.round(preTax * TAX_RATE);
+  const postTax = preTax + tax;
+  return { diagnosticFee, laborSubtotal, preTax, tax, postTax };
+}
+
+function formatCents(cents: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+function statusColor(status: JobStatus): string {
+  switch (status) {
+    case JobStatus.open: return 'bg-blue-100 text-blue-700 border-blue-200';
+    case JobStatus.inProgress: return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    case JobStatus.complete: return 'bg-green-100 text-green-700 border-green-200';
+    default: return 'bg-muted text-muted-foreground';
+  }
+}
+
+function statusLabel(status: JobStatus): string {
+  switch (status) {
+    case JobStatus.open: return 'Open';
+    case JobStatus.inProgress: return 'In Progress';
+    case JobStatus.complete: return 'Complete';
+    default: return status;
+  }
+}
+
+// ── Job Cost Card ─────────────────────────────────────────────────────────────
+function JobCostSummary({ job }: { job: Job }) {
+  const [expanded, setExpanded] = useState(false);
+  const costs = calcJobCosts(job);
 
   return (
-    <div className="bg-card rounded-xl border border-border p-2.5 space-y-1.5 hover:shadow-card transition-shadow">
+    <div className="mt-2">
       <button
-        onClick={onClick}
-        className="w-full text-left"
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        onClick={e => { e.stopPropagation(); setExpanded(!expanded); }}
       >
-        <div className="flex items-start gap-1.5">
-          <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${config.dotColor}`} />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate leading-tight">
-              {client?.name ?? `Client #${job.clientId}`}
-            </p>
-            {job.notes && (
-              <p className="text-[10px] text-muted-foreground truncate mt-0.5 leading-tight">
-                {job.notes}
-              </p>
-            )}
+        <DollarSign className="h-3 w-3" />
+        <span>{formatCents(costs.postTax)} (incl. tax)</span>
+        <span className="ml-1">{expanded ? '▲' : '▼'}</span>
+      </button>
+      {expanded && (
+        <div className="mt-1 p-2 bg-muted/40 rounded text-xs space-y-0.5">
+          <div className="flex justify-between text-muted-foreground">
+            <span>Diagnostic Fee</span>
+            <span>{formatCents(costs.diagnosticFee)}</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Labor</span>
+            <span>{formatCents(costs.laborSubtotal)}</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Pre-tax Total</span>
+            <span>{formatCents(costs.preTax)}</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Tax ({(TAX_RATE * 100).toFixed(3)}%)</span>
+            <span>{formatCents(costs.tax)}</span>
+          </div>
+          <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1">
+            <span>Total</span>
+            <span>{formatCents(costs.postTax)}</span>
           </div>
         </div>
-      </button>
-
-      <div className="flex items-center justify-between gap-1">
-        <Badge variant={config.badgeVariant} className="text-[9px] px-1 py-0 h-3.5 leading-none">
-          {config.label}
-        </Badge>
-        {mapsUrl && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <a
-                  href={mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary transition-colors"
-                  aria-label={`View ${client?.name ?? 'client'} on Google Maps`}
-                >
-                  <MapPin size={10} className="shrink-0" />
-                  <span className="hidden sm:inline text-[9px]">Map</span>
-                </a>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                <p>View on Google Maps</p>
-                <p className="text-muted-foreground text-[10px] max-w-[180px] truncate">{client?.address}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-      </div>
+      )}
     </div>
   );
 }
 
-export default function CalendarPage() {
-  const navigate = useNavigate();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
+// ── Routing Section ───────────────────────────────────────────────────────────
+interface RouteJob {
+  job: Job;
+  client: Client | undefined;
+}
 
-  const { data: jobs, isLoading: jobsLoading } = useListJobs();
-  const { data: clients, isLoading: clientsLoading } = useListClients();
+function RoutingSection({ jobs, clients }: { jobs: Job[]; clients: Client[] }) {
+  const routeableJobs = jobs.filter(
+    j => j.status === JobStatus.open || j.status === JobStatus.inProgress
+  );
 
-  const isLoading = jobsLoading || clientsLoading;
+  const [routeOrder, setRouteOrder] = useState<bigint[]>([]);
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
 
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [weekStart]);
+  const routeJobs: RouteJob[] = routeOrder
+    .map(id => {
+      const job = routeableJobs.find(j => j.id === id);
+      const client = job ? clients.find(c => c.id === job.clientId) : undefined;
+      return job ? { job, client } : null;
+    })
+    .filter(Boolean) as RouteJob[];
 
-  const jobsByDay = useMemo(() => {
-    if (!jobs) return {};
-    const map: Record<string, Job[]> = {};
-    weekDays.forEach((day) => {
-      const key = format(day, 'yyyy-MM-dd');
-      map[key] = jobs.filter((job) => {
-        const jobDate = getJobDate(job.date);
-        return isSameDay(jobDate, day);
-      });
-    });
-    return map;
-  }, [jobs, weekDays]);
+  const unaddedJobs = routeableJobs.filter(j => !routeOrder.includes(j.id));
 
-  const totalThisWeek = useMemo(() => {
-    return Object.values(jobsByDay).reduce((sum, arr) => sum + arr.length, 0);
-  }, [jobsByDay]);
+  const handleDragStart = (index: number) => {
+    dragItem.current = index;
+  };
 
-  const today = new Date();
-  const isCurrentWeek = isSameDay(weekStart, startOfWeek(today, { weekStartsOn: 0 }));
+  const handleDragEnter = (index: number) => {
+    dragOverItem.current = index;
+  };
+
+  const handleDragEnd = () => {
+    if (dragItem.current === null || dragOverItem.current === null) return;
+    if (dragItem.current === dragOverItem.current) return;
+    const newOrder = [...routeOrder];
+    const draggedId = newOrder.splice(dragItem.current, 1)[0];
+    newOrder.splice(dragOverItem.current, 0, draggedId);
+    setRouteOrder(newOrder);
+    dragItem.current = null;
+    dragOverItem.current = null;
+  };
+
+  const addToRoute = (jobId: bigint) => {
+    setRouteOrder(prev => [...prev, jobId]);
+  };
+
+  const removeFromRoute = (jobId: bigint) => {
+    setRouteOrder(prev => prev.filter(id => id !== jobId));
+  };
+
+  const clearRoute = () => setRouteOrder([]);
+
+  const getMapsUrl = (address: string) =>
+    `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
 
   return (
-    <div className="px-4 py-5 space-y-5 animate-fade-in">
-      {/* Header */}
+    <div className="bg-card rounded-xl border border-border p-4 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Calendar size={20} className="text-primary" />
-          <h2 className="font-display font-bold text-xl text-foreground">Calendar</h2>
+          <Navigation className="h-5 w-5 text-primary" />
+          <h2 className="font-semibold text-foreground">Routing</h2>
+          <Badge variant="outline" className="text-xs">{routeJobs.length} stops</Badge>
         </div>
-        {!isCurrentWeek && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setWeekStart(startOfWeek(today, { weekStartsOn: 0 }))}
-            className="text-xs text-primary h-7 px-2 rounded-lg"
-          >
-            Today
+        {routeOrder.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={clearRoute} className="text-muted-foreground text-xs">
+            Clear Route
           </Button>
         )}
       </div>
 
-      {/* Week Navigation */}
-      <div className="bg-card rounded-2xl border border-border p-3">
-        <div className="flex items-center justify-between mb-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setWeekStart((w) => subWeeks(w, 1))}
-            className="h-8 w-8 rounded-xl"
-          >
-            <ChevronLeft size={16} />
-          </Button>
-          <div className="text-center">
-            <p className="font-semibold text-sm text-foreground">
-              {format(weekStart, 'MMM d')} – {format(addDays(weekStart, 6), 'MMM d, yyyy')}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {totalThisWeek} job{totalThisWeek !== 1 ? 's' : ''} this week
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setWeekStart((w) => addWeeks(w, 1))}
-            className="h-8 w-8 rounded-xl"
-          >
-            <ChevronRight size={16} />
-          </Button>
-        </div>
-      </div>
-
-      {/* Weekly Grid */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-20 rounded-2xl" />
+      {/* Route List (drag-and-drop) */}
+      {routeJobs.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Route Order</p>
+          {routeJobs.map((rj, index) => (
+            <div
+              key={rj.job.id.toString()}
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              onDragEnter={() => handleDragEnter(index)}
+              onDragEnd={handleDragEnd}
+              onDragOver={e => e.preventDefault()}
+              className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border border-border cursor-grab active:cursor-grabbing select-none"
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex-shrink-0">
+                {index + 1}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {rj.client?.name ?? `Job #${rj.job.id}`}
+                </p>
+                {rj.client?.address && (
+                  <p className="text-xs text-muted-foreground truncate">{rj.client.address}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {rj.client?.address && (
+                  <a
+                    href={getMapsUrl(rj.client.address)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 rounded hover:bg-muted transition-colors"
+                    onClick={e => e.stopPropagation()}
+                    title="Open in Google Maps"
+                  >
+                    <MapPin className="h-4 w-4 text-primary" />
+                  </a>
+                )}
+                <button
+                  onClick={() => removeFromRoute(rj.job.id)}
+                  className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
           ))}
         </div>
-      ) : (
-        <div className="space-y-2">
-          {weekDays.map((day) => {
-            const key = format(day, 'yyyy-MM-dd');
-            const dayJobs = jobsByDay[key] ?? [];
-            const isToday = isSameDay(day, today);
+      )}
 
+      {/* Available Jobs to Add */}
+      {unaddedJobs.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Available Jobs ({unaddedJobs.length})
+          </p>
+          {unaddedJobs.map(job => {
+            const client = clients.find(c => c.id === job.clientId);
             return (
               <div
-                key={key}
-                className={`rounded-2xl border transition-colors ${
-                  isToday
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border bg-card'
-                }`}
+                key={job.id.toString()}
+                className="flex items-center gap-3 p-3 bg-muted/10 rounded-lg border border-dashed border-border"
               >
-                {/* Day Header */}
-                <div className={`flex items-center justify-between px-3 py-2 border-b ${isToday ? 'border-primary/20' : 'border-border'}`}>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                      isToday
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {format(day, 'd')}
-                    </div>
-                    <div>
-                      <p className={`text-xs font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>
-                        {DAY_LABELS[day.getDay()]}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">{format(day, 'MMM d')}</p>
-                    </div>
-                  </div>
-                  {dayJobs.length > 0 && (
-                    <Badge variant="secondary" className="text-xs h-5 px-1.5">
-                      {dayJobs.length}
-                    </Badge>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {client?.name ?? `Job #${job.id}`}
+                  </p>
+                  {client?.address && (
+                    <p className="text-xs text-muted-foreground truncate">{client.address}</p>
                   )}
+                  <Badge className={`text-xs mt-1 ${statusColor(job.status)}`}>
+                    {statusLabel(job.status)}
+                  </Badge>
                 </div>
-
-                {/* Jobs for this day */}
-                <div className="p-2">
-                  {dayJobs.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground text-center py-2">No jobs scheduled</p>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                      {dayJobs.map((job) => (
-                        <JobCard
-                          key={job.id.toString()}
-                          job={job}
-                          client={getClientForJob(clients, job.clientId)}
-                          onClick={() => navigate({ to: '/jobs/$jobId', params: { jobId: job.id.toString() } })}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-shrink-0 h-7 text-xs"
+                  onClick={() => addToRoute(job.id)}
+                >
+                  + Add
+                </Button>
               </div>
             );
           })}
         </div>
       )}
 
-      {/* Empty State */}
-      {!isLoading && totalThisWeek === 0 && (
-        <div className="bg-card rounded-2xl border border-border p-8 text-center">
-          <Briefcase size={32} className="text-muted-foreground mx-auto mb-3" />
-          <p className="font-semibold text-foreground text-sm">No jobs this week</p>
-          <p className="text-muted-foreground text-xs mt-1">Jobs will appear here based on their scheduled date.</p>
-          <Button
-            onClick={() => navigate({ to: '/jobs/new' })}
-            size="sm"
-            className="mt-4 rounded-xl bg-primary text-primary-foreground"
-          >
-            Schedule a Job
-          </Button>
-        </div>
+      {routeableJobs.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-4">
+          No open or in-progress jobs to route.
+        </p>
       )}
 
-      {/* Footer */}
-      <footer className="pt-2 pb-4 text-center">
-        <p className="text-muted-foreground text-xs">
-          Built with ❤️ using{' '}
-          <a
-            href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary font-medium"
-          >
-            caffeine.ai
-          </a>
-          {' '}· © {new Date().getFullYear()} Reliable Home Appliance Repair LLC
+      {routeableJobs.length > 0 && routeJobs.length === 0 && unaddedJobs.length > 0 && (
+        <p className="text-xs text-muted-foreground text-center">
+          Click "+ Add" to add jobs to your route, then drag to reorder.
         </p>
-      </footer>
+      )}
+    </div>
+  );
+}
+
+// ── Main Calendar Page ────────────────────────────────────────────────────────
+export default function CalendarPage() {
+  const { data: jobs = [], isLoading: jobsLoading } = useListJobs();
+  const { data: clients = [], isLoading: clientsLoading } = useListClients();
+
+  const [weekStart, setWeekStart] = useState(() => getESTWeekStart(new Date()));
+  const [activeTab, setActiveTab] = useState<'calendar' | 'routing'>('calendar');
+
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  const prevWeek = () => setWeekStart(d => addDays(d, -7));
+  const nextWeek = () => setWeekStart(d => addDays(d, 7));
+  const goToday = () => setWeekStart(getESTWeekStart(new Date()));
+
+  const getJobsForDay = (day: Date): Job[] => {
+    return jobs.filter(job => {
+      const jobDate = toESTDate(job.date);
+      return isSameESTDay(jobDate, day);
+    });
+  };
+
+  const weekLabel = () => {
+    const start = new Intl.DateTimeFormat('en-US', {
+      timeZone: EST_TZ,
+      month: 'short',
+      day: 'numeric',
+    }).format(weekStart);
+    const end = new Intl.DateTimeFormat('en-US', {
+      timeZone: EST_TZ,
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(addDays(weekStart, 6));
+    return `${start} – ${end} EST`;
+  };
+
+  const isToday = (day: Date): boolean => {
+    const todayStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: EST_TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    const dayStr = `${String(day.getMonth() + 1).padStart(2, '0')}/${String(day.getDate()).padStart(2, '0')}/${day.getFullYear()}`;
+    return todayStr === dayStr;
+  };
+
+  if (jobsLoading || clientsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="font-semibold text-foreground">Schedule</h1>
+          <Button variant="outline" size="sm" onClick={goToday} className="text-xs">
+            Today
+          </Button>
+        </div>
+
+        {/* Tab switcher */}
+        <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
+          <button
+            className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors ${
+              activeTab === 'calendar'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setActiveTab('calendar')}
+          >
+            Calendar
+          </button>
+          <button
+            className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors ${
+              activeTab === 'routing'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setActiveTab('routing')}
+          >
+            Routing
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+        {activeTab === 'calendar' && (
+          <>
+            {/* Week Navigation */}
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="icon" onClick={prevWeek}>
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <span className="text-sm font-medium text-foreground">{weekLabel()}</span>
+              <Button variant="ghost" size="icon" onClick={nextWeek}>
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Days */}
+            <div className="space-y-3">
+              {weekDays.map((day, idx) => {
+                const dayJobs = getJobsForDay(day);
+                const today = isToday(day);
+                return (
+                  <div
+                    key={idx}
+                    className={`rounded-xl border ${today ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}
+                  >
+                    {/* Day Header */}
+                    <div className={`px-4 py-2 border-b ${today ? 'border-primary/20' : 'border-border'} flex items-center justify-between`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-semibold ${today ? 'text-primary' : 'text-foreground'}`}>
+                          {formatESTDate(day)}
+                        </span>
+                        {today && (
+                          <Badge className="text-xs bg-primary text-primary-foreground">Today</Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {dayJobs.length} job{dayJobs.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    {/* Jobs */}
+                    <div className="p-3 space-y-2">
+                      {dayJobs.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-2">No jobs scheduled</p>
+                      ) : (
+                        dayJobs.map(job => {
+                          const client = clients.find(c => c.id === job.clientId);
+                          const jobDate = toESTDate(job.date);
+                          return (
+                            <div
+                              key={job.id.toString()}
+                              className="p-3 bg-muted/30 rounded-lg border border-border/50"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-medium text-foreground truncate">
+                                      {client?.name ?? `Job #${job.id}`}
+                                    </p>
+                                    <Badge className={`text-xs ${statusColor(job.status)}`}>
+                                      {statusLabel(job.status)}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {formatESTTime(jobDate)}
+                                  </p>
+                                  {client?.address && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                      <a
+                                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(client.address)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-primary hover:underline truncate"
+                                      >
+                                        {client.address}
+                                      </a>
+                                    </div>
+                                  )}
+                                  {job.notes && (
+                                    <p className="text-xs text-muted-foreground mt-1 truncate">{job.notes}</p>
+                                  )}
+                                </div>
+                              </div>
+                              {/* Cost Summary */}
+                              <JobCostSummary job={job} />
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {activeTab === 'routing' && (
+          <RoutingSection jobs={jobs} clients={clients} />
+        )}
+      </div>
     </div>
   );
 }

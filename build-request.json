@@ -1,161 +1,134 @@
 {
   "kind": "build_request",
-  "title": "Add labor rates & parts to jobs, signature blob storage on login, and job photo capture",
-  "projectName": "Reliable Service Desk",
-  "priority": "normal",
+  "title": "Fix owner privilege loss — harden stable owner principal and role checks",
+  "projectName": "Reliable Home Appliance Repair Service Desk",
+  "priority": "high",
   "requirements": [
     {
-      "id": "REQ-30",
-      "text": "Extend the backend Job record to include a laborLineItems field: a list of records each containing laborRateId (Nat), rateType (variant { #hourly; #flat }), hours (optional Float), amount (Nat, in cents), and description (Text). Add addLaborLineItem and removeLaborLineItem endpoints on jobs restricted to #authorized. The job's total estimate amount should be derivable from the sum of labor line items plus parts used.",
+      "id": "REQ-48",
+      "text": "In backend/main.mo, declare the owner principal as a stable let constant (not a mutable stable var) initialized with Principal.fromText(\"q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe\"). This value must never be overwritten by any upgrade, migration, or role-management call. Remove any stable var or TrieMap entry that could shadow or replace the owner principal.",
       "target": "backend",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-user-1"
         ],
         "quotes": [
-          "Add labor rates and parts to be added into jobs"
+          "Let's go back to version 8, troubleshoot why I lost my owner privileges.",
+          "Owner loses privileges after certain builds — root cause: possible overwrite of stable owner principal or mismatch between NNS principal and app-derived principal."
         ]
       },
       "acceptanceCriteria": [
-        "Job record contains a laborLineItems list field persisted in stable storage",
-        "addLaborLineItem endpoint accepts jobId, laborRateId, optional hours, and description; requires #authorized",
-        "removeLaborLineItem endpoint accepts jobId and lineItemId; requires #authorized",
-        "listJobs and getJob responses include the laborLineItems array"
+        "The owner principal 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe' is declared as a stable immutable value (stable let or equivalent) that cannot be overwritten at runtime or during canister upgrades.",
+        "No role-management function (addRole, removeRole, setRole, or equivalent) can alter the owner principal.",
+        "The roles TrieMap does not contain an entry for the owner principal — ownership is determined solely by direct equality comparison against the stable owner constant.",
+        "After a canister upgrade, the same principal still passes the #owner permission check without any additional configuration."
       ]
     },
     {
-      "id": "REQ-31",
-      "text": "On the Job Detail page, add a 'Labor' section below the existing fields. Display existing labor line items for the job (labor rate name, type, hours if hourly, and computed amount). Include an 'Add Labor' button that opens an inline form: select a labor rate from listLaborRates, enter hours (if hourly type), and a description. Allow removing individual line items. Show a running subtotal for labor. Use the addLaborLineItem and removeLaborLineItem backend endpoints.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-4"
-        ],
-        "quotes": [
-          "Add labor rates and parts to be added into jobs"
-        ]
-      },
-      "acceptanceCriteria": [
-        "Labor section is visible on the Job Detail page",
-        "Existing labor line items display rate name, type, hours (if hourly), and dollar amount",
-        "Add Labor form lets user select a labor rate and enter hours for hourly rates",
-        "Removing a line item calls removeLaborLineItem and refreshes the list",
-        "A running labor subtotal is displayed below the line items"
-      ]
-    },
-    {
-      "id": "REQ-32",
-      "text": "On the Job Detail page, add a 'Parts Used' section that displays parts already associated with the job via existing usePartOnJob records. Include an 'Add Part' button that opens an inline form: select a part from listParts, enter a quantity to deduct, and confirm. This calls the existing usePartOnJob endpoint. Show part name, SKU, quantity used, and unit cost per line. Display a running parts subtotal.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-4"
-        ],
-        "quotes": [
-          "Add labor rates and parts to be added into jobs"
-        ]
-      },
-      "acceptanceCriteria": [
-        "Parts Used section is visible on the Job Detail page",
-        "Existing parts used are displayed with name, SKU, quantity, and unit cost",
-        "Add Part form lets user select a part and enter a quantity",
-        "Submitting the form calls usePartOnJob and refreshes the parts list",
-        "A running parts subtotal is shown below the line items"
-      ]
-    },
-    {
-      "id": "REQ-33",
-      "text": "Extend the backend to store a signature blob associated with the login/onboarding flow. Add a storeUserSignature(sig: Blob) endpoint restricted to authenticated callers (minimum #authorized) that saves the signature blob keyed by the caller's principal in a stable TrieMap<Principal, Blob>. Add a getUserSignature() query that returns the stored blob for the caller. The signature should be associated with the user profile, not a specific job.",
+      "id": "REQ-49",
+      "text": "In backend/main.mo, rewrite the hasPermission helper so that #owner checks are a direct equality comparison between the caller and the stable owner constant (REQ-48) and never fall through to the roles TrieMap. The roles TrieMap is only consulted for #authorized and #admin role checks. Ensure no code path can grant #owner via the TrieMap.",
       "target": "backend",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-user-1"
         ],
         "quotes": [
-          "Integrate the sign on screen option blob storage"
+          "owner check must be a direct equality comparison against this stable var so it cannot be overwritten"
         ]
       },
       "acceptanceCriteria": [
-        "storeUserSignature endpoint accepts a Blob and persists it keyed by caller principal",
-        "getUserSignature query returns the stored blob for the caller or null if none",
-        "Both endpoints require at minimum #authorized permission",
-        "Signature blobs are stored in a stable variable and survive upgrades"
+        "hasPermission(caller, #owner) returns true if and only if caller == ownerPrincipal (the stable constant).",
+        "hasPermission(caller, #authorized) returns true for the owner principal and for any principal assigned #authorized or #admin in the TrieMap.",
+        "Assigning #authorized to any principal via addAuthorized does not grant #owner privileges.",
+        "Removing a principal from the TrieMap does not affect the owner's permissions."
       ]
     },
     {
-      "id": "REQ-34",
-      "text": "On the Login page (LoginPage.tsx) and/or the Profile Setup page (ProfileSetupPage.tsx), add an optional signature capture step after the user authenticates. Display a canvas-based signature pad where the user can draw their signature with a mouse or finger. Include Clear and Save buttons. On Save, convert the canvas drawing to a Blob and call storeUserSignature. Show a confirmation message when saved. Skip the step gracefully if the user dismisses it.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-4"
-        ],
-        "quotes": [
-          "Integrate the sign on screen option blob storage"
-        ]
-      },
-      "acceptanceCriteria": [
-        "A signature capture canvas is presented to the user after successful login or during profile setup",
-        "User can draw a signature using touch or mouse input on the canvas",
-        "Clear button resets the canvas",
-        "Save button converts the canvas content to a Blob and calls storeUserSignature",
-        "A success message is shown after saving",
-        "User can skip the signature step without error"
-      ]
-    },
-    {
-      "id": "REQ-35",
-      "text": "Extend the backend Job record to include a photos field: list of Blob (already present as [Blob] per prior spec). Add addJobPhoto(jobId: Nat, photo: Blob) and removeJobPhoto(jobId: Nat, photoIndex: Nat) endpoints restricted to #authorized. Ensure these persist in stable storage and are included in getJob and listJobs responses.",
+      "id": "REQ-50",
+      "text": "Audit and fix every owner-guarded backend endpoint (setStripeKey, getStripeKey, addAuthorizedPrincipal, removeAuthorizedPrincipal, listAuthorizedPrincipals, createLaborRate, updateLaborRate, deleteLaborRate, createPackage, updatePackage, deletePackage, and any other #owner-only function) to use the hardened hasPermission check from REQ-49. Ensure none of these functions accept the roles TrieMap as a fallback for the owner check.",
       "target": "backend",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-user-1"
         ],
         "quotes": [
-          "Blob storage on jobs for pictures(open camera)"
+          "I need multiple users to be able to have full crud abilities",
+          "troubleshoot why I lost my owner privileges"
         ]
       },
       "acceptanceCriteria": [
-        "addJobPhoto endpoint appends a Blob to the job's photos array and requires #authorized",
-        "removeJobPhoto endpoint removes a photo by index and requires #authorized",
-        "Photo blobs persist across canister upgrades in stable storage",
-        "getJob response includes the photos array"
+        "Calling any owner-only endpoint from a non-owner principal returns an #unauthorized or equivalent error.",
+        "Calling any owner-only endpoint from the owner principal (q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe) succeeds.",
+        "No canister upgrade resets these guards."
       ]
     },
     {
-      "id": "REQ-36",
-      "text": "On the Job Detail page, add a 'Photos' section that displays thumbnail previews of all stored photos for the job. Include a 'Take Photo / Upload' button that uses an HTML file input with accept='image/*' and capture='environment' to open the device camera or file picker. On selection, read the file as an ArrayBuffer, convert to Blob, and call addJobPhoto. Display the uploaded photo as a thumbnail in the section. Include a delete icon on each thumbnail that calls removeJobPhoto.",
-      "target": "frontend",
+      "id": "REQ-51",
+      "text": "Ensure all standard CRUD endpoints (createClient, updateClient, deleteClient, createJob, updateJob, deleteJob, updateJobStatus, createPart, updatePart, deletePart, usePartOnJob, addJobPhoto, removeJobPhoto, addLaborLineItem, removeLaborLineItem, updateJobSchedule, updateJobPayment, createPaymentIntent, storeUserSignature) accept calls from any principal that passes hasPermission(caller, #authorized) — which includes both the owner principal and any TrieMap-registered #authorized principal. This supports multiple technician/admin users with full CRUD access.",
+      "target": "backend",
       "source": {
         "messageIds": [
-          "msg-4"
+          "msg-user-1"
         ],
         "quotes": [
-          "Blob storage on jobs for pictures(open camera)"
+          "I need multiple users to be able to have full crud abilities"
         ]
       },
       "acceptanceCriteria": [
-        "Photos section is visible on the Job Detail page",
-        "Existing job photos are displayed as thumbnail previews",
-        "Take Photo / Upload button opens camera on mobile and file picker on desktop",
-        "Selected image is uploaded via addJobPhoto and immediately appears as a thumbnail",
-        "Delete icon on each thumbnail calls removeJobPhoto and removes it from the display",
-        "Loading and error states are handled gracefully"
+        "A principal registered as #authorized in the TrieMap can successfully call all standard CRUD endpoints.",
+        "The owner principal can also call all standard CRUD endpoints.",
+        "An unauthenticated or unregistered principal is rejected from all CRUD endpoints.",
+        "Multiple #authorized principals can be registered simultaneously and all retain CRUD access."
+      ]
+    },
+    {
+      "id": "REQ-52",
+      "text": "In the frontend Settings page (SettingsPage.tsx), update the owner-check logic that gates the Settings screen. The frontend isOwner check must compare the authenticated Internet Identity principal against the hardcoded string 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. Do not rely solely on a backend role query that could return a stale or missing result. If the backend getMyRole (or equivalent) query is used, also verify locally. The Settings screen must render fully for the owner principal.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-user-1"
+        ],
+        "quotes": [
+          "I lost owner privileges",
+          "Version 8 was so close to being perfect"
+        ]
+      },
+      "acceptanceCriteria": [
+        "When logged in as q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe, the Settings screen renders all owner-only sections (labor rates, Stripe key, maintenance packages, role management).",
+        "When logged in as any other principal, the Settings screen either shows a restricted message or redirects.",
+        "The Dashboard owner-only metrics card and Labor Rates card render for the owner principal.",
+        "No page shows 'Metrics restricted' when the owner is logged in (as visible in the uploaded screenshots)."
+      ]
+    },
+    {
+      "id": "REQ-53",
+      "text": "Add a migration guard in backend/main.mo (or migration.mo if needed) to preserve the stable owner principal across all future upgrades. On upgrade, if any logic would reset or overwrite the ownerPrincipal value, abort or skip that step. Document the stable owner principal in a comment so future builds do not accidentally replace it.",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-user-1"
+        ],
+        "quotes": [
+          "Owner loses privileges after certain builds — root cause: possible overwrite of stable owner principal"
+        ]
+      },
+      "acceptanceCriteria": [
+        "After deploying a new version of the canister, the owner principal remains q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe.",
+        "The stable owner value is clearly commented in the source so it is not accidentally changed in future builds.",
+        "No migration logic resets the owner to a default or anonymous principal."
       ]
     }
   ],
   "constraints": [
-    "Owner principal must remain q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe — do not change it",
-    "Do not modify files under frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, or frontend/src/components/ui",
-    "All Motoko logic must remain in backend/main.mo as a single actor",
-    "Photo and signature blobs must be stored in stable variables to survive canister upgrades"
+    "The owner principal must always be q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe — do not change this value.",
+    "Do not remove or break any existing CRUD endpoints, role management UI, or previously implemented features.",
+    "Do not modify immutable frontend paths: frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, frontend/src/components/ui."
   ],
   "nonGoals": [
-    "Real-time photo syncing or cloud storage outside the canister",
-    "GPS or live location tracking",
-    "Stripe payment changes",
-    "Maintenance package changes",
-    "Changes to the calendar or invoice screens"
+    "Do not add new features beyond fixing owner privilege loss and hardening role checks.",
+    "Do not integrate a new authentication system — Internet Identity remains the only auth mechanism.",
+    "Do not change the Stripe integration, invoice, calendar, or routing screens as part of this fix."
   ],
   "imageRequirements": {
     "required": [],

@@ -1,15 +1,14 @@
 # Specification
 
 ## Summary
-**Goal:** Add labor line items and parts tracking to job detail, signature capture on login/profile setup with blob storage, and photo capture/upload on jobs.
+**Goal:** Fix owner privilege loss by hardening the stable owner principal and role checks in the backend and frontend so the owner never loses access after canister upgrades.
 
 **Planned changes:**
-- Extend the backend Job record with a `laborLineItems` field; add `addLaborLineItem` and `removeLaborLineItem` endpoints (restricted to #authorized)
-- Add a Labor section on the Job Detail page showing line items (rate name, type, hours, amount) with an inline Add Labor form and running labor subtotal
-- Add a Parts Used section on the Job Detail page showing parts (name, SKU, quantity, unit cost) with an inline Add Part form using the existing `usePartOnJob` endpoint and a running parts subtotal
-- Add a `storeUserSignature(sig: Blob)` endpoint and `getUserSignature()` query on the backend, storing blobs in a stable TrieMap keyed by caller principal
-- Add an optional signature capture canvas (mouse/touch) on the Login or Profile Setup page with Clear and Save buttons; Save converts canvas to Blob and calls `storeUserSignature`; user can skip
-- Extend the backend Job record with a `photos` field; add `addJobPhoto` and `removeJobPhoto` endpoints (restricted to #authorized), persisted in stable storage
-- Add a Photos section on the Job Detail page with thumbnail previews, a Take Photo / Upload button (using `<input accept="image/*" capture="environment">`), and per-thumbnail delete icons calling `removeJobPhoto`
+- Declare the owner principal (`q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe`) as a stable immutable constant in `backend/main.mo` that cannot be overwritten by upgrades, migrations, or role-management calls
+- Rewrite the `hasPermission` helper so `#owner` checks use direct equality against the stable owner constant and never consult the roles TrieMap
+- Audit and fix all owner-guarded endpoints (`setStripeKey`, `getStripeKey`, `addAuthorizedPrincipal`, `removeAuthorizedPrincipal`, `listAuthorizedPrincipals`, labor rate and package CRUD, etc.) to use the hardened permission check
+- Ensure all standard CRUD endpoints accept any principal passing `hasPermission(caller, #authorized)`, supporting multiple technician/admin users
+- Update the frontend Settings page (`SettingsPage.tsx`) to compare the authenticated principal against the hardcoded owner principal string locally, not relying solely on a backend role query
+- Add a migration guard to preserve the stable owner principal across all future canister upgrades, with a comment documenting the owner principal in source
 
-**User-visible outcome:** Technicians can log labor rates and parts against a job with running subtotals, capture and store their signature during login/profile setup, and take or upload photos directly on a job record.
+**User-visible outcome:** The owner principal always retains full access to the Settings screen, owner-only metrics, labor rates, and all admin functions after any canister upgrade, and the "Metrics restricted" banner no longer appears when the owner is logged in.

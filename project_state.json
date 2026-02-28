@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 15,
+  "projectStateVersion": 21,
   "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal). Ryan is the authorized user with CRUD abilities. Owner has full access confirmed. Building incrementally: core job/client management, role-based access control, labor rates/inventory on jobs, on-screen signature blob storage, and job photo capture (open camera). Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
   "architectural_notes": [
     "Single canister ICP app: Motoko backend + responsive mobile-first frontend",
@@ -8,13 +8,16 @@
     "Only #owner can add/remove roles or change settings. #owner + #admin + #authorized get full CRUD on business data.",
     "All stable storage: clients, jobs, inventory as stable vars/TrieMaps. Fully upgrade-safe.",
     "Offline queue via localStorage sync for crash-proof mobile use.",
-    "Owner principal updated to app-derived principal q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe. Internet Identity generates a different derived principal per canister — the NNS principal (w3w26-...) differs from the in-app principal."
+    "Owner principal updated to app-derived principal q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe. Internet Identity generates a different derived principal per canister — the NNS principal (w3w26-...) differs from the in-app principal.",
+    "Owner privileges loss is a recurring issue — likely caused by owner principal mismatch between hardcoded stable var and the app-derived Internet Identity principal. Must verify Principal.fromText initialization and that hasPermission checks owner stable var directly (not via roles TrieMap)."
   ],
   "known_issues": [
     "Initial full prompt was too complex to process in one pass — building incrementally starting with core job/client/roles.",
-    "Build failed twice when trying to add labor rates + on-screen signatures + appliance type in one pass — retry with smaller incremental prompts."
+    "Build failed twice when trying to add labor rates + on-screen signatures + appliance type in one pass — retry with smaller incremental prompts.",
+    "Signature screen on estimates and Stripe integration not visible in build — needs re-implementation or fix.",
+    "Owner loses privileges after certain builds — root cause: possible overwrite of stable owner principal or mismatch between NNS principal and app-derived principal. Reverting to version 8 to troubleshoot."
   ],
-  "isFixRequest": false,
+  "isFixRequest": true,
   "existing_features": [
     {
       "id": "feature-build-a-responsive-mobile-first-react-frontend-with-a-professional-green-and-silver-visual-theme-use-a-deep-forest-green-primary-color-silver-light-gray-accents-and-clean-sans-serif-typography-apply-this-theme-consistently-across-all-screens-cards-buttons-and-navigation-the-layout-should-use-a-bottom-navigation-bar-on-mobile-with-tabs-dashboard-clients-jobs-and-settings",
@@ -181,6 +184,102 @@
       "title": "On the Job Detail page, add a 'Photos' section that displays thumbnail previews of all stored photos for the job. Include a 'Take Photo / Upload' button that uses an HTML file input with accept='image/*' and capture='environment' to open the device camera or file picker. On selection, read the file as an ArrayBuffer, convert to Blob, and call addJobPhoto. Display the uploaded photo as a thumbnail in the section. Include a delete icon on each thumbnail that calls removeJobPhoto.",
       "reqIds": [
         "REQ-36"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-job-detail-page-replace-the-maintenance-package-field-with-a-labor-section-the-labor-section-must-allow-users-to-add-fully-customizable-labor-line-items-directly-on-the-job-each-line-item-has-a-name-free-text-not-required-to-reference-a-saved-labor-rate-type-hourly-or-flat-hours-if-hourly-rate-amount-editable-per-line-and-description-display-each-line-item-with-its-computed-amount-and-a-remove-button-show-a-running-labor-subtotal-persist-labor-line-items-via-the-existing-addlaborlineitem-and-removelaborlineitem-backend-endpoints-but-allow-the-user-to-enter-custom-name-amount-values-not-tied-to-a-predefined-rate-remove-the-maintenance-package-selector-from-the-add-job-and-job-detail-forms-entirely",
+      "title": "On the Job Detail page, replace the 'Maintenance Package' field with a 'Labor' section. The Labor section must allow users to add fully customizable labor line items directly on the job — each line item has a name (free-text, not required to reference a saved labor rate), type (hourly or flat), hours (if hourly), rate amount (editable per line), and description. Display each line item with its computed amount and a remove button. Show a running labor subtotal. Persist labor line items via the existing addLaborLineItem and removeLaborLineItem backend endpoints, but allow the user to enter custom name/amount values not tied to a predefined rate. Remove the Maintenance Package selector from the Add Job and Job Detail forms entirely.",
+      "reqIds": [
+        "REQ-37"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-maintenance-packages-management-remains-available-under-the-settings-screen-owner-only-ensure-the-settings-page-still-contains-the-maintenance-packages-section-add-edit-delete-packages-with-name-description-intervaldays-price-and-that-no-reference-to-maintenance-packages-appears-on-any-job-form",
+      "title": "Maintenance Packages management remains available under the Settings screen (owner-only). Ensure the Settings page still contains the Maintenance Packages section (add, edit, delete packages with name, description, intervalDays, price) and that no reference to maintenance packages appears on any job form.",
+      "reqIds": [
+        "REQ-38"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-invoice-estimate-preview-page-invoicepreviewpage-tsx-add-an-in-page-signature-capture-section-at-the-bottom-of-the-invoice-display-a-canvas-based-signature-pad-where-the-customer-or-technician-can-draw-a-signature-with-a-mouse-or-finger-include-clear-and-save-signature-buttons-on-save-convert-the-canvas-drawing-to-a-blob-and-call-storeusersignature-or-attach-it-to-the-job-estimate-record-display-a-confirmation-message-when-the-signature-is-saved-the-signature-should-render-on-the-invoice-preview-and-be-included-in-the-downloaded-pdf",
+      "title": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), add an in-page signature capture section at the bottom of the invoice. Display a canvas-based signature pad where the customer or technician can draw a signature with a mouse or finger. Include 'Clear' and 'Save Signature' buttons. On save, convert the canvas drawing to a Blob and call storeUserSignature (or attach it to the job estimate record). Display a confirmation message when the signature is saved. The signature should render on the invoice preview and be included in the downloaded PDF.",
+      "reqIds": [
+        "REQ-39"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-implement-stripe-payment-integration-in-the-settings-screen-owner-only-add-a-stripe-secret-key-input-field-that-saves-the-key-via-the-existing-setstripekey-backend-endpoint-and-displays-a-masked-value-if-one-is-already-stored-on-the-backend-add-a-createpaymentintent-jobid-nat-amountcents-nat-endpoint-restricted-to-authorized-that-uses-the-stored-stripe-secret-key-to-create-a-stripe-payment-intent-via-the-stripe-api-https-api-stripe-com-v1-payment-intents-and-returns-the-client-secret-on-the-job-detail-page-add-a-charge-via-stripe-button-that-calls-createpaymentintent-with-the-job-s-estimated-total-then-stores-the-returned-payment-intent-id-on-the-job-via-updatejobpayment-show-a-payment-status-badge-paid-unpaid-based-on-whether-a-stripepaymentid-is-present",
+      "title": "Implement Stripe payment integration. In the Settings screen (owner-only), add a Stripe Secret Key input field that saves the key via the existing setStripeKey backend endpoint and displays a masked value if one is already stored. On the backend, add a createPaymentIntent(jobId: Nat, amountCents: Nat) endpoint restricted to #authorized that uses the stored Stripe secret key to create a Stripe Payment Intent via the Stripe API (https://api.stripe.com/v1/payment_intents) and returns the client secret. On the Job Detail page, add a 'Charge via Stripe' button that calls createPaymentIntent with the job's estimated total, then stores the returned payment intent ID on the job via updateJobPayment. Show a payment status badge (Paid / Unpaid) based on whether a stripePaymentId is present.",
+      "reqIds": [
+        "REQ-40"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-client-detail-page-if-a-google-review-url-is-not-already-set-for-the-client-pre-populate-or-suggest-the-url-https-www-google-com-search-q-reliablehomeapplianceny-com-as-the-default-google-review-url-ensure-the-existing-request-google-review-button-on-the-client-detail-page-opens-this-url-or-the-client-s-custom-googlereviewurl-if-set-in-a-new-browser-tab-additionally-surface-a-request-google-review-button-or-link-on-the-job-detail-page-that-links-to-the-associated-client-s-google-review-url-defaulting-to-https-www-google-com-search-q-reliablehomeapplianceny-com-if-none-is-stored",
+      "title": "On the Client Detail page, if a Google Review URL is not already set for the client, pre-populate or suggest the URL 'https://www.google.com/search?q=reliablehomeapplianceny.com' as the default Google Review URL. Ensure the existing 'Request Google Review' button on the Client Detail page opens this URL (or the client's custom googleReviewUrl if set) in a new browser tab. Additionally, surface a 'Request Google Review' button or link on the Job Detail page that links to the associated client's Google review URL (defaulting to https://www.google.com/search?q=reliablehomeapplianceny.com if none is stored).",
+      "reqIds": [
+        "REQ-41"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-invoice-estimate-preview-page-invoicepreviewpage-tsx-ensure-the-canvas-based-signature-capture-section-is-visibly-rendered-at-the-bottom-of-the-invoice-the-section-must-display-a-signature-pad-canvas-clear-and-save-signature-buttons-a-confirmation-message-on-successful-save-and-the-saved-signature-image-rendered-inline-in-the-invoice-the-signature-must-also-be-captured-in-the-downloaded-pdf-export-if-the-signaturecapture-component-or-usesignaturepad-hook-are-not-currently-being-used-on-this-page-wire-them-in-now",
+      "title": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), ensure the canvas-based signature capture section is visibly rendered at the bottom of the invoice. The section must display a signature pad canvas, 'Clear' and 'Save Signature' buttons, a confirmation message on successful save, and the saved signature image rendered inline in the invoice. The signature must also be captured in the downloaded PDF export. If the SignatureCapture component or useSignaturePad hook are not currently being used on this page, wire them in now.",
+      "reqIds": [
+        "REQ-42"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-job-detail-page-jobdetailpage-tsx-ensure-the-stripe-payment-section-is-visibly-rendered-it-must-include-a-charge-via-stripe-button-that-calls-the-createpaymentintent-backend-endpoint-with-the-job-s-estimated-total-sum-of-labor-parts-stores-the-returned-payment-intent-id-via-updatejobpayment-and-shows-a-paid-unpaid-payment-status-badge-based-on-whether-stripepaymentid-is-present-if-the-section-is-missing-or-not-wired-to-the-backend-re-implement-it-now-using-the-existing-createpaymentintent-and-updatejobpayment-endpoints",
+      "title": "On the Job Detail page (JobDetailPage.tsx), ensure the Stripe payment section is visibly rendered. It must include: a 'Charge via Stripe' button that calls the createPaymentIntent backend endpoint with the job's estimated total (sum of labor + parts), stores the returned payment intent ID via updateJobPayment, and shows a 'Paid' / 'Unpaid' payment status badge based on whether stripePaymentId is present. If the section is missing or not wired to the backend, re-implement it now using the existing createPaymentIntent and updateJobPayment endpoints.",
+      "reqIds": [
+        "REQ-43"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-scheduling-calendar-screen-calendarpage-tsx-add-a-cost-summary-overlay-or-info-panel-to-each-scheduled-job-card-that-displays-the-job-s-diagnostic-fee-if-set-labor-rate-subtotal-sum-of-labor-line-items-parts-subtotal-sum-of-parts-used-and-a-tax-rate-variable-the-tax-rate-should-be-a-configurable-value-default-8-875-display-the-computed-pre-tax-total-and-post-tax-total-on-the-card-or-in-an-expandable-detail-section",
+      "title": "On the Scheduling/Calendar screen (CalendarPage.tsx), add a cost summary overlay or info panel to each scheduled job card that displays the job's diagnostic fee (if set), labor rate subtotal (sum of labor line items), parts subtotal (sum of parts used), and a tax rate variable. The tax rate should be a configurable value (default 8.875%). Display the computed pre-tax total and post-tax total on the card or in an expandable detail section.",
+      "reqIds": [
+        "REQ-44"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-routing-section-to-the-scheduling-calendar-screen-display-a-list-of-all-open-and-in-progress-jobs-allow-the-user-to-drag-and-drop-job-cards-into-an-ordered-route-list-each-job-in-the-route-list-should-show-the-client-name-address-and-a-view-on-map-link-that-opens-a-google-maps-directions-url-https-www-google-com-maps-dir-api-1-destination-address-in-a-new-tab-using-the-client-s-address-display-the-ordered-route-as-a-numbered-list-persist-the-route-order-in-local-component-state-no-backend-persistence-required",
+      "title": "Add a 'Routing' section to the Scheduling/Calendar screen. Display a list of all open and in-progress jobs. Allow the user to drag and drop job cards into an ordered route list. Each job in the route list should show the client name, address, and a 'View on Map' link that opens a Google Maps directions URL (https://www.google.com/maps/dir/?api=1&destination=ADDRESS) in a new tab using the client's address. Display the ordered route as a numbered list. Persist the route order in local component state (no backend persistence required).",
+      "reqIds": [
+        "REQ-45"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-the-scheduling-calendar-screen-calendarpage-tsx-ensure-all-displayed-times-scheduledstart-scheduledend-job-dates-are-formatted-and-labeled-in-eastern-standard-time-est-america-new-york-use-the-intl-datetimeformat-api-with-timezone-america-new-york-for-all-time-rendering-in-the-calendar-view-and-week-navigation-labels",
+      "title": "In the Scheduling/Calendar screen (CalendarPage.tsx), ensure all displayed times (scheduledStart, scheduledEnd, job dates) are formatted and labeled in Eastern Standard Time (EST / America/New_York). Use the Intl.DateTimeFormat API with timeZone: 'America/New_York' for all time rendering in the calendar view and week navigation labels.",
+      "reqIds": [
+        "REQ-46"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-replace-the-default-google-review-url-throughout-the-entire-application-clientdetailpage-tsx-jobdetailpage-tsx-and-any-other-location-where-a-google-review-url-default-is-referenced-with-the-following-exact-url-https-www-google-com-search-client-safari-hs-bqlu-sca-esv-477fbb8c9f03b619-hl-en-us-biw-393-bih-695-sxsrf-anbl-n4rto1qhvuqwzk-dxdg4lesjqo68g-1772317989694-q-www-appliancerepairwalden-com-reviews-uds-alypb-kzb5bomuflrqxcqelgpo46flvnfv4llop9fxmtgn0bfd-59afqnzrv2ll-22fdckjo-3pvepgz54y0ahvy-gxqxefnh1qx8tfczbbdwapadyxtd4rj2fbkctn2wmvet-c7nop7fdkpqdsny6qiyhwqvvezt-rbespi998me2rg-kwcven74oci-4xpnr22msldpmhbl8gybinblvubwacikp-o7ifzczciuuqqzrom0yqtzptcz3svevvuwibzruurirfjpjjybvx9x-egup-hcuwxardzzro09vsyhcpocs-cwwmgzy0rwgw8zjgh5wgiy2fhfds2uckddduktp48v8l24sa8xc5ab-2pyfo3nvvnjjmpvjphff0r559cwqf2c7qml2dliq9lvmuhwlfyhaubp-qpmwjwko6lxf2ocxba71y3lp6zvnh89yunvqoklmf1b2-nvhik0cujdxth7wl4qkf-8ktjnbcwi5tusylahmy-si-al3drzesmmgcrymmfshj3stbhodz2-6yykxd-doetee1or-qor1ddoznahzjisdi7vdjydnjgxelcqqzxsy0yqcso2tsw1ly5cwamjigfn94-bitlztkpcdtbggruaeyr62-qzw3a8vaelxpm0ns58y2b2f8zx0rka-3d-3d-sa-x-ved-2ahukewiyrtgbn-2saxvxe1kfhqkkmeyqk8glegqiihab-ictx-1-stq-1-cs-0-lei-yg2jaeaxgk6l5nopp7haiaw-ebo-1-this-url-must-be-used-as-the-fallback-default-wherever-a-client-has-no-custom-googlereviewurl-stored",
+      "title": "Replace the default Google Review URL throughout the entire application (ClientDetailPage.tsx, JobDetailPage.tsx, and any other location where a Google Review URL default is referenced) with the following exact URL: https://www.google.com/search?client=safari&hs=bqlU&sca_esv=477fbb8c9f03b619&hl=en-us&biw=393&bih=695&sxsrf=ANbL-n4RtO1QhvuqwZK_dXDG4LEsJQO68g:1772317989694&q=www.appliancerepairwalden.com+reviews&uds=ALYpb_kZB5BOMUFlRqxCQelgPO46flvNFV4llOp9FXmtgN0bFd_59aFqnzrv2lL_22fdcKjO_3pVePgz54Y0AhVY-GXqXefnH1qx8tFczBBdwApAdYXTD4RJ2fBkcTn2WMvET_C7noP7FDKpQdsny6qiyHWQVVEzt_rbESpi998me2Rg_kwCVEN74ocI_4XPNR22msLdpmHbL8GYbInBlVUBwAcIKp_O7ifZcZcIuUQQZROm0YQtZPTCZ3SVevvuwibzruurIRfjpjjybvX9x_eguP-hCuWxArDZZrO09vSYhCpocS_cwWMGzY0Rwgw8zjgH5WGiY2fHfDs2UCkdDDuktP48v8L24SA8xc5Ab-2pYFO3nVVnJjMPVJpHFf0r559CWqf2c7qmL2DlIq9LVmUhwLfYHaubp-qPmWjWko6lXf2oCXBA71Y3Lp6zVnH89YUnvqoKlmf1B2-nVHIk0CujdXTh7wl4QKF-8kTjNbCWi5TusYLAhMY&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qOR1dDOzNahzjiSdI7VdJYDnJGXelcQqzXSy0Yqcso2TsW1Ly5cwaMJIgfN94_biTlzTkpCdTbGgRuaEYR62-qzW3A8vAeLXPm0nS58Y2B2F8ZX0rKA%3D%3D&sa=X&ved=2ahUKEwiYrtGBn_2SAxVXE1kFHQkkMeYQk8gLegQIIhAB&ictx=1&stq=1&cs=0&lei=YG2jaeaXGK6l5NoPp7HaiAw#ebo=1 — This URL must be used as the fallback/default wherever a client has no custom googleReviewUrl stored.",
+      "reqIds": [
+        "REQ-47"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-the-frontend-settings-page-settingspage-tsx-update-the-owner-check-logic-that-gates-the-settings-screen-the-frontend-isowner-check-must-compare-the-authenticated-internet-identity-principal-against-the-hardcoded-string-q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe-do-not-rely-solely-on-a-backend-role-query-that-could-return-a-stale-or-missing-result-if-the-backend-getmyrole-or-equivalent-query-is-used-also-verify-locally-the-settings-screen-must-render-fully-for-the-owner-principal",
+      "title": "In the frontend Settings page (SettingsPage.tsx), update the owner-check logic that gates the Settings screen. The frontend isOwner check must compare the authenticated Internet Identity principal against the hardcoded string 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. Do not rely solely on a backend role query that could return a stale or missing result. If the backend getMyRole (or equivalent) query is used, also verify locally. The Settings screen must render fully for the owner principal.",
+      "reqIds": [
+        "REQ-52"
       ],
       "version": 1
     }
@@ -429,6 +528,88 @@
       "summary": "Extend the backend Job record to include a photos field: list of Blob (already present as [Blob] per prior spec). Add addJobPhoto(jobId: Nat, photo: Blob) and removeJobPhoto(jobId: Nat, photoIndex: Nat) endpoints restricted to #authorized. Ensure these persist in stable storage and are included in getJob and listJobs responses.",
       "reqIds": [
         "REQ-35"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-40",
+      "summary": "Move labor rates into the Job Detail page as a customizable 'Labor' section. Replace the 'Maintenance Package' field on jobs with a 'Labor' section. Maintenance packages remain available under Settings only.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-41",
+      "summary": "Add a signature capture screen on the Estimates/Invoice page. Display a canvas-based signature pad, allow the user to sign, and store the signature blob associated with the estimate/job.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-42",
+      "summary": "Stripe payment integration: allow owner to store Stripe secret key in Settings, create/confirm payment intents from backend, store payment ID on job, show payment status badge on job detail.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-43",
+      "summary": "Add a 'Request Google Review' button linking to reliablehomeapplianceny.com Google review URL on client detail and/or job detail page.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-44",
+      "summary": "Add diagnostic fee, labor rate, parts, and tax rate variables to the live map display on the scheduling/routing screen.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-45",
+      "summary": "Add a routing section to the scheduling screen with drag-and-drop job assignment to map. Scheduling section timezone set to EST.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-46",
+      "summary": "Replace the Google Review URL default with https://www.google.com/search?client=safari&...#ebo=1 (full appliancerepairwalden.com reviews link) for all client/job detail pages.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-47",
+      "summary": "In backend/main.mo, declare the owner principal as a stable let constant (not a mutable stable var) initialized with Principal.fromText(\"q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe\"). This value must never be overwritten by any upgrade, migration, or role-management call. Remove any stable var or TrieMap entry that could shadow or replace the owner principal.",
+      "reqIds": [
+        "REQ-48"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-48",
+      "summary": "In backend/main.mo, rewrite the hasPermission helper so that #owner checks are a direct equality comparison between the caller and the stable owner constant (REQ-48) and never fall through to the roles TrieMap. The roles TrieMap is only consulted for #authorized and #admin role checks. Ensure no code path can grant #owner via the TrieMap.",
+      "reqIds": [
+        "REQ-49"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-49",
+      "summary": "Audit and fix every owner-guarded backend endpoint (setStripeKey, getStripeKey, addAuthorizedPrincipal, removeAuthorizedPrincipal, listAuthorizedPrincipals, createLaborRate, updateLaborRate, deleteLaborRate, createPackage, updatePackage, deletePackage, and any other #owner-only function) to use the hardened hasPermission check from REQ-49. Ensure none of these functions accept the roles TrieMap as a fallback for the owner check.",
+      "reqIds": [
+        "REQ-50"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-50",
+      "summary": "Ensure all standard CRUD endpoints (createClient, updateClient, deleteClient, createJob, updateJob, deleteJob, updateJobStatus, createPart, updatePart, deletePart, usePartOnJob, addJobPhoto, removeJobPhoto, addLaborLineItem, removeLaborLineItem, updateJobSchedule, updateJobPayment, createPaymentIntent, storeUserSignature) accept calls from any principal that passes hasPermission(caller, #authorized) — which includes both the owner principal and any TrieMap-registered #authorized principal. This supports multiple technician/admin users with full CRUD access.",
+      "reqIds": [
+        "REQ-51"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-52",
+      "summary": "Add a migration guard in backend/main.mo (or migration.mo if needed) to preserve the stable owner principal across all future upgrades. On upgrade, if any logic would reset or overwrite the ownerPrincipal value, abort or skip that step. Document the stable owner principal in a comment so future builds do not accidentally replace it.",
+      "reqIds": [
+        "REQ-53"
       ],
       "status": "pending"
     }

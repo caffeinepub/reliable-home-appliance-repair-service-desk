@@ -1,486 +1,490 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from '@tanstack/react-router';
-import { useGetJob, useGetClient, useListLaborRates } from '../hooks/useQueries';
-import { JobStatus, RateType } from '../backend';
+import React, { useRef, useState, useEffect } from 'react';
+import { useParams, useNavigate } from '@tanstack/react-router';
+import { ArrowLeft, Download, Printer, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  ArrowLeft,
-  Download,
-  Share2,
-  FileText,
-  Loader2,
-  AlertCircle,
-} from 'lucide-react';
-import { format } from 'date-fns';
+import { useGetJob, useGetClient, useGetUserSignature, useStoreUserSignature } from '../hooks/useQueries';
+import { useSignaturePad } from '../hooks/useSignaturePad';
+import { RateType } from '../backend';
 
-function formatJobDate(timestamp: bigint): string {
-  try {
-    const ms = Number(timestamp / BigInt(1_000_000));
-    return format(new Date(ms), 'MMMM d, yyyy');
-  } catch {
-    return 'Unknown date';
-  }
+const DEFAULT_DIAGNOSTIC_FEE = 8500; // cents ($85.00)
+
+function toSafeUint8Array(input: Uint8Array): Uint8Array<ArrayBuffer> {
+  const buf = new ArrayBuffer(input.byteLength);
+  new Uint8Array(buf).set(input);
+  return new Uint8Array(buf);
 }
 
-function formatJobDateShort(timestamp: bigint): string {
-  try {
-    const ms = Number(timestamp / BigInt(1_000_000));
-    return format(new Date(ms), 'yyyy-MM-dd');
-  } catch {
-    return 'unknown';
-  }
-}
+export default function InvoicePreviewPage() {
+  const { jobId } = useParams({ from: '/invoice/$jobId' });
+  const navigate = useNavigate();
+  const invoiceRef = useRef<HTMLDivElement>(null);
 
-function formatCurrency(cents: bigint): string {
-  return `$${(Number(cents) / 100).toFixed(2)}`;
-}
+  const jobIdBig = BigInt(jobId);
+  const { data: job, isLoading: jobLoading } = useGetJob(jobIdBig);
+  const { data: client, isLoading: clientLoading } = useGetClient(job?.clientId);
+  const { data: existingSigBytes } = useGetUserSignature();
+  const storeSignature = useStoreUserSignature();
 
-function statusLabel(status: JobStatus): string {
-  switch (status) {
-    case JobStatus.open: return 'Open';
-    case JobStatus.inProgress: return 'In Progress';
-    case JobStatus.complete: return 'Complete';
-    default: return 'Unknown';
-  }
-}
+  const { canvasRef, clear, getSignatureBytes, isEmpty } = useSignaturePad();
+  const [sigSaved, setSigSaved] = useState(false);
+  const [sigError, setSigError] = useState('');
+  const [existingSigUrl, setExistingSigUrl] = useState<string | null>(null);
 
-function buildInvoiceHTML(params: {
-  jobId: string;
-  clientName: string;
-  clientPhone: string;
-  clientAddress: string;
-  clientEmail: string;
-  jobDate: string;
-  jobNotes: string;
-  jobStatus: string;
-  maintenancePackage: string;
-  waiverType: string;
-  estimateAmount: string;
-  laborRates: string;
-  stripePaymentId: string;
-}): string {
-  return `<!DOCTYPE html>
+  useEffect(() => {
+    if (existingSigBytes && existingSigBytes.length > 0) {
+      const safe = toSafeUint8Array(existingSigBytes);
+      const blob = new Blob([safe], { type: 'image/png' });
+      const url = URL.createObjectURL(blob);
+      setExistingSigUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [existingSigBytes]);
+
+  const handleSaveSignature = async () => {
+    setSigError('');
+    if (isEmpty) {
+      setSigError('Please draw your signature before saving.');
+      return;
+    }
+    const bytes = await getSignatureBytes();
+    if (!bytes) {
+      setSigError('Failed to capture signature.');
+      return;
+    }
+    try {
+      await storeSignature.mutateAsync(bytes);
+      setSigSaved(true);
+      const safe = toSafeUint8Array(bytes);
+      const blob = new Blob([safe], { type: 'image/png' });
+      const url = URL.createObjectURL(blob);
+      setExistingSigUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+    } catch {
+      setSigError('Failed to save signature. Please try again.');
+    }
+  };
+
+  const buildInvoiceHTML = (): string => {
+    if (!job || !client) return '';
+
+    const formatCurrency = (cents: number) =>
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+
+    const formatDate = (time: bigint) =>
+      new Date(Number(time) / 1_000_000).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
+    const laborSubtotal = job.laborLineItems.reduce(
+      (sum, item) => sum + Number(item.totalAmount),
+      0
+    );
+    const estimateAmount = job.estimate ? Number(job.estimate.amount) : 0;
+    const diagnosticFee = estimateAmount > 0 ? estimateAmount : DEFAULT_DIAGNOSTIC_FEE;
+    const grandTotal = diagnosticFee + laborSubtotal;
+
+    const laborRows = job.laborLineItems
+      .map(
+        item => `
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
+            <div style="font-weight:500">${item.name}</div>
+            ${item.description ? `<div style="font-size:11px;color:#888">${item.description}</div>` : ''}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right">
+            ${formatCurrency(Number(item.rateAmount))}/${item.rateType === 'hourly' ? 'hr' : 'flat'}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right">
+            ${item.rateType === 'hourly' ? item.hours.toFixed(1) : '1'}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:500">
+            ${formatCurrency(Number(item.totalAmount))}
+          </td>
+        </tr>`
+      )
+      .join('');
+
+    const sigSection = existingSigUrl
+      ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0">
+           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;margin-bottom:8px">Customer Signature</div>
+           <img src="${existingSigUrl}" alt="Signature" style="max-height:80px;border:1px solid #e0e0e0;border-radius:4px" />
+         </div>`
+      : '';
+
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Invoice - ${params.clientName} - ${params.jobDate}</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Invoice - ${client.name} - Job #${job.id}</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a1a; background: #fff; padding: 40px; max-width: 700px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 2px solid #2d6a4f; }
-    .company-name { font-size: 20px; font-weight: 700; color: #2d6a4f; }
-    .company-sub { font-size: 12px; color: #666; margin-top: 4px; }
-    .invoice-label { text-align: right; }
-    .invoice-label h1 { font-size: 28px; font-weight: 800; color: #2d6a4f; letter-spacing: -0.5px; }
-    .invoice-label p { font-size: 12px; color: #666; margin-top: 4px; }
-    .section { margin-bottom: 24px; }
-    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #2d6a4f; margin-bottom: 8px; }
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .info-block p { font-size: 13px; line-height: 1.6; color: #333; }
-    .info-block strong { color: #1a1a1a; }
-    .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
-    .detail-row:last-child { border-bottom: none; }
-    .detail-label { color: #666; }
-    .detail-value { font-weight: 600; color: #1a1a1a; }
-    .total-box { background: #f0faf5; border: 1px solid #2d6a4f; border-radius: 8px; padding: 16px; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; }
-    .total-label { font-size: 14px; font-weight: 600; color: #2d6a4f; }
-    .total-amount { font-size: 24px; font-weight: 800; color: #2d6a4f; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #e8f5e9; color: #2d6a4f; }
-    .notes-box { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; font-size: 13px; color: #444; line-height: 1.6; white-space: pre-wrap; }
-    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e0e0e0; text-align: center; font-size: 11px; color: #999; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;padding:40px;max-width:720px;margin:0 auto}
+    @media print{body{padding:20px}}
   </style>
 </head>
 <body>
-  <div class="header">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:24px;border-bottom:2px solid #2d6a4f">
     <div>
-      <div class="company-name">Reliable Home Appliance Repair</div>
-      <div class="company-sub">Professional Appliance Service</div>
+      <div style="font-size:20px;font-weight:700;color:#2d6a4f">Appliance Repair Walden</div>
+      <div style="font-size:12px;color:#666;margin-top:4px">Professional Appliance Services</div>
     </div>
-    <div class="invoice-label">
-      <h1>INVOICE</h1>
-      <p>Job #${params.jobId}</p>
-      <p>${params.jobDate}</p>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="info-grid">
-      <div class="info-block">
-        <div class="section-title">Bill To</div>
-        <p><strong>${params.clientName}</strong></p>
-        ${params.clientPhone ? `<p>${params.clientPhone}</p>` : ''}
-        ${params.clientEmail ? `<p>${params.clientEmail}</p>` : ''}
-        ${params.clientAddress ? `<p>${params.clientAddress}</p>` : ''}
-      </div>
-      <div class="info-block">
-        <div class="section-title">Job Details</div>
-        <p>Status: <span class="badge">${params.jobStatus}</span></p>
-        ${params.maintenancePackage ? `<p style="margin-top:6px">Package: <strong>${params.maintenancePackage}</strong></p>` : ''}
-        ${params.waiverType ? `<p style="margin-top:4px">Waiver: <strong>${params.waiverType}</strong></p>` : ''}
-        ${params.stripePaymentId ? `<p style="margin-top:4px">Payment ID: <strong>${params.stripePaymentId}</strong></p>` : ''}
-      </div>
+    <div style="text-align:right">
+      <div style="font-size:28px;font-weight:800;color:#2d6a4f">INVOICE</div>
+      <div style="font-size:12px;color:#666;margin-top:4px">Job #${job.id.toString().padStart(5, '0')}</div>
+      <div style="font-size:12px;color:#666">${formatDate(job.date)}</div>
     </div>
   </div>
 
-  ${params.jobNotes ? `
-  <div class="section">
-    <div class="section-title">Service Notes</div>
-    <div class="notes-box">${params.jobNotes}</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px">
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#2d6a4f;margin-bottom:8px">Bill To</div>
+      <div style="font-weight:600">${client.name}</div>
+      ${client.address ? `<div style="font-size:13px;color:#555;margin-top:2px">${client.address}</div>` : ''}
+      ${client.phone ? `<div style="font-size:13px;color:#555">${client.phone}</div>` : ''}
+      ${client.email ? `<div style="font-size:13px;color:#555">${client.email}</div>` : ''}
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#2d6a4f;margin-bottom:8px">Job Details</div>
+      <div style="font-size:13px;color:#555">Status: <strong style="text-transform:capitalize">${job.status}</strong></div>
+      ${job.waiverType ? `<div style="font-size:13px;color:#555">Waiver: <strong style="text-transform:capitalize">${job.waiverType}</strong></div>` : ''}
+      ${job.stripePaymentId ? `<div style="margin-top:4px;display:inline-block;padding:2px 8px;background:#e8f5e9;color:#2d6a4f;border-radius:4px;font-size:11px;font-weight:600">PAID</div>` : ''}
+    </div>
+  </div>
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+    <thead>
+      <tr style="border-bottom:2px solid #e0e0e0">
+        <th style="text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;padding-bottom:8px">Description</th>
+        <th style="text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;padding-bottom:8px">Rate</th>
+        <th style="text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;padding-bottom:8px">Qty/Hrs</th>
+        <th style="text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;padding-bottom:8px">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0">Diagnostic Fee</td>
+        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right">—</td>
+        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right">1</td>
+        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:500">${formatCurrency(diagnosticFee)}</td>
+      </tr>
+      ${laborRows}
+    </tbody>
+  </table>
+
+  <div style="display:flex;justify-content:flex-end;margin-bottom:32px">
+    <div style="width:240px">
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;color:#555">
+        <span>Subtotal</span><span>${formatCurrency(grandTotal)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-top:2px solid #1a1a1a;font-weight:700;font-size:15px">
+        <span>Total</span><span>${formatCurrency(grandTotal)}</span>
+      </div>
+    </div>
+  </div>
+
+  ${job.notes ? `
+  <div style="margin-bottom:24px;padding:12px;background:#fafafa;border:1px solid #e0e0e0;border-radius:8px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;margin-bottom:6px">Notes</div>
+    <div style="font-size:13px;color:#444;white-space:pre-wrap">${job.notes}</div>
   </div>` : ''}
 
-  ${params.laborRates ? `
-  <div class="section">
-    <div class="section-title">Labor Rates Applied</div>
-    <div class="notes-box">${params.laborRates}</div>
-  </div>` : ''}
+  ${sigSection}
 
-  <div class="section">
-    <div class="section-title">Summary</div>
-    ${params.estimateAmount ? `
-    <div class="total-box">
-      <div class="total-label">Estimate Total</div>
-      <div class="total-amount">${params.estimateAmount}</div>
-    </div>` : `
-    <div class="detail-row">
-      <span class="detail-label">Estimate</span>
-      <span class="detail-value">Pending</span>
-    </div>`}
-  </div>
-
-  <div class="footer">
-    <p>Thank you for choosing Reliable Home Appliance Repair LLC</p>
+  <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e0e0e0;text-align:center;font-size:11px;color:#999">
+    <p>Thank you for your business! — Appliance Repair Walden</p>
     <p style="margin-top:4px">Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
   </div>
 </body>
 </html>`;
-}
-
-export default function InvoicePreviewPage() {
-  const navigate = useNavigate();
-  const params = useParams({ strict: false }) as { jobId?: string };
-  const jobId = params.jobId ? BigInt(params.jobId) : null;
-
-  const { data: job, isLoading: jobLoading } = useGetJob(jobId);
-  const { data: client, isLoading: clientLoading } = useGetClient(job ? job.clientId : null);
-  const { data: laborRates } = useListLaborRates();
-
-  const [shareError, setShareError] = useState('');
-  const [isSharing, setIsSharing] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  const canShare = typeof navigator !== 'undefined' && !!navigator.share;
-
-  const buildParams = () => {
-    if (!job || !client) return null;
-    return {
-      jobId: job.id.toString(),
-      clientName: client.name,
-      clientPhone: client.phone,
-      clientAddress: client.address,
-      clientEmail: client.email ?? '',
-      jobDate: formatJobDate(job.date),
-      jobNotes: job.notes,
-      jobStatus: statusLabel(job.status),
-      maintenancePackage: job.maintenancePackage ?? '',
-      waiverType: job.waiverType ?? '',
-      estimateAmount: job.estimate ? formatCurrency(job.estimate.amount) : '',
-      laborRates: laborRates && laborRates.length > 0
-        ? laborRates.map((r) => `${r.name} — ${r.rateType === RateType.hourly ? `$${(Number(r.amount) / 100).toFixed(2)}/hr` : `$${(Number(r.amount) / 100).toFixed(2)} flat`}`).join('\n')
-        : '',
-      stripePaymentId: job.stripePaymentId ?? '',
-    };
   };
 
-  const getFileName = () => {
-    if (!job || !client) return 'Invoice.html';
-    const safeName = client.name.replace(/[^a-zA-Z0-9]/g, '-');
-    const dateStr = formatJobDateShort(job.date);
-    return `Invoice-${safeName}-${dateStr}.html`;
+  const handleDownload = () => {
+    const html = buildInvoiceHTML();
+    if (!html) return;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeName = client?.name.replace(/[^a-zA-Z0-9]/g, '-') ?? 'client';
+    a.download = `Invoice-${safeName}-Job${jobId}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
-  const handleDownload = async () => {
-    setIsDownloading(true);
-    try {
-      const p = buildParams();
-      if (!p) return;
-      const html = buildInvoiceHTML(p);
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = getFileName();
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Download failed:', err);
-    } finally {
-      setIsDownloading(false);
-    }
+  const handlePrint = () => {
+    const html = buildInvoiceHTML();
+    if (!html) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
   };
 
-  const handleShare = async () => {
-    setShareError('');
-    setIsSharing(true);
-    try {
-      const p = buildParams();
-      if (!p) return;
-      const html = buildInvoiceHTML(p);
-      const fileName = getFileName();
-
-      const htmlBlob = new Blob([html], { type: 'text/html' });
-      const htmlFile = new File([htmlBlob], fileName, { type: 'text/html' });
-
-      const shareData: ShareData = {
-        title: `Invoice - ${p.clientName} - ${p.jobDate}`,
-        text: `Invoice for ${p.clientName} — Job #${p.jobId}${p.estimateAmount ? ` — ${p.estimateAmount}` : ''}`,
-      };
-
-      if (navigator.canShare && navigator.canShare({ files: [htmlFile] })) {
-        await navigator.share({ ...shareData, files: [htmlFile] });
-      } else {
-        await navigator.share(shareData);
-      }
-    } catch (err: unknown) {
-      const error = err as Error;
-      if (error?.name !== 'AbortError') {
-        setShareError('Share failed. Try downloading instead.');
-      }
-    } finally {
-      setIsSharing(false);
-    }
-  };
-
-  const isLoading = jobLoading || clientLoading;
-
-  if (isLoading) {
+  if (jobLoading || clientLoading) {
     return (
-      <div className="px-4 py-5 space-y-4">
-        <Skeleton className="h-8 w-32 rounded-xl" />
-        <Skeleton className="h-64 rounded-2xl" />
-        <Skeleton className="h-12 rounded-xl" />
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
 
   if (!job || !client) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-        <AlertCircle size={32} className="text-destructive mb-3" />
-        <p className="text-foreground font-semibold">Job not found</p>
-        <button
-          onClick={() => navigate({ to: '/jobs' })}
-          className="text-primary text-sm mt-2"
-        >
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <p className="text-muted-foreground">Invoice not found.</p>
+        <Button variant="outline" onClick={() => navigate({ to: '/jobs' })}>
           Back to Jobs
-        </button>
+        </Button>
       </div>
     );
   }
 
+  const laborSubtotal = job.laborLineItems.reduce(
+    (sum, item) => sum + Number(item.totalAmount),
+    0
+  );
+  const estimateAmount = job.estimate ? Number(job.estimate.amount) : 0;
+  const diagnosticFee = estimateAmount > 0 ? estimateAmount : DEFAULT_DIAGNOSTIC_FEE;
+  const grandTotal = diagnosticFee + laborSubtotal;
+
+  const formatCurrency = (cents: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+
+  const formatDate = (time: bigint) =>
+    new Date(Number(time) / 1_000_000).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
   return (
-    <div className="px-4 py-5 space-y-5 animate-fade-in">
+    <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => navigate({ to: '/jobs/$jobId', params: { jobId: job.id.toString() } })}
-          className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={18} />
-          <span className="text-sm font-medium">Job</span>
-        </button>
-        <div className="flex items-center gap-2">
-          <FileText size={16} className="text-primary" />
-          <h2 className="font-display font-bold text-lg text-foreground">Invoice Preview</h2>
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex gap-2">
-        <Button
-          onClick={handleDownload}
-          disabled={isDownloading}
-          className="flex-1 bg-primary text-primary-foreground rounded-xl font-semibold"
-          size="sm"
-        >
-          {isDownloading ? (
-            <Loader2 size={15} className="animate-spin mr-2" />
-          ) : (
-            <Download size={15} className="mr-2" />
-          )}
-          Download HTML
+      <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+        <Button variant="ghost" size="icon" onClick={() => navigate({ to: '/jobs' })}>
+          <ArrowLeft className="h-5 w-5" />
         </Button>
-
-        {canShare ? (
-          <Button
-            onClick={handleShare}
-            disabled={isSharing}
-            variant="outline"
-            className="flex-1 rounded-xl font-semibold border-primary text-primary hover:bg-primary/10"
-            size="sm"
-          >
-            {isSharing ? (
-              <Loader2 size={15} className="animate-spin mr-2" />
-            ) : (
-              <Share2 size={15} className="mr-2" />
-            )}
-            Share
+        <h1 className="font-semibold text-foreground">Invoice Preview</h1>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={handlePrint} title="Print Invoice">
+            <Printer className="h-4 w-4" />
           </Button>
-        ) : (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="flex-1">
-                  <Button
-                    disabled
-                    variant="outline"
-                    className="w-full rounded-xl font-semibold opacity-40"
-                    size="sm"
-                  >
-                    <Share2 size={15} className="mr-2" />
-                    Share
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Sharing is not supported on this browser</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
+          <Button variant="outline" size="icon" onClick={handleDownload} title="Download HTML">
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {shareError && (
-        <p className="text-destructive text-xs text-center">{shareError}</p>
-      )}
-
-      {/* Invoice Preview Card */}
-      <div className="bg-card rounded-2xl border border-border overflow-hidden">
-        {/* Invoice Header */}
-        <div className="bg-primary px-5 py-4 flex items-start justify-between">
-          <div>
-            <p className="text-primary-foreground font-display font-bold text-base leading-tight">
-              Reliable Home Appliance Repair
-            </p>
-            <p className="text-primary-foreground/70 text-xs mt-0.5">Professional Appliance Service</p>
-          </div>
-          <div className="text-right">
-            <p className="text-primary-foreground font-bold text-xl">INVOICE</p>
-            <p className="text-primary-foreground/70 text-xs">Job #{job.id.toString()}</p>
-          </div>
-        </div>
-
-        <div className="p-5 space-y-5">
-          {/* Client & Job Info */}
-          <div className="grid grid-cols-2 gap-4">
+      {/* Invoice Content */}
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        <div ref={invoiceRef} className="bg-white text-gray-900 rounded-xl shadow-lg p-8">
+          {/* Company Header */}
+          <div className="flex items-start justify-between mb-8">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1.5">Bill To</p>
-              <p className="font-semibold text-sm text-foreground">{client.name}</p>
-              {client.phone && <p className="text-xs text-muted-foreground mt-0.5">{client.phone}</p>}
-              {client.email && <p className="text-xs text-muted-foreground">{client.email}</p>}
-              {client.address && <p className="text-xs text-muted-foreground">{client.address}</p>}
+              <img
+                src="/assets/generated/reliable-logo.dim_256x256.png"
+                alt="Logo"
+                className="h-16 w-16 object-contain mb-2"
+              />
+              <h2 className="text-xl font-bold text-gray-900">Appliance Repair Walden</h2>
+              <p className="text-sm text-gray-500">Professional Appliance Services</p>
+            </div>
+            <div className="text-right">
+              <h1 className="text-3xl font-bold text-gray-900">INVOICE</h1>
+              <p className="text-sm text-gray-500 mt-1">#{job.id.toString().padStart(5, '0')}</p>
+              <p className="text-sm text-gray-500">{formatDate(job.date)}</p>
+            </div>
+          </div>
+
+          {/* Bill To */}
+          <div className="grid grid-cols-2 gap-8 mb-8">
+            <div>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Bill To
+              </h3>
+              <p className="font-semibold text-gray-900">{client.name}</p>
+              {client.address && <p className="text-sm text-gray-600">{client.address}</p>}
+              {client.phone && <p className="text-sm text-gray-600">{client.phone}</p>}
+              {client.email && <p className="text-sm text-gray-600">{client.email}</p>}
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1.5">Job Details</p>
-              <p className="text-xs text-muted-foreground">Date: <span className="text-foreground font-medium">{formatJobDate(job.date)}</span></p>
-              <div className="mt-1">
-                <Badge
-                  variant={job.status === JobStatus.complete ? 'default' : job.status === JobStatus.inProgress ? 'secondary' : 'destructive'}
-                  className="text-xs"
-                >
-                  {statusLabel(job.status)}
-                </Badge>
-              </div>
-              {job.maintenancePackage && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Package: <span className="text-foreground font-medium">{job.maintenancePackage}</span>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Job Details
+              </h3>
+              <p className="text-sm text-gray-600">
+                Status: <span className="font-medium capitalize">{job.status}</span>
+              </p>
+              {job.waiverType && (
+                <p className="text-sm text-gray-600">
+                  Waiver: <span className="font-medium capitalize">{job.waiverType}</span>
                 </p>
               )}
+              {job.stripePaymentId && (
+                <span className="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                  Paid
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <table className="w-full mb-6">
+            <thead>
+              <tr className="border-b-2 border-gray-200">
+                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                  Description
+                </th>
+                <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                  Rate
+                </th>
+                <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                  Qty/Hrs
+                </th>
+                <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                  Amount
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Diagnostic Fee */}
+              <tr className="border-b border-gray-100">
+                <td className="py-3 text-sm text-gray-700">Diagnostic Fee</td>
+                <td className="py-3 text-sm text-gray-700 text-right">—</td>
+                <td className="py-3 text-sm text-gray-700 text-right">1</td>
+                <td className="py-3 text-sm font-medium text-gray-900 text-right">
+                  {formatCurrency(diagnosticFee)}
+                </td>
+              </tr>
+              {/* Labor Line Items */}
+              {job.laborLineItems.map((item, idx) => (
+                <tr key={idx} className="border-b border-gray-100">
+                  <td className="py-3 text-sm text-gray-700">
+                    <div className="font-medium">{item.name}</div>
+                    {item.description && (
+                      <div className="text-xs text-gray-400">{item.description}</div>
+                    )}
+                  </td>
+                  <td className="py-3 text-sm text-gray-700 text-right">
+                    {formatCurrency(Number(item.rateAmount))}/
+                    {item.rateType === RateType.hourly ? 'hr' : 'flat'}
+                  </td>
+                  <td className="py-3 text-sm text-gray-700 text-right">
+                    {item.rateType === RateType.hourly ? item.hours.toFixed(1) : '1'}
+                  </td>
+                  <td className="py-3 text-sm font-medium text-gray-900 text-right">
+                    {formatCurrency(Number(item.totalAmount))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Totals */}
+          <div className="flex justify-end mb-8">
+            <div className="w-64">
+              <div className="flex justify-between py-2 text-sm text-gray-600">
+                <span>Subtotal</span>
+                <span>{formatCurrency(grandTotal)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-t-2 border-gray-900 font-bold text-gray-900">
+                <span>Total</span>
+                <span>{formatCurrency(grandTotal)}</span>
+              </div>
             </div>
           </div>
 
           {/* Notes */}
           {job.notes && (
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1.5">Service Notes</p>
-              <div className="bg-muted rounded-xl px-3 py-2.5">
-                <p className="text-sm text-foreground whitespace-pre-wrap">{job.notes}</p>
-              </div>
+            <div className="mb-8 p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Notes
+              </h3>
+              <p className="text-sm text-gray-600">{job.notes}</p>
             </div>
           )}
 
-          {/* Labor Rates */}
-          {laborRates && laborRates.length > 0 && (
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1.5">Labor Rates</p>
-              <div className="space-y-1.5">
-                {laborRates.map((rate) => (
-                  <div key={rate.id.toString()} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
-                    <span className="text-sm text-foreground">{rate.name}</span>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">
-                        {rate.rateType === RateType.hourly ? 'Hourly' : 'Flat'}
-                      </Badge>
-                      <span className="text-sm font-semibold text-primary">
-                        ${(Number(rate.amount) / 100).toFixed(2)}{rate.rateType === RateType.hourly ? '/hr' : ''}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Signature Section */}
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+              Customer Signature
+            </h3>
 
-          {/* Estimate Total */}
-          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-primary">Estimate Total</p>
-              {job.stripePaymentId && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Payment ID: <span className="font-mono">{job.stripePaymentId}</span>
-                </p>
-              )}
+            {/* Existing saved signature */}
+            {existingSigUrl && (
+              <div className="mb-4">
+                <img
+                  src={existingSigUrl}
+                  alt="Customer Signature"
+                  className="max-h-24 border border-gray-200 rounded bg-white"
+                />
+                <p className="text-xs text-gray-400 mt-1">Signature on file</p>
+              </div>
+            )}
+
+            {/* Signature pad */}
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 bg-gray-50">
+              <canvas
+                ref={canvasRef}
+                width={500}
+                height={150}
+                className="w-full touch-none cursor-crosshair bg-white rounded"
+                style={{ touchAction: 'none' }}
+              />
             </div>
-            <p className="text-2xl font-display font-bold text-primary">
-              {job.estimate ? formatCurrency(job.estimate.amount) : 'Pending'}
+            <p className="text-xs text-gray-400 mt-1 mb-3">
+              {existingSigUrl
+                ? 'Draw a new signature to update'
+                : 'Draw your signature above'}
             </p>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={clear}
+                disabled={isEmpty}
+                className="text-gray-600"
+              >
+                Clear
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSaveSignature}
+                disabled={storeSignature.isPending || isEmpty}
+                className="bg-primary text-primary-foreground"
+              >
+                {storeSignature.isPending ? 'Saving...' : 'Save Signature'}
+              </Button>
+            </div>
+
+            {sigSaved && (
+              <div className="flex items-center gap-2 mt-3 text-green-600 text-sm">
+                <CheckCircle className="h-4 w-4" />
+                <span>Signature saved successfully!</span>
+              </div>
+            )}
+            {sigError && <p className="mt-2 text-sm text-red-500">{sigError}</p>}
           </div>
 
-          {/* Waiver */}
-          {job.waiverType && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <AlertCircle size={12} />
-              <span>Waiver signed: <span className="font-medium text-foreground capitalize">{job.waiverType}</span></span>
-            </div>
-          )}
+          {/* Footer */}
+          <div className="mt-8 pt-4 border-t border-gray-100 text-center text-xs text-gray-400">
+            <p>Thank you for your business!</p>
+          </div>
         </div>
       </div>
-
-      {/* Footer */}
-      <footer className="pt-2 pb-4 text-center">
-        <p className="text-muted-foreground text-xs">
-          Built with ❤️ using{' '}
-          <a
-            href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary font-medium"
-          >
-            caffeine.ai
-          </a>
-          {' '}· © {new Date().getFullYear()} Reliable Home Appliance Repair LLC
-        </p>
-      </footer>
     </div>
   );
 }

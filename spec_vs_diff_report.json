@@ -1,87 +1,65 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-02-28T21:54:52.364Z",
-  "summary": "The diff implements most of the requested requirements (REQ-30 through REQ-36) with good coverage. The backend adds laborLineItems to Job, storeUserSignature/getUserSignature, and addJobPhoto/removeJobPhoto. The frontend adds Labor, Parts Used, and Photos sections to JobDetailPage, a SignatureCapture component, and integrates it into ProfileSetupPage. However, the owner principal in main.mo does not match the required value, and several non-goal areas were modified.",
+  "generatedAt": "2026-02-28T23:18:11.717Z",
+  "summary": "The diff implements most of the required changes for hardening the owner principal and role checks. The backend declares ownerPrincipal as an immutable let constant with the correct value and comment, frontend SettingsPage.tsx uses a local OWNER_PRINCIPAL constant for isOwner checks, and useQueries.ts exposes a useIsOwner hook using the hardcoded principal. However, several specific requirements have partial or missing evidence in the diff due to truncation.",
   "missing_requirements": [
     {
-      "requirement": "Owner principal must remain q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe — do not change it",
-      "reason": "The backend/main.mo diff shows ownerPrincipal set to 'qo6l3-2omfi-cld33-ayy2m-apjgc-3encg-s6jub-j5dzz-npkyk-5wo3k-lae', which differs from the required principal in the build spec constraints.",
+      "id": "REQ-49",
+      "requirement": "Rewrite hasPermission so #owner checks are a direct equality comparison against the stable owner constant and never fall through to the TrieMap.",
+      "reason": "The AccessControl module files (authorization/access-control, authorization/MixinAuthorization) are not shown as modified in the diff. The hasPermission function itself is not visible. It is unclear whether #owner permission in the AccessControl module still consults the TrieMap or short-circuits to an equality check.",
       "evidence": [
         "backend/main.mo"
       ]
     },
     {
-      "id": "REQ-33",
-      "requirement": "Signature blobs stored in a stable TrieMap keyed by Principal to survive canister upgrades",
-      "reason": "The visible portion of main.mo shows userSignatures defined as Map.empty<Principal, Blob>() without a visible stable keyword or stable variable declaration, making survival across upgrades unconfirmed.",
+      "id": "REQ-50",
+      "requirement": "Audit and fix every owner-guarded endpoint (setStripeKey, getStripeKey, addAuthorizedPrincipal, removeAuthorizedPrincipal, listAuthorizedPrincipals, createLaborRate, updateLaborRate, deleteLaborRate, createPackage, updatePackage, deletePackage) to use the hardened hasPermission check.",
+      "reason": "The diff for backend/main.mo is truncated and does not show the implementation of these owner-guarded endpoints or confirm they use the hardened owner check.",
       "evidence": [
         "backend/main.mo"
       ]
     },
     {
-      "id": "REQ-34",
-      "requirement": "Signature capture step optionally presented on the Login page (LoginPage.tsx)",
-      "reason": "The diff and file summaries confirm SignatureCapture is only integrated into ProfileSetupPage.tsx. LoginPage.tsx is described as just a login screen with no signature capture step.",
+      "id": "REQ-51",
+      "requirement": "All standard CRUD endpoints accept calls from any principal passing hasPermission(caller, #authorized), including the owner and any TrieMap-registered #authorized principal.",
+      "reason": "The truncated diff shows createClient using isAuthorizedOrOwner which checks caller == ownerPrincipal OR AccessControl.hasPermission(..., #user). The use of #user instead of #authorized is inconsistent with the requirement. The remaining CRUD endpoints are not visible due to truncation.",
       "evidence": [
-        "frontend/src/pages/ProfileSetupPage.tsx",
+        "backend/main.mo"
+      ]
+    },
+    {
+      "id": "REQ-52",
+      "requirement": "The Dashboard owner-only metrics card and Labor Rates card render for the owner principal. No page shows 'Metrics restricted' when the owner is logged in.",
+      "reason": "DashboardPage.tsx is not listed as a modified file in the diff. The file summary mentions it uses useIsOwner but there is no direct diff evidence that the Dashboard page was actually updated.",
+      "evidence": [
         "frontend-file-summaries.txt"
+      ]
+    },
+    {
+      "id": "REQ-53",
+      "requirement": "Add a migration guard to preserve the stable owner principal across all future upgrades, actively aborting or skipping any logic that would reset the owner.",
+      "reason": "The diff declares ownerPrincipal as a let constant with a comment but does not show explicit migration guards in preupgrade/postupgrade hooks or a migration.mo file that actively prevents reset logic.",
+      "evidence": [
+        "backend/main.mo"
       ]
     }
   ],
   "hallucinated_features": [
     {
-      "description": "A separate backend/migration.mo module was created implementing OldJob-to-NewJob schema migration",
-      "reason": "The build request does not request a separate migration module file. It only requires laborLineItems to be added to the Job record with stable storage.",
+      "description": "A reusable useIsOwner hook exported from useQueries.ts and used across multiple pages including Dashboard and Inventory",
+      "reason": "The build request only requires the Settings page isOwner check to use a hardcoded principal comparison (REQ-52). Adding a shared hook used in DashboardPage and InventoryPage goes beyond the explicitly requested scope.",
       "evidence": [
-        "backend/migration.mo"
-      ]
-    },
-    {
-      "description": "CalendarPage.tsx was modified with job cards and Google Maps deep-links",
-      "reason": "The build request explicitly lists changes to the calendar screen as a non-goal, yet CalendarPage.tsx appears in the modified files.",
-      "evidence": [
-        "frontend/src/pages/CalendarPage.tsx",
-        "frontend-file-summaries.txt"
-      ]
-    },
-    {
-      "description": "A new InventoryPage with full CRUD for parts management was added",
-      "reason": "No requirement requests creation of a new InventoryPage. REQ-32 only requests a Parts Used section on the Job Detail page.",
-      "evidence": [
-        "frontend-file-summaries.txt"
-      ]
-    },
-    {
-      "description": "DashboardPage was modified to add a labor rates summary section and inventory card",
-      "reason": "No requirement in the build request asks for changes to the Dashboard page.",
-      "evidence": [
-        "frontend/src/pages/DashboardPage.tsx",
-        "frontend-file-summaries.txt"
-      ]
-    },
-    {
-      "description": "Layout.tsx bottom navigation was changed from four tabs to five tabs, adding Inventory and replacing Calendar",
-      "reason": "No requirement requests navigation tab changes, and the build spec non-goals explicitly exclude calendar changes.",
-      "evidence": [
+        "frontend/src/hooks/useQueries.ts",
         "frontend-file-summaries.txt"
       ]
     }
   ],
-  "confidence": 0.72,
+  "confidence": 0.62,
   "changed_files": [
     "backend/main.mo",
-    "backend/migration.mo",
     "frontend-file-summaries.txt",
-    "frontend/src/components/SignatureCapture.tsx",
     "frontend/src/hooks/useQueries.ts",
-    "frontend/src/hooks/useSignaturePad.ts",
-    "frontend/src/pages/CalendarPage.tsx",
-    "frontend/src/pages/DashboardPage.tsx",
-    "frontend/src/pages/InvoicePreviewPage.tsx",
-    "frontend/src/pages/JobDetailPage.tsx",
-    "frontend/src/pages/JobsPage.tsx",
-    "frontend/src/pages/ProfileSetupPage.tsx",
     "frontend/src/pages/SettingsPage.tsx",
     "project_state.json"
   ]

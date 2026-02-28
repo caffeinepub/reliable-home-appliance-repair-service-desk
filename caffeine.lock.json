@@ -11,7 +11,9 @@
     "initial-app": "1.0.0",
     "github-export-icp-cli": "1.0.0",
     "blob-storage": "4.0.0",
-    "camera": "1.0.0"
+    "camera": "1.0.0",
+    "stripe": "3.0.0",
+    "http-outcalls": "3.0.0"
   },
   "tags": [],
   "aiCoreVersion": "0.20.4",
