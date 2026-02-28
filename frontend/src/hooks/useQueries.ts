@@ -1,19 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useActor } from './useActor';
 import { useInternetIdentity } from './useInternetIdentity';
-import type { Client, Job, UserProfile, UserRole, LaborRate } from '../backend';
-import { Variant_open_complete_inProgress } from '../backend';
+import type { Client, Job, UserProfile, UserRole, LaborRate, LaborLineItem, Part } from '../backend';
+import { ExternalBlob, JobStatus } from '../backend';
 import type { Principal } from '@icp-sdk/core/principal';
 
 // ─── Owner Principal ──────────────────────────────────────────────────────────
-// Must match the stable ownerPrincipal in backend/main.mo exactly.
 const OWNER_PRINCIPAL = 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe';
 
-/**
- * Returns true when the currently logged-in identity is the owner principal.
- * This mirrors the backend's `ensureOwner` check which compares caller == ownerPrincipal
- * directly, bypassing the roles TrieMap.
- */
 export function useIsOwner(): boolean {
   const { identity } = useInternetIdentity();
   if (!identity) return false;
@@ -54,6 +48,38 @@ export function useSaveCallerUserProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] });
+    },
+  });
+}
+
+// ─── User Signature ───────────────────────────────────────────────────────────
+
+export function useGetUserSignature() {
+  const { actor, isFetching: actorFetching } = useActor();
+  const { identity } = useInternetIdentity();
+
+  return useQuery<Uint8Array | null>({
+    queryKey: ['userSignature'],
+    queryFn: async () => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.getUserSignature();
+    },
+    enabled: !!actor && !actorFetching && !!identity,
+    retry: false,
+  });
+}
+
+export function useStoreUserSignature() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (sig: Uint8Array) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.storeUserSignature(sig);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userSignature'] });
     },
   });
 }
@@ -248,7 +274,7 @@ export function useUpdateJobStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ jobId, newStatus }: { jobId: bigint; newStatus: Variant_open_complete_inProgress }) => {
+    mutationFn: async ({ jobId, newStatus }: { jobId: bigint; newStatus: JobStatus }) => {
       if (!actor) throw new Error('Actor not available');
       return actor.updateJobStatus(jobId, newStatus);
     },
@@ -269,6 +295,74 @@ export function useDeleteJob() {
       return actor.deleteJob(jobId);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+// ─── Job Labor Line Items ─────────────────────────────────────────────────────
+
+export function useAddLaborLineItem() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ jobId, laborLineItem }: { jobId: bigint; laborLineItem: LaborLineItem }) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.addLaborLineItem(jobId, laborLineItem);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+export function useRemoveLaborLineItem() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ jobId, index }: { jobId: bigint; index: bigint }) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.removeLaborLineItem(jobId, index);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+// ─── Job Photos ───────────────────────────────────────────────────────────────
+
+export function useAddJobPhoto() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ jobId, photo }: { jobId: bigint; photo: ExternalBlob }) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.addJobPhoto(jobId, photo);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+export function useRemoveJobPhoto() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ jobId, photoIndex }: { jobId: bigint; photoIndex: bigint }) => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.removeJobPhoto(jobId, photoIndex);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
     },
   });
@@ -370,7 +464,7 @@ export function useCreatePart() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (part: import('../backend').Part) => {
+    mutationFn: async (part: Part) => {
       if (!actor) throw new Error('Actor not available');
       return actor.createPart(part);
     },
@@ -385,7 +479,7 @@ export function useUpdatePart() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (part: import('../backend').Part) => {
+    mutationFn: async (part: Part) => {
       if (!actor) throw new Error('Actor not available');
       return actor.updatePart(part);
     },
@@ -420,8 +514,10 @@ export function useUsePartOnJob() {
       if (!actor) throw new Error('Actor not available');
       return actor.usePartOnJob(partId, jobId, quantityUsed);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['parts'] });
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
     },
   });
 }

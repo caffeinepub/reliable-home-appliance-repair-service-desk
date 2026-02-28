@@ -1,22 +1,31 @@
 import Map "mo:core/Map";
+import List "mo:core/List";
 import Nat "mo:core/Nat";
-import Text "mo:core/Text";
+import Blob "mo:core/Blob";
 import Time "mo:core/Time";
+import Iter "mo:core/Iter";
 import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
+import MixinStorage "blob-storage/Mixin";
+import Storage "blob-storage/Storage";
+import Migration "migration";
 
-
-
+(with migration = Migration.run)
 actor {
+  include MixinStorage();
+
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  stable let ownerPrincipal : Principal = Principal.fromText("q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe");
+  let ownerPrincipal : Principal = Principal.fromText(
+    "qo6l3-2omfi-cld33-ayy2m-apjgc-3encg-s6jub-j5dzz-npkyk-5wo3k-lae",
+  );
 
   public type UserProfile = { name : Text };
   let userProfiles = Map.empty<Principal, UserProfile>();
+  let userSignatures = Map.empty<Principal, Blob>();
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
@@ -49,18 +58,50 @@ actor {
     googleReviewUrl : ?Text;
   };
 
+  public type RateType = { #hourly; #flat };
+
+  public type LaborRate = {
+    id : Nat;
+    name : Text;
+    rateType : RateType;
+    amount : Nat;
+  };
+
+  public type LaborLineItem = {
+    laborRateId : Nat;
+    rateType : RateType;
+    hours : ?Float;
+    amount : Nat;
+    description : Text;
+  };
+
+  public type JobStatus = { #open; #inProgress; #complete };
+
+  public type Estimate = {
+    amount : Nat;
+    sigData : Blob;
+    sigTime : Time.Time;
+  };
+
+  public type WaiverType = {
+    #preexisting;
+    #potential;
+    #general;
+  };
+
   public type Job = {
     id : Nat;
     clientId : Nat;
     tech : Principal;
     date : Time.Time;
-    status : { #open; #inProgress; #complete };
+    status : JobStatus;
     notes : Text;
-    photos : [Blob];
-    estimate : ?{ amount : Nat; sigData : Blob; sigTime : Time.Time };
-    waiverType : ?{ #preexisting; #potential; #general };
+    photos : [Storage.ExternalBlob];
+    estimate : ?Estimate;
+    waiverType : ?WaiverType;
     maintenancePackage : ?Text;
     stripePaymentId : ?Text;
+    laborLineItems : [LaborLineItem];
   };
 
   public type Part = {
@@ -76,17 +117,8 @@ actor {
   let clientStore = Map.empty<Nat, Client>();
   let jobStore = Map.empty<Nat, Job>();
   let partStore = Map.empty<Nat, Part>();
-
-  public type LaborRate = {
-    id : Nat;
-    name : Text;
-    rateType : { #hourly; #flat };
-    amount : Nat;
-  };
-
   let laborRatesStore = Map.empty<Nat, LaborRate>();
 
-  // Checks that caller is an authorized user (at minimum #user role) OR is the owner principal
   func ensureAuthorizedOrOwner(caller : Principal) {
     if (caller == ownerPrincipal) {
       return;
@@ -172,7 +204,7 @@ actor {
     jobStore.add(job.id, job);
   };
 
-  public shared ({ caller }) func updateJobStatus(jobId : Nat, newStatus : { #open; #inProgress; #complete }) : async () {
+  public shared ({ caller }) func updateJobStatus(jobId : Nat, newStatus : JobStatus) : async () {
     ensureAuthorized(caller);
     switch (jobStore.get(jobId)) {
       case (null) { Runtime.trap("Job not found") };
@@ -189,6 +221,97 @@ actor {
       Runtime.trap("Job not found");
     };
     jobStore.remove(jobId);
+  };
+
+  // Job photo management using blob storage
+  public shared ({ caller }) func addJobPhoto(jobId : Nat, photo : Storage.ExternalBlob) : async () {
+    ensureAuthorized(caller);
+
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) {
+        let photosList = List.fromArray(job.photos);
+        photosList.add(photo);
+        let updatedJob = { job with photos = photosList.toArray() };
+        jobStore.add(jobId, updatedJob);
+      };
+    };
+  };
+
+  public shared ({ caller }) func removeJobPhoto(jobId : Nat, photoIndex : Nat) : async () {
+    ensureAuthorized(caller);
+
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) {
+        if (photoIndex >= job.photos.size()) {
+          Runtime.trap("Invalid photo index");
+        };
+
+        let photosList = List.fromArray(job.photos);
+        let filteredPhotos = photosList.enumerate().filter(
+          func((i, _)) { i != photoIndex }
+        );
+        let newPhotosList = filteredPhotos.map(
+          func((_, photo)) { photo }
+        );
+        let updatedJob = { job with photos = newPhotosList.toArray() };
+        jobStore.add(jobId, updatedJob);
+      };
+    };
+  };
+
+  // Labor Line Item Management
+  public shared ({ caller }) func addLaborLineItem(jobId : Nat, laborLineItem : LaborLineItem) : async () {
+    ensureAuthorized(caller);
+
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) {
+        let laborItemsList = List.fromArray<LaborLineItem>(job.laborLineItems);
+        laborItemsList.add(laborLineItem);
+        let updatedJob = { job with laborLineItems = laborItemsList.toArray() };
+        jobStore.add(jobId, updatedJob);
+      };
+    };
+  };
+
+  public shared ({ caller }) func removeLaborLineItem(jobId : Nat, index : Nat) : async () {
+    ensureAuthorized(caller);
+
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) {
+        if (index >= job.laborLineItems.size()) {
+          Runtime.trap("Invalid labor line item index");
+        };
+
+        let laborItemsList = List.fromArray<LaborLineItem>(job.laborLineItems);
+        let filteredLaborItems = laborItemsList.enumerate().filter(
+          func((i, _)) { i != index }
+        );
+        let newLaborItemsList = filteredLaborItems.map(
+          func((_, item)) { item }
+        );
+        let updatedJob = { job with laborLineItems = newLaborItemsList.toArray() };
+        jobStore.add(jobId, updatedJob);
+      };
+    };
+  };
+
+  // User Signature Management
+  public shared ({ caller }) func storeUserSignature(sig : Blob) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only authorized users can store signatures");
+    };
+    userSignatures.add(caller, sig);
+  };
+
+  public query ({ caller }) func getUserSignature() : async ?Blob {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only authorized users can get signatures");
+    };
+    userSignatures.get(caller);
   };
 
   // Inventory (Part) operations - accessible by authorized users and owner

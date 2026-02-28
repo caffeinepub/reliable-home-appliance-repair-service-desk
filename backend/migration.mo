@@ -1,46 +1,76 @@
 import Map "mo:core/Map";
-import Text "mo:core/Text";
-import Principal "mo:core/Principal";
 import Nat "mo:core/Nat";
+import Blob "mo:core/Blob";
+import Time "mo:core/Time";
+import Principal "mo:core/Principal";
+import Storage "blob-storage/Storage";
 
 module {
-  type UserProfile = { name : Text };
-  type Client = {
-    id : Nat;
-    name : Text;
-    phone : Text;
-    address : Text;
-    notes : Text;
-    email : ?Text;
-    googleReviewUrl : ?Text;
-  };
-  type Job = {
+  // Types from old code (before adding laborLineItems)
+  public type OldJob = {
     id : Nat;
     clientId : Nat;
     tech : Principal;
-    date : Int;
+    date : Time.Time;
     status : { #open; #inProgress; #complete };
     notes : Text;
-    photos : [Blob];
-    estimate : ?{ amount : Nat; sigData : Blob; sigTime : Int };
-    waiverType : ?{ #preexisting; #potential; #general };
+    photos : [Storage.ExternalBlob];
+    estimate : ?{
+      amount : Nat;
+      sigData : Blob;
+      sigTime : Time.Time;
+    };
+    waiverType : ?{
+      #preexisting;
+      #potential;
+      #general;
+    };
     maintenancePackage : ?Text;
     stripePaymentId : ?Text;
   };
-  type LaborRate = {
-    id : Nat;
-    name : Text;
-    rateType : { #hourly; #flat };
-    amount : Nat;
-  };
-  type Actor = {
-    userProfiles : Map.Map<Principal, UserProfile>;
-    clientStore : Map.Map<Nat, Client>;
-    jobStore : Map.Map<Nat, Job>;
-    laborRatesStore : Map.Map<Nat, LaborRate>;
+
+  public type OldActor = {
+    jobStore : Map.Map<Nat, OldJob>;
   };
 
-  public func run(old : Actor) : Actor {
-    old;
+  // Types from new code (with laborLineItems)
+  public type NewJob = {
+    id : Nat;
+    clientId : Nat;
+    tech : Principal;
+    date : Time.Time;
+    status : { #open; #inProgress; #complete };
+    notes : Text;
+    photos : [Storage.ExternalBlob];
+    estimate : ?{
+      amount : Nat;
+      sigData : Blob;
+      sigTime : Time.Time;
+    };
+    waiverType : ?{
+      #preexisting;
+      #potential;
+      #general;
+    };
+    maintenancePackage : ?Text;
+    stripePaymentId : ?Text;
+    laborLineItems : [{
+      laborRateId : Nat;
+      rateType : { #hourly; #flat };
+      hours : ?Float;
+      amount : Nat;
+      description : Text;
+    }];
+  };
+
+  public type NewActor = {
+    jobStore : Map.Map<Nat, NewJob>;
+  };
+
+  public func run(old : OldActor) : NewActor {
+    let newJobStore = old.jobStore.map<Nat, OldJob, NewJob>(
+      func(_id, oldJob) { { oldJob with laborLineItems = [] } }
+    );
+    { jobStore = newJobStore };
   };
 };

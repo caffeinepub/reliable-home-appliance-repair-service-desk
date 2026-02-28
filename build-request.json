@@ -1,57 +1,161 @@
 {
   "kind": "build_request",
-  "title": "Fix owner principal in backend stable var",
-  "projectName": "Reliable Home Appliance Repair",
-  "priority": "high",
+  "title": "Add labor rates & parts to jobs, signature blob storage on login, and job photo capture",
+  "projectName": "Reliable Service Desk",
+  "priority": "normal",
   "requirements": [
     {
-      "id": "REQ-28",
-      "text": "In backend/main.mo, update the stable owner principal variable to the exact text value 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This must be set using Principal.fromText(\"q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe\") in the stable var initializer. All hasPermission checks for the #owner role must compare the caller against this principal. Remove any previously hardcoded principal value. Do not rely on a roles TrieMap entry for owner — the owner check must be a direct equality comparison against this stable var so it cannot be overwritten.",
+      "id": "REQ-30",
+      "text": "Extend the backend Job record to include a laborLineItems field: a list of records each containing laborRateId (Nat), rateType (variant { #hourly; #flat }), hours (optional Float), amount (Nat, in cents), and description (Text). Add addLaborLineItem and removeLaborLineItem endpoints on jobs restricted to #authorized. The job's total estimate amount should be derivable from the sum of labor line items plus parts used.",
       "target": "backend",
       "source": {
         "messageIds": [
-          "msg-1"
+          "msg-4"
         ],
         "quotes": [
-          "Fix the owner principal please same issue."
+          "Add labor rates and parts to be added into jobs"
         ]
       },
       "acceptanceCriteria": [
-        "The stable owner principal variable in main.mo is set to 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe' using Principal.fromText.",
-        "hasPermission(caller, #owner) returns true when and only when caller equals this principal.",
-        "No other principal value (old NNS principal or any other) appears as the owner in the codebase.",
-        "The owner principal check is a direct equality comparison against the stable var and cannot be overridden by the roles TrieMap.",
-        "Logging in with the app-derived Internet Identity principal grants full owner access including Settings, labor rate management, and owner-only metrics."
+        "Job record contains a laborLineItems list field persisted in stable storage",
+        "addLaborLineItem endpoint accepts jobId, laborRateId, optional hours, and description; requires #authorized",
+        "removeLaborLineItem endpoint accepts jobId and lineItemId; requires #authorized",
+        "listJobs and getJob responses include the laborLineItems array"
       ]
     },
     {
-      "id": "REQ-29",
-      "text": "In backend/main.mo, ensure that all inventory endpoints (createPart, getPart, listParts, updatePart, deletePart, usePartOnJob) correctly accept calls from principals with at minimum the #authorized role, and also from the #owner principal. Verify the hasPermission guard on every inventory function uses the updated owner principal so the owner can perform all inventory CRUD operations.",
-      "target": "backend",
+      "id": "REQ-31",
+      "text": "On the Job Detail page, add a 'Labor' section below the existing fields. Display existing labor line items for the job (labor rate name, type, hours if hourly, and computed amount). Include an 'Add Labor' button that opens an inline form: select a labor rate from listLaborRates, enter hours (if hourly type), and a description. Allow removing individual line items. Show a running subtotal for labor. Use the addLaborLineItem and removeLaborLineItem backend endpoints.",
+      "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-1"
+          "msg-4"
         ],
         "quotes": [
-          "Fix the owner principal please same issue."
+          "Add labor rates and parts to be added into jobs"
         ]
       },
       "acceptanceCriteria": [
-        "The owner principal can call createPart, updatePart, deletePart, usePartOnJob, listParts, and getPart without receiving an access-denied error.",
-        "Authorized users (non-owner) can also call these endpoints successfully.",
-        "Unauthorized callers receive an access-denied error from all inventory endpoints."
+        "Labor section is visible on the Job Detail page",
+        "Existing labor line items display rate name, type, hours (if hourly), and dollar amount",
+        "Add Labor form lets user select a labor rate and enter hours for hourly rates",
+        "Removing a line item calls removeLaborLineItem and refreshes the list",
+        "A running labor subtotal is displayed below the line items"
+      ]
+    },
+    {
+      "id": "REQ-32",
+      "text": "On the Job Detail page, add a 'Parts Used' section that displays parts already associated with the job via existing usePartOnJob records. Include an 'Add Part' button that opens an inline form: select a part from listParts, enter a quantity to deduct, and confirm. This calls the existing usePartOnJob endpoint. Show part name, SKU, quantity used, and unit cost per line. Display a running parts subtotal.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-4"
+        ],
+        "quotes": [
+          "Add labor rates and parts to be added into jobs"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Parts Used section is visible on the Job Detail page",
+        "Existing parts used are displayed with name, SKU, quantity, and unit cost",
+        "Add Part form lets user select a part and enter a quantity",
+        "Submitting the form calls usePartOnJob and refreshes the parts list",
+        "A running parts subtotal is shown below the line items"
+      ]
+    },
+    {
+      "id": "REQ-33",
+      "text": "Extend the backend to store a signature blob associated with the login/onboarding flow. Add a storeUserSignature(sig: Blob) endpoint restricted to authenticated callers (minimum #authorized) that saves the signature blob keyed by the caller's principal in a stable TrieMap<Principal, Blob>. Add a getUserSignature() query that returns the stored blob for the caller. The signature should be associated with the user profile, not a specific job.",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-4"
+        ],
+        "quotes": [
+          "Integrate the sign on screen option blob storage"
+        ]
+      },
+      "acceptanceCriteria": [
+        "storeUserSignature endpoint accepts a Blob and persists it keyed by caller principal",
+        "getUserSignature query returns the stored blob for the caller or null if none",
+        "Both endpoints require at minimum #authorized permission",
+        "Signature blobs are stored in a stable variable and survive upgrades"
+      ]
+    },
+    {
+      "id": "REQ-34",
+      "text": "On the Login page (LoginPage.tsx) and/or the Profile Setup page (ProfileSetupPage.tsx), add an optional signature capture step after the user authenticates. Display a canvas-based signature pad where the user can draw their signature with a mouse or finger. Include Clear and Save buttons. On Save, convert the canvas drawing to a Blob and call storeUserSignature. Show a confirmation message when saved. Skip the step gracefully if the user dismisses it.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-4"
+        ],
+        "quotes": [
+          "Integrate the sign on screen option blob storage"
+        ]
+      },
+      "acceptanceCriteria": [
+        "A signature capture canvas is presented to the user after successful login or during profile setup",
+        "User can draw a signature using touch or mouse input on the canvas",
+        "Clear button resets the canvas",
+        "Save button converts the canvas content to a Blob and calls storeUserSignature",
+        "A success message is shown after saving",
+        "User can skip the signature step without error"
+      ]
+    },
+    {
+      "id": "REQ-35",
+      "text": "Extend the backend Job record to include a photos field: list of Blob (already present as [Blob] per prior spec). Add addJobPhoto(jobId: Nat, photo: Blob) and removeJobPhoto(jobId: Nat, photoIndex: Nat) endpoints restricted to #authorized. Ensure these persist in stable storage and are included in getJob and listJobs responses.",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-4"
+        ],
+        "quotes": [
+          "Blob storage on jobs for pictures(open camera)"
+        ]
+      },
+      "acceptanceCriteria": [
+        "addJobPhoto endpoint appends a Blob to the job's photos array and requires #authorized",
+        "removeJobPhoto endpoint removes a photo by index and requires #authorized",
+        "Photo blobs persist across canister upgrades in stable storage",
+        "getJob response includes the photos array"
+      ]
+    },
+    {
+      "id": "REQ-36",
+      "text": "On the Job Detail page, add a 'Photos' section that displays thumbnail previews of all stored photos for the job. Include a 'Take Photo / Upload' button that uses an HTML file input with accept='image/*' and capture='environment' to open the device camera or file picker. On selection, read the file as an ArrayBuffer, convert to Blob, and call addJobPhoto. Display the uploaded photo as a thumbnail in the section. Include a delete icon on each thumbnail that calls removeJobPhoto.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-4"
+        ],
+        "quotes": [
+          "Blob storage on jobs for pictures(open camera)"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Photos section is visible on the Job Detail page",
+        "Existing job photos are displayed as thumbnail previews",
+        "Take Photo / Upload button opens camera on mobile and file picker on desktop",
+        "Selected image is uploaded via addJobPhoto and immediately appears as a thumbnail",
+        "Delete icon on each thumbnail calls removeJobPhoto and removes it from the display",
+        "Loading and error states are handled gracefully"
       ]
     }
   ],
   "constraints": [
-    "The owner principal value must be exactly 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe' — do not alter or truncate it.",
-    "Do not change any frontend immutable paths.",
-    "All Motoko logic must remain in backend/main.mo as a single actor."
+    "Owner principal must remain q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe — do not change it",
+    "Do not modify files under frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, or frontend/src/components/ui",
+    "All Motoko logic must remain in backend/main.mo as a single actor",
+    "Photo and signature blobs must be stored in stable variables to survive canister upgrades"
   ],
   "nonGoals": [
-    "Do not change any frontend files for this fix.",
-    "Do not add new features or screens.",
-    "Do not modify the roles TrieMap logic beyond ensuring the owner stable var is used correctly for #owner checks."
+    "Real-time photo syncing or cloud storage outside the canister",
+    "GPS or live location tracking",
+    "Stripe payment changes",
+    "Maintenance package changes",
+    "Changes to the calendar or invoice screens"
   ],
   "imageRequirements": {
     "required": [],

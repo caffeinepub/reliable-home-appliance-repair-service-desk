@@ -8,6 +8,26 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
+export const _CaffeineStorageCreateCertificateResult = IDL.Record({
+  'method' : IDL.Text,
+  'blob_hash' : IDL.Text,
+});
+export const _CaffeineStorageRefillInformation = IDL.Record({
+  'proposed_top_up_amount' : IDL.Opt(IDL.Nat),
+});
+export const _CaffeineStorageRefillResult = IDL.Record({
+  'success' : IDL.Opt(IDL.Bool),
+  'topped_up_amount' : IDL.Opt(IDL.Nat),
+});
+export const ExternalBlob = IDL.Vec(IDL.Nat8);
+export const RateType = IDL.Variant({ 'flat' : IDL.Null, 'hourly' : IDL.Null });
+export const LaborLineItem = IDL.Record({
+  'hours' : IDL.Opt(IDL.Float64),
+  'laborRateId' : IDL.Nat,
+  'description' : IDL.Text,
+  'amount' : IDL.Nat,
+  'rateType' : RateType,
+});
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
   'user' : IDL.Null,
@@ -22,41 +42,41 @@ export const Client = IDL.Record({
   'notes' : IDL.Text,
   'phone' : IDL.Text,
 });
+export const JobStatus = IDL.Variant({
+  'open' : IDL.Null,
+  'complete' : IDL.Null,
+  'inProgress' : IDL.Null,
+});
+export const WaiverType = IDL.Variant({
+  'general' : IDL.Null,
+  'preexisting' : IDL.Null,
+  'potential' : IDL.Null,
+});
 export const Time = IDL.Int;
+export const Estimate = IDL.Record({
+  'sigData' : IDL.Vec(IDL.Nat8),
+  'sigTime' : Time,
+  'amount' : IDL.Nat,
+});
 export const Job = IDL.Record({
   'id' : IDL.Nat,
-  'status' : IDL.Variant({
-    'open' : IDL.Null,
-    'complete' : IDL.Null,
-    'inProgress' : IDL.Null,
-  }),
+  'status' : JobStatus,
   'clientId' : IDL.Nat,
-  'waiverType' : IDL.Opt(
-    IDL.Variant({
-      'general' : IDL.Null,
-      'preexisting' : IDL.Null,
-      'potential' : IDL.Null,
-    })
-  ),
+  'waiverType' : IDL.Opt(WaiverType),
   'date' : Time,
   'tech' : IDL.Principal,
-  'estimate' : IDL.Opt(
-    IDL.Record({
-      'sigData' : IDL.Vec(IDL.Nat8),
-      'sigTime' : Time,
-      'amount' : IDL.Nat,
-    })
-  ),
+  'estimate' : IDL.Opt(Estimate),
   'notes' : IDL.Text,
   'stripePaymentId' : IDL.Opt(IDL.Text),
   'maintenancePackage' : IDL.Opt(IDL.Text),
-  'photos' : IDL.Vec(IDL.Vec(IDL.Nat8)),
+  'laborLineItems' : IDL.Vec(LaborLineItem),
+  'photos' : IDL.Vec(ExternalBlob),
 });
 export const LaborRate = IDL.Record({
   'id' : IDL.Nat,
   'name' : IDL.Text,
   'amount' : IDL.Nat,
-  'rateType' : IDL.Variant({ 'flat' : IDL.Null, 'hourly' : IDL.Null }),
+  'rateType' : RateType,
 });
 export const Part = IDL.Record({
   'id' : IDL.Nat,
@@ -70,7 +90,35 @@ export const Part = IDL.Record({
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
 
 export const idlService = IDL.Service({
+  '_caffeineStorageBlobIsLive' : IDL.Func(
+      [IDL.Vec(IDL.Nat8)],
+      [IDL.Bool],
+      ['query'],
+    ),
+  '_caffeineStorageBlobsToDelete' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Vec(IDL.Nat8))],
+      ['query'],
+    ),
+  '_caffeineStorageConfirmBlobDeletion' : IDL.Func(
+      [IDL.Vec(IDL.Vec(IDL.Nat8))],
+      [],
+      [],
+    ),
+  '_caffeineStorageCreateCertificate' : IDL.Func(
+      [IDL.Text],
+      [_CaffeineStorageCreateCertificateResult],
+      [],
+    ),
+  '_caffeineStorageRefillCashier' : IDL.Func(
+      [IDL.Opt(_CaffeineStorageRefillInformation)],
+      [_CaffeineStorageRefillResult],
+      [],
+    ),
+  '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+  'addJobPhoto' : IDL.Func([IDL.Nat, ExternalBlob], [], []),
+  'addLaborLineItem' : IDL.Func([IDL.Nat, LaborLineItem], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'createClient' : IDL.Func([Client], [IDL.Nat], []),
   'createJob' : IDL.Func([Job], [IDL.Nat], []),
@@ -90,26 +138,19 @@ export const idlService = IDL.Service({
       [IDL.Opt(UserProfile)],
       ['query'],
     ),
+  'getUserSignature' : IDL.Func([], [IDL.Opt(IDL.Vec(IDL.Nat8))], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'listClients' : IDL.Func([], [IDL.Vec(Client)], ['query']),
   'listJobs' : IDL.Func([], [IDL.Vec(Job)], ['query']),
   'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
   'listParts' : IDL.Func([], [IDL.Vec(Part)], ['query']),
+  'removeJobPhoto' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
+  'removeLaborLineItem' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'storeUserSignature' : IDL.Func([IDL.Vec(IDL.Nat8)], [], []),
   'updateClient' : IDL.Func([Client], [], []),
   'updateJob' : IDL.Func([Job], [], []),
-  'updateJobStatus' : IDL.Func(
-      [
-        IDL.Nat,
-        IDL.Variant({
-          'open' : IDL.Null,
-          'complete' : IDL.Null,
-          'inProgress' : IDL.Null,
-        }),
-      ],
-      [],
-      [],
-    ),
+  'updateJobStatus' : IDL.Func([IDL.Nat, JobStatus], [], []),
   'updateLaborRate' : IDL.Func([LaborRate], [], []),
   'updatePart' : IDL.Func([Part], [], []),
   'usePartOnJob' : IDL.Func([IDL.Nat, IDL.Nat, IDL.Nat], [], []),
@@ -118,6 +159,26 @@ export const idlService = IDL.Service({
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
+  const _CaffeineStorageCreateCertificateResult = IDL.Record({
+    'method' : IDL.Text,
+    'blob_hash' : IDL.Text,
+  });
+  const _CaffeineStorageRefillInformation = IDL.Record({
+    'proposed_top_up_amount' : IDL.Opt(IDL.Nat),
+  });
+  const _CaffeineStorageRefillResult = IDL.Record({
+    'success' : IDL.Opt(IDL.Bool),
+    'topped_up_amount' : IDL.Opt(IDL.Nat),
+  });
+  const ExternalBlob = IDL.Vec(IDL.Nat8);
+  const RateType = IDL.Variant({ 'flat' : IDL.Null, 'hourly' : IDL.Null });
+  const LaborLineItem = IDL.Record({
+    'hours' : IDL.Opt(IDL.Float64),
+    'laborRateId' : IDL.Nat,
+    'description' : IDL.Text,
+    'amount' : IDL.Nat,
+    'rateType' : RateType,
+  });
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
     'user' : IDL.Null,
@@ -132,41 +193,41 @@ export const idlFactory = ({ IDL }) => {
     'notes' : IDL.Text,
     'phone' : IDL.Text,
   });
+  const JobStatus = IDL.Variant({
+    'open' : IDL.Null,
+    'complete' : IDL.Null,
+    'inProgress' : IDL.Null,
+  });
+  const WaiverType = IDL.Variant({
+    'general' : IDL.Null,
+    'preexisting' : IDL.Null,
+    'potential' : IDL.Null,
+  });
   const Time = IDL.Int;
+  const Estimate = IDL.Record({
+    'sigData' : IDL.Vec(IDL.Nat8),
+    'sigTime' : Time,
+    'amount' : IDL.Nat,
+  });
   const Job = IDL.Record({
     'id' : IDL.Nat,
-    'status' : IDL.Variant({
-      'open' : IDL.Null,
-      'complete' : IDL.Null,
-      'inProgress' : IDL.Null,
-    }),
+    'status' : JobStatus,
     'clientId' : IDL.Nat,
-    'waiverType' : IDL.Opt(
-      IDL.Variant({
-        'general' : IDL.Null,
-        'preexisting' : IDL.Null,
-        'potential' : IDL.Null,
-      })
-    ),
+    'waiverType' : IDL.Opt(WaiverType),
     'date' : Time,
     'tech' : IDL.Principal,
-    'estimate' : IDL.Opt(
-      IDL.Record({
-        'sigData' : IDL.Vec(IDL.Nat8),
-        'sigTime' : Time,
-        'amount' : IDL.Nat,
-      })
-    ),
+    'estimate' : IDL.Opt(Estimate),
     'notes' : IDL.Text,
     'stripePaymentId' : IDL.Opt(IDL.Text),
     'maintenancePackage' : IDL.Opt(IDL.Text),
-    'photos' : IDL.Vec(IDL.Vec(IDL.Nat8)),
+    'laborLineItems' : IDL.Vec(LaborLineItem),
+    'photos' : IDL.Vec(ExternalBlob),
   });
   const LaborRate = IDL.Record({
     'id' : IDL.Nat,
     'name' : IDL.Text,
     'amount' : IDL.Nat,
-    'rateType' : IDL.Variant({ 'flat' : IDL.Null, 'hourly' : IDL.Null }),
+    'rateType' : RateType,
   });
   const Part = IDL.Record({
     'id' : IDL.Nat,
@@ -180,7 +241,35 @@ export const idlFactory = ({ IDL }) => {
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
   
   return IDL.Service({
+    '_caffeineStorageBlobIsLive' : IDL.Func(
+        [IDL.Vec(IDL.Nat8)],
+        [IDL.Bool],
+        ['query'],
+      ),
+    '_caffeineStorageBlobsToDelete' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Vec(IDL.Nat8))],
+        ['query'],
+      ),
+    '_caffeineStorageConfirmBlobDeletion' : IDL.Func(
+        [IDL.Vec(IDL.Vec(IDL.Nat8))],
+        [],
+        [],
+      ),
+    '_caffeineStorageCreateCertificate' : IDL.Func(
+        [IDL.Text],
+        [_CaffeineStorageCreateCertificateResult],
+        [],
+      ),
+    '_caffeineStorageRefillCashier' : IDL.Func(
+        [IDL.Opt(_CaffeineStorageRefillInformation)],
+        [_CaffeineStorageRefillResult],
+        [],
+      ),
+    '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+    'addJobPhoto' : IDL.Func([IDL.Nat, ExternalBlob], [], []),
+    'addLaborLineItem' : IDL.Func([IDL.Nat, LaborLineItem], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'createClient' : IDL.Func([Client], [IDL.Nat], []),
     'createJob' : IDL.Func([Job], [IDL.Nat], []),
@@ -200,26 +289,19 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(UserProfile)],
         ['query'],
       ),
+    'getUserSignature' : IDL.Func([], [IDL.Opt(IDL.Vec(IDL.Nat8))], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'listClients' : IDL.Func([], [IDL.Vec(Client)], ['query']),
     'listJobs' : IDL.Func([], [IDL.Vec(Job)], ['query']),
     'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
     'listParts' : IDL.Func([], [IDL.Vec(Part)], ['query']),
+    'removeJobPhoto' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
+    'removeLaborLineItem' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'storeUserSignature' : IDL.Func([IDL.Vec(IDL.Nat8)], [], []),
     'updateClient' : IDL.Func([Client], [], []),
     'updateJob' : IDL.Func([Job], [], []),
-    'updateJobStatus' : IDL.Func(
-        [
-          IDL.Nat,
-          IDL.Variant({
-            'open' : IDL.Null,
-            'complete' : IDL.Null,
-            'inProgress' : IDL.Null,
-          }),
-        ],
-        [],
-        [],
-      ),
+    'updateJobStatus' : IDL.Func([IDL.Nat, JobStatus], [], []),
     'updateLaborRate' : IDL.Func([LaborRate], [], []),
     'updatePart' : IDL.Func([Part], [], []),
     'usePartOnJob' : IDL.Func([IDL.Nat, IDL.Nat, IDL.Nat], [], []),

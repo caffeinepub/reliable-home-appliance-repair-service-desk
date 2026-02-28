@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useListJobs, useListClients } from '../hooks/useQueries';
 import type { Job, Client } from '../backend';
-import { Variant_open_complete_inProgress } from '../backend';
+import { JobStatus } from '../backend';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,19 +34,19 @@ function getClientForJob(clients: Client[] | undefined, clientId: bigint): Clien
 }
 
 const STATUS_CONFIG = {
-  [Variant_open_complete_inProgress.open]: {
+  [JobStatus.open]: {
     label: 'Open',
     icon: AlertCircle,
     badgeVariant: 'destructive' as const,
     dotColor: 'bg-destructive',
   },
-  [Variant_open_complete_inProgress.inProgress]: {
+  [JobStatus.inProgress]: {
     label: 'In Progress',
     icon: Clock,
     badgeVariant: 'secondary' as const,
     dotColor: 'bg-primary',
   },
-  [Variant_open_complete_inProgress.complete]: {
+  [JobStatus.complete]: {
     label: 'Complete',
     icon: CheckCircle2,
     badgeVariant: 'default' as const,

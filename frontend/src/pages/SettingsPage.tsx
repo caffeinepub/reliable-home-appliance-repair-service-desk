@@ -10,7 +10,7 @@ import {
   useUpdateLaborRate,
   useDeleteLaborRate,
 } from '../hooks/useQueries';
-import { UserRole, Variant_flat_hourly } from '../backend';
+import { UserRole, RateType } from '../backend';
 import type { LaborRate } from '../backend';
 import { Principal } from '@dfinity/principal';
 import { useQueryClient } from '@tanstack/react-query';
@@ -70,13 +70,13 @@ function AccessDenied() {
 
 interface LaborRateFormState {
   name: string;
-  rateType: Variant_flat_hourly;
+  rateType: RateType;
   amount: string;
 }
 
 const emptyRateForm: LaborRateFormState = {
   name: '',
-  rateType: Variant_flat_hourly.hourly,
+  rateType: RateType.hourly,
   amount: '',
 };
 
@@ -150,9 +150,9 @@ function LaborRatesSection() {
     }
   };
 
-  const formatAmount = (amount: bigint, rateType: Variant_flat_hourly) => {
+  const formatAmount = (amount: bigint, rateType: RateType) => {
     const dollars = (Number(amount) / 100).toFixed(2);
-    return rateType === Variant_flat_hourly.hourly ? `$${dollars}/hr` : `$${dollars} flat`;
+    return rateType === RateType.hourly ? `$${dollars}/hr` : `$${dollars} flat`;
   };
 
   return (
@@ -198,14 +198,14 @@ function LaborRatesSection() {
               <Label className="text-xs font-medium">Type</Label>
               <Select
                 value={addForm.rateType}
-                onValueChange={(val) => setAddForm((p) => ({ ...p, rateType: val as Variant_flat_hourly }))}
+                onValueChange={(val) => setAddForm((p) => ({ ...p, rateType: val as RateType }))}
               >
                 <SelectTrigger className="rounded-xl h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={Variant_flat_hourly.hourly}>Hourly</SelectItem>
-                  <SelectItem value={Variant_flat_hourly.flat}>Flat</SelectItem>
+                  <SelectItem value={RateType.hourly}>Hourly</SelectItem>
+                  <SelectItem value={RateType.flat}>Flat</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -278,14 +278,14 @@ function LaborRatesSection() {
                   <div className="grid grid-cols-2 gap-2">
                     <Select
                       value={editForm.rateType}
-                      onValueChange={(val) => setEditForm((p) => ({ ...p, rateType: val as Variant_flat_hourly }))}
+                      onValueChange={(val) => setEditForm((p) => ({ ...p, rateType: val as RateType }))}
                     >
                       <SelectTrigger className="rounded-lg h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={Variant_flat_hourly.hourly}>Hourly</SelectItem>
-                        <SelectItem value={Variant_flat_hourly.flat}>Flat</SelectItem>
+                        <SelectItem value={RateType.hourly}>Hourly</SelectItem>
+                        <SelectItem value={RateType.flat}>Flat</SelectItem>
                       </SelectContent>
                     </Select>
                     <Input
@@ -323,7 +323,7 @@ function LaborRatesSection() {
                     <p className="text-sm font-semibold text-foreground truncate">{rate.name}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">
-                        {rate.rateType === Variant_flat_hourly.hourly ? 'Hourly' : 'Flat'}
+                        {rate.rateType === RateType.hourly ? 'Hourly' : 'Flat'}
                       </Badge>
                       <span className="text-xs text-primary font-semibold">
                         {formatAmount(rate.amount, rate.rateType)}
@@ -492,14 +492,15 @@ export default function SettingsPage() {
         <div className="space-y-1">
           <p className="text-xs text-muted-foreground font-medium">Your Principal ID</p>
           <div className="flex items-center gap-2">
-            <p className="font-mono text-xs text-foreground bg-muted rounded-lg px-3 py-2 flex-1 truncate">
-              {principalStr}
+            <p className="text-xs font-mono text-foreground bg-muted rounded-lg px-2 py-1.5 flex-1 truncate">
+              {principalStr || '—'}
             </p>
             <Button
               variant="ghost"
               size="icon"
               onClick={handleCopyPrincipal}
-              className="shrink-0 rounded-lg h-8 w-8"
+              className="h-8 w-8 rounded-lg shrink-0"
+              disabled={!principalStr}
             >
               {copied ? <Check size={14} className="text-primary" /> : <Copy size={14} />}
             </Button>
@@ -508,77 +509,78 @@ export default function SettingsPage() {
 
         <Button
           variant="outline"
+          size="sm"
           onClick={handleLogout}
-          className="w-full rounded-xl text-destructive border-destructive/30 hover:bg-destructive/5 gap-2"
+          className="w-full rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive text-xs h-8"
         >
-          <LogOut size={15} />
-          Sign Out
+          <LogOut size={13} className="mr-1.5" />
+          Log Out
         </Button>
       </div>
 
       {/* Labor Rates — Owner Only */}
       {isOwner && <LaborRatesSection />}
 
-      {/* Role Assignment — Admin or Owner */}
-      <div className="bg-card rounded-2xl border border-border p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <UserPlus size={16} className="text-primary" />
-          <h3 className="font-semibold text-sm text-foreground">Assign User Role</h3>
-        </div>
-        <p className="text-muted-foreground text-xs">
-          Grant or revoke access for technicians by entering their principal ID.
-        </p>
-
-        <form onSubmit={handleAssignRole} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Principal ID</Label>
-            <Input
-              value={newPrincipal}
-              onChange={(e) => setNewPrincipal(e.target.value)}
-              placeholder="xxxxx-xxxxx-xxxxx-xxxxx-xxx"
-              className="rounded-xl text-sm h-9 font-mono"
-            />
+      {/* Role Assignment — Owner & Admin */}
+      {(isOwner || isAdmin) && (
+        <div className="bg-card rounded-2xl border border-border p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <UserPlus size={16} className="text-primary" />
+            <h3 className="font-semibold text-sm text-foreground">Assign User Role</h3>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Role</Label>
-            <Select
-              value={newRole}
-              onValueChange={(val) => setNewRole(val as UserRole)}
-            >
-              <SelectTrigger className="rounded-xl h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={UserRole.user}>Authorized User</SelectItem>
-                <SelectItem value={UserRole.admin}>Admin</SelectItem>
-                <SelectItem value={UserRole.guest}>Guest (Revoke Access)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {assignError && (
-            <p className="text-destructive text-xs">{assignError}</p>
-          )}
-
-          <Button
-            type="submit"
-            size="sm"
-            disabled={assignRole.isPending || !newPrincipal.trim()}
-            className="w-full rounded-xl bg-primary text-primary-foreground text-xs h-9"
-          >
-            {assignRole.isPending ? (
-              <Loader2 size={13} className="animate-spin mr-1" />
-            ) : (
-              <UserPlus size={13} className="mr-1" />
+          <p className="text-muted-foreground text-xs">
+            Grant access to team members by assigning them a role using their principal ID.
+          </p>
+          <form onSubmit={handleAssignRole} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Principal ID</Label>
+              <Input
+                value={newPrincipal}
+                onChange={(e) => setNewPrincipal(e.target.value)}
+                placeholder="e.g. aaaaa-aa..."
+                className="rounded-xl text-sm h-9 font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Role</Label>
+              <Select
+                value={newRole}
+                onValueChange={(val) => setNewRole(val as UserRole)}
+              >
+                <SelectTrigger className="rounded-xl h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UserRole.user}>User</SelectItem>
+                  <SelectItem value={UserRole.admin}>Admin</SelectItem>
+                  <SelectItem value={UserRole.guest}>Guest</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {assignError && (
+              <p className="text-destructive text-xs">{assignError}</p>
             )}
-            Assign Role
-          </Button>
-
-          {assignRole.isSuccess && (
-            <p className="text-primary text-xs text-center">Role assigned successfully!</p>
-          )}
-        </form>
-      </div>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={assignRole.isPending || !newPrincipal.trim()}
+              className="w-full rounded-xl bg-primary text-primary-foreground text-xs h-9"
+            >
+              {assignRole.isPending ? (
+                <Loader2 size={13} className="animate-spin mr-1.5" />
+              ) : (
+                <UserPlus size={13} className="mr-1.5" />
+              )}
+              Assign Role
+            </Button>
+            {assignRole.isSuccess && (
+              <p className="text-primary text-xs text-center flex items-center justify-center gap-1">
+                <Check size={12} /> Role assigned successfully.
+              </p>
+            )}
+          </form>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="pt-2 pb-4 text-center">
@@ -591,8 +593,8 @@ export default function SettingsPage() {
             className="text-primary font-medium"
           >
             caffeine.ai
-          </a>{' '}
-          · © {new Date().getFullYear()} Reliable Home Appliance Repair LLC
+          </a>
+          {' '}· © {new Date().getFullYear()} Reliable Home Appliance Repair LLC
         </p>
       </footer>
     </div>

@@ -1,4 +1,95 @@
 {
   "kind": "feature_evidence_report",
-  "features": []
+  "features": [
+    {
+      "featureId": "feature-on-the-job-detail-page-add-a-labor-section-below-the-existing-fields-display-existing-labor-line-items-for-the-job-labor-rate-name-type-hours-if-hourly-and-computed-amount-include-an-add-labor-button-that-opens-an-inline-form-select-a-labor-rate-from-listlaborrates-enter-hours-if-hourly-type-and-a-description-allow-removing-individual-line-items-show-a-running-subtotal-for-labor-use-the-addlaborlineitem-and-removelaborlineitem-backend-endpoints",
+      "featureTitle": "On the Job Detail page, add a 'Labor' section below the existing fields. Display existing labor line items for the job (labor rate name, type, hours if hourly, and computed amount). Include an 'Add Labor' button that opens an inline form: select a labor rate from listLaborRates, enter hours (if hourly type), and a description. Allow removing individual line items. Show a running subtotal for labor. Use the addLaborLineItem and removeLaborLineItem backend endpoints.",
+      "files": [
+        "frontend/src/hooks/useQueries.ts",
+        "frontend/src/pages/JobDetailPage.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0",
+        "blob-storage@4.0.0",
+        "camera@1.0.0"
+      ],
+      "testIds": [
+        "REQ-31"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-on-the-job-detail-page-add-a-parts-used-section-that-displays-parts-already-associated-with-the-job-via-existing-usepartonjob-records-include-an-add-part-button-that-opens-an-inline-form-select-a-part-from-listparts-enter-a-quantity-to-deduct-and-confirm-this-calls-the-existing-usepartonjob-endpoint-show-part-name-sku-quantity-used-and-unit-cost-per-line-display-a-running-parts-subtotal",
+      "featureTitle": "On the Job Detail page, add a 'Parts Used' section that displays parts already associated with the job via existing usePartOnJob records. Include an 'Add Part' button that opens an inline form: select a part from listParts, enter a quantity to deduct, and confirm. This calls the existing usePartOnJob endpoint. Show part name, SKU, quantity used, and unit cost per line. Display a running parts subtotal.",
+      "files": [
+        "frontend/src/hooks/useQueries.ts",
+        "frontend/src/pages/JobDetailPage.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0",
+        "blob-storage@4.0.0",
+        "camera@1.0.0"
+      ],
+      "testIds": [
+        "REQ-32"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-on-the-login-page-loginpage-tsx-and-or-the-profile-setup-page-profilesetuppage-tsx-add-an-optional-signature-capture-step-after-the-user-authenticates-display-a-canvas-based-signature-pad-where-the-user-can-draw-their-signature-with-a-mouse-or-finger-include-clear-and-save-buttons-on-save-convert-the-canvas-drawing-to-a-blob-and-call-storeusersignature-show-a-confirmation-message-when-saved-skip-the-step-gracefully-if-the-user-dismisses-it",
+      "featureTitle": "On the Login page (LoginPage.tsx) and/or the Profile Setup page (ProfileSetupPage.tsx), add an optional signature capture step after the user authenticates. Display a canvas-based signature pad where the user can draw their signature with a mouse or finger. Include Clear and Save buttons. On Save, convert the canvas drawing to a Blob and call storeUserSignature. Show a confirmation message when saved. Skip the step gracefully if the user dismisses it.",
+      "files": [
+        "frontend/src/components/SignatureCapture.tsx",
+        "frontend/src/hooks/useQueries.ts",
+        "frontend/src/hooks/useSignaturePad.ts",
+        "frontend/src/pages/ProfileSetupPage.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0",
+        "blob-storage@4.0.0",
+        "camera@1.0.0"
+      ],
+      "testIds": [
+        "REQ-34"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-on-the-job-detail-page-add-a-photos-section-that-displays-thumbnail-previews-of-all-stored-photos-for-the-job-include-a-take-photo-upload-button-that-uses-an-html-file-input-with-accept-image-and-capture-environment-to-open-the-device-camera-or-file-picker-on-selection-read-the-file-as-an-arraybuffer-convert-to-blob-and-call-addjobphoto-display-the-uploaded-photo-as-a-thumbnail-in-the-section-include-a-delete-icon-on-each-thumbnail-that-calls-removejobphoto",
+      "featureTitle": "On the Job Detail page, add a 'Photos' section that displays thumbnail previews of all stored photos for the job. Include a 'Take Photo / Upload' button that uses an HTML file input with accept='image/*' and capture='environment' to open the device camera or file picker. On selection, read the file as an ArrayBuffer, convert to Blob, and call addJobPhoto. Display the uploaded photo as a thumbnail in the section. Include a delete icon on each thumbnail that calls removeJobPhoto.",
+      "files": [
+        "frontend/src/hooks/useQueries.ts",
+        "frontend/src/pages/JobDetailPage.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0",
+        "blob-storage@4.0.0",
+        "camera@1.0.0"
+      ],
+      "testIds": [
+        "REQ-36"
+      ],
+      "confidence": "high"
+    }
+  ]
 }

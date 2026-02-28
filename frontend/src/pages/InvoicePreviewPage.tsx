@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useGetJob, useGetClient, useListLaborRates } from '../hooks/useQueries';
-import { Variant_open_complete_inProgress } from '../backend';
+import { JobStatus, RateType } from '../backend';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -43,11 +43,12 @@ function formatCurrency(cents: bigint): string {
   return `$${(Number(cents) / 100).toFixed(2)}`;
 }
 
-function statusLabel(status: Variant_open_complete_inProgress): string {
+function statusLabel(status: JobStatus): string {
   switch (status) {
-    case Variant_open_complete_inProgress.open: return 'Open';
-    case Variant_open_complete_inProgress.inProgress: return 'In Progress';
-    case Variant_open_complete_inProgress.complete: return 'Complete';
+    case JobStatus.open: return 'Open';
+    case JobStatus.inProgress: return 'In Progress';
+    case JobStatus.complete: return 'Complete';
+    default: return 'Unknown';
   }
 }
 
@@ -193,7 +194,7 @@ export default function InvoicePreviewPage() {
       waiverType: job.waiverType ?? '',
       estimateAmount: job.estimate ? formatCurrency(job.estimate.amount) : '',
       laborRates: laborRates && laborRates.length > 0
-        ? laborRates.map((r) => `${r.name} — ${r.rateType === 'hourly' ? `$${(Number(r.amount) / 100).toFixed(2)}/hr` : `$${(Number(r.amount) / 100).toFixed(2)} flat`}`).join('\n')
+        ? laborRates.map((r) => `${r.name} — ${r.rateType === RateType.hourly ? `$${(Number(r.amount) / 100).toFixed(2)}/hr` : `$${(Number(r.amount) / 100).toFixed(2)} flat`}`).join('\n')
         : '',
       stripePaymentId: job.stripePaymentId ?? '',
     };
@@ -245,7 +246,6 @@ export default function InvoicePreviewPage() {
         text: `Invoice for ${p.clientName} — Job #${p.jobId}${p.estimateAmount ? ` — ${p.estimateAmount}` : ''}`,
       };
 
-      // Try sharing with file if supported
       if (navigator.canShare && navigator.canShare({ files: [htmlFile] })) {
         await navigator.share({ ...shareData, files: [htmlFile] });
       } else {
@@ -253,7 +253,6 @@ export default function InvoicePreviewPage() {
       }
     } catch (err: unknown) {
       const error = err as Error;
-      // AbortError means user cancelled — not a real error
       if (error?.name !== 'AbortError') {
         setShareError('Share failed. Try downloading instead.');
       }
@@ -396,7 +395,7 @@ export default function InvoicePreviewPage() {
               <p className="text-xs text-muted-foreground">Date: <span className="text-foreground font-medium">{formatJobDate(job.date)}</span></p>
               <div className="mt-1">
                 <Badge
-                  variant={job.status === Variant_open_complete_inProgress.complete ? 'default' : job.status === Variant_open_complete_inProgress.inProgress ? 'secondary' : 'destructive'}
+                  variant={job.status === JobStatus.complete ? 'default' : job.status === JobStatus.inProgress ? 'secondary' : 'destructive'}
                   className="text-xs"
                 >
                   {statusLabel(job.status)}
@@ -430,10 +429,10 @@ export default function InvoicePreviewPage() {
                     <span className="text-sm text-foreground">{rate.name}</span>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary" className="text-xs">
-                        {rate.rateType === 'hourly' ? 'Hourly' : 'Flat'}
+                        {rate.rateType === RateType.hourly ? 'Hourly' : 'Flat'}
                       </Badge>
                       <span className="text-sm font-semibold text-primary">
-                        ${(Number(rate.amount) / 100).toFixed(2)}{rate.rateType === 'hourly' ? '/hr' : ''}
+                        ${(Number(rate.amount) / 100).toFixed(2)}{rate.rateType === RateType.hourly ? '/hr' : ''}
                       </span>
                     </div>
                   </div>

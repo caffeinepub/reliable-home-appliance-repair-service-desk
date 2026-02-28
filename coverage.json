@@ -1,44 +1,118 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-02-28T21:25:07.832Z",
+  "generatedAt": "2026-02-28T21:54:52.371Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 2,
-    "implemented": 0,
+    "total": 7,
+    "implemented": 4,
     "items": [
       {
-        "id": "REQ-28",
-        "summary": "In backend/main.mo, update the stable owner principal variable to the exact text value 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. This must be set using Principal.fromText(\"q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe\") in the stable var initializer. All hasPermission checks for the #owner role must compare the caller against this principal. Remove any previously hardcoded principal value. Do not rely on a roles TrieMap entry for owner — the owner check must be a direct equality comparison against this stable var so it cannot be overwritten.",
+        "id": "REQ-30",
+        "summary": "Extend the backend Job record to include a laborLineItems field: a list of records each containing laborRateId (Nat), rateType (variant { #hourly; #flat }), hours (optional Float), amount (Nat, in cents), and description (Text). Add addLaborLineItem and removeLaborLineItem endpoints on jobs restricted to #authorized. The job's total estimate amount should be derivable from the sum of labor line items plus parts used.",
         "status": "unknown",
         "plannedFiles": [],
         "matchedFiles": []
       },
       {
-        "id": "REQ-29",
-        "summary": "In backend/main.mo, ensure that all inventory endpoints (createPart, getPart, listParts, updatePart, deletePart, usePartOnJob) correctly accept calls from principals with at minimum the #authorized role, and also from the #owner principal. Verify the hasPermission guard on every inventory function uses the updated owner principal so the owner can perform all inventory CRUD operations.",
+        "id": "REQ-31",
+        "summary": "On the Job Detail page, add a 'Labor' section below the existing fields. Display existing labor line items for the job (labor rate name, type, hours if hourly, and computed amount). Include an 'Add Labor' button that opens an inline form: select a labor rate from listLaborRates, enter hours (if hourly type), and a description. Allow removing individual line items. Show a running subtotal for labor. Use the addLaborLineItem and removeLaborLineItem backend endpoints.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/pages/JobDetailPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/pages/JobDetailPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-32",
+        "summary": "On the Job Detail page, add a 'Parts Used' section that displays parts already associated with the job via existing usePartOnJob records. Include an 'Add Part' button that opens an inline form: select a part from listParts, enter a quantity to deduct, and confirm. This calls the existing usePartOnJob endpoint. Show part name, SKU, quantity used, and unit cost per line. Display a running parts subtotal.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/pages/JobDetailPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/pages/JobDetailPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-33",
+        "summary": "Extend the backend to store a signature blob associated with the login/onboarding flow. Add a storeUserSignature(sig: Blob) endpoint restricted to authenticated callers (minimum #authorized) that saves the signature blob keyed by the caller's principal in a stable TrieMap<Principal, Blob>. Add a getUserSignature() query that returns the stored blob for the caller. The signature should be associated with the user profile, not a specific job.",
         "status": "unknown",
         "plannedFiles": [],
         "matchedFiles": []
+      },
+      {
+        "id": "REQ-34",
+        "summary": "On the Login page (LoginPage.tsx) and/or the Profile Setup page (ProfileSetupPage.tsx), add an optional signature capture step after the user authenticates. Display a canvas-based signature pad where the user can draw their signature with a mouse or finger. Include Clear and Save buttons. On Save, convert the canvas drawing to a Blob and call storeUserSignature. Show a confirmation message when saved. Skip the step gracefully if the user dismisses it.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/hooks/useSignaturePad.ts",
+          "frontend/src/components/SignatureCapture.tsx",
+          "frontend/src/pages/ProfileSetupPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/hooks/useSignaturePad.ts",
+          "frontend/src/components/SignatureCapture.tsx",
+          "frontend/src/pages/ProfileSetupPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-35",
+        "summary": "Extend the backend Job record to include a photos field: list of Blob (already present as [Blob] per prior spec). Add addJobPhoto(jobId: Nat, photo: Blob) and removeJobPhoto(jobId: Nat, photoIndex: Nat) endpoints restricted to #authorized. Ensure these persist in stable storage and are included in getJob and listJobs responses.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      },
+      {
+        "id": "REQ-36",
+        "summary": "On the Job Detail page, add a 'Photos' section that displays thumbnail previews of all stored photos for the job. Include a 'Take Photo / Upload' button that uses an HTML file input with accept='image/*' and capture='environment' to open the device camera or file picker. On selection, read the file as an ArrayBuffer, convert to Blob, and call addJobPhoto. Display the uploaded photo as a thumbnail in the section. Include a delete icon on each thumbnail that calls removeJobPhoto.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/pages/JobDetailPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/hooks/useQueries.ts",
+          "frontend/src/pages/JobDetailPage.tsx"
+        ]
       }
     ]
   },
   "changedFiles": [
+    "backend/blob-storage/Mixin.mo",
+    "backend/blob-storage/Storage.mo",
     "backend/main.mo",
+    "backend/migration.mo",
     "build-request.json",
+    "caffeine.lock.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
     "frontend/src/backend.d.ts",
     "frontend/src/backend.ts",
+    "frontend/src/camera/useCamera.ts",
+    "frontend/src/components/SignatureCapture.tsx",
     "frontend/src/declarations/backend.did.d.ts",
     "frontend/src/declarations/backend.did.js",
     "frontend/src/hooks/useQueries.ts",
+    "frontend/src/hooks/useSignaturePad.ts",
+    "frontend/src/pages/CalendarPage.tsx",
     "frontend/src/pages/DashboardPage.tsx",
-    "frontend/src/pages/InventoryPage.tsx",
+    "frontend/src/pages/InvoicePreviewPage.tsx",
+    "frontend/src/pages/JobDetailPage.tsx",
+    "frontend/src/pages/JobsPage.tsx",
+    "frontend/src/pages/ProfileSetupPage.tsx",
     "frontend/src/pages/SettingsPage.tsx",
     "project_state.json",
     "scratch/component-selection.json",

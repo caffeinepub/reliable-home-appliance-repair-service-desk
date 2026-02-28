@@ -1,6 +1,111 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Fix owner principal in backend stable var - Frontend Plan",
-  "requirements": []
+  "title": "Add labor rates & parts to jobs, signature blob storage on login, and job photo capture",
+  "requirements": [
+    {
+      "id": "REQ-31",
+      "summary": "Add Labor section to Job Detail page with line item management",
+      "acceptanceCriteria": [
+        "Labor section is visible on the Job Detail page",
+        "Existing labor line items display rate name, type, hours (if hourly), and dollar amount",
+        "Add Labor form lets user select a labor rate and enter hours for hourly rates",
+        "Removing a line item calls removeLaborLineItem and refreshes the list",
+        "A running labor subtotal is displayed below the line items"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/hooks/useQueries.ts",
+          "operation": "modify",
+          "description": "Add React Query hooks for addLaborLineItem and removeLaborLineItem mutations. These will call the backend capabilities and invalidate the job query cache on success."
+        },
+        {
+          "path": "frontend/src/pages/JobDetailPage.tsx",
+          "operation": "modify",
+          "description": "Add a Labor section below existing job fields. Display the job's laborLineItems array with rate name (looked up from labor rates), type badge, hours (if hourly), and computed amount in dollars. Include an 'Add Labor' button that toggles an inline form with a labor rate select dropdown (populated from listLaborRates), a conditional hours input (shown only for hourly rates), and a description textarea. Add a remove button for each line item. Calculate and display a labor subtotal. Use the new mutation hooks from useQueries.ts. Ensure the labor rate dropdown shows rate name and amount. Format amounts in dollars (divide by 100)."
+        }
+      ]
+    },
+    {
+      "id": "REQ-32",
+      "summary": "Add Parts Used section to Job Detail page",
+      "acceptanceCriteria": [
+        "Parts Used section is visible on the Job Detail page",
+        "Existing parts used are displayed with name, SKU, quantity, and unit cost",
+        "Add Part form lets user select a part and enter a quantity",
+        "Submitting the form calls usePartOnJob and refreshes the parts list",
+        "A running parts subtotal is shown below the line items"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/hooks/useQueries.ts",
+          "operation": "modify",
+          "description": "Add a React Query mutation hook for usePartOnJob that accepts partId, jobId, and quantityUsed. Invalidate both the job and parts queries on success."
+        },
+        {
+          "path": "frontend/src/pages/JobDetailPage.tsx",
+          "operation": "modify",
+          "description": "Add a Parts Used section that displays parts associated with the job via existing jobId fields on Part records. Filter listParts by jobId matching the current job. Display part name, partNumber (SKU), quantityUsed (derived from quantityOnHand changes), and unitCost in dollars. Include an 'Add Part' button that opens an inline form with a part select dropdown (populated from listParts where jobId is null or matches current job) and a quantity input. On submit, call the usePartOnJob mutation. Calculate and display a parts subtotal below the line items. Format costs in dollars (divide by 100)."
+        }
+      ]
+    },
+    {
+      "id": "REQ-34",
+      "summary": "Add signature capture canvas to login or profile setup flow",
+      "acceptanceCriteria": [
+        "A signature capture canvas is presented to the user after successful login or during profile setup",
+        "User can draw a signature using touch or mouse input on the canvas",
+        "Clear button resets the canvas",
+        "Save button converts the canvas content to a Blob and calls storeUserSignature",
+        "A success message is shown after saving",
+        "User can skip the signature step without error"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/hooks/useQueries.ts",
+          "operation": "modify",
+          "description": "Add React Query hooks for storeUserSignature mutation and getUserSignature query. The mutation accepts a Uint8Array (converted from canvas blob). Include success and error handling."
+        },
+        {
+          "path": "frontend/src/hooks/useSignaturePad.ts",
+          "operation": "create",
+          "description": "Create a custom React hook that manages a signature canvas using HTML5 Canvas API. Provide a canvasRef, clear function that resets the canvas, and a getSignatureBlob async function that converts the canvas content to a Uint8Array. Track whether the canvas has any strokes (isEmpty state). Handle mouse and touch events for drawing. Return { canvasRef, clear, getSignatureBlob, isEmpty }."
+        },
+        {
+          "path": "frontend/src/components/SignatureCapture.tsx",
+          "operation": "create",
+          "description": "Create a reusable SignatureCapture component that uses useSignaturePad hook. Display a canvas element with a border and instructions. Include Clear and Save buttons. The Save button should be disabled when isEmpty is true. On Save, call getSignatureBlob, then invoke the storeUserSignature mutation from useQueries. Show a success message (using a toast or inline text) after saving. Include a Skip button that closes the component. Accept onComplete and onSkip callback props."
+        },
+        {
+          "path": "frontend/src/pages/ProfileSetupPage.tsx",
+          "operation": "modify",
+          "description": "After the user saves their profile name, render the SignatureCapture component as an optional next step. Use getUserSignature query to check if a signature already exists; if so, skip this step. On signature save completion or skip, redirect to the home page. Display a heading like 'Optional: Add Your Signature' above the component."
+        }
+      ]
+    },
+    {
+      "id": "REQ-36",
+      "summary": "Add Photos section to Job Detail page with camera/upload support",
+      "acceptanceCriteria": [
+        "Photos section is visible on the Job Detail page",
+        "Existing job photos are displayed as thumbnail previews",
+        "Take Photo / Upload button opens camera on mobile and file picker on desktop",
+        "Selected image is uploaded via addJobPhoto and immediately appears as a thumbnail",
+        "Delete icon on each thumbnail calls removeJobPhoto and removes it from the display",
+        "Loading and error states are handled gracefully"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/hooks/useQueries.ts",
+          "operation": "modify",
+          "description": "Add React Query mutation hooks for addJobPhoto (accepts jobId and ExternalBlob photo) and removeJobPhoto (accepts jobId and photoIndex). Both should invalidate the job query cache on success. Use the blob-storage component's ExternalBlob class: ExternalBlob.fromBytes(data).withUploadProgress(callback) for tracking upload progress."
+        },
+        {
+          "path": "frontend/src/pages/JobDetailPage.tsx",
+          "operation": "modify",
+          "description": "Add a Photos section below Parts Used. Display the job's photos array as thumbnail images using ExternalBlob.getDirectURL() for each blob. Include a 'Take Photo / Upload' button that triggers an HTML file input with accept='image/*' and capture='environment' attributes. On file selection, read the file as ArrayBuffer, convert to Uint8Array, wrap in ExternalBlob.fromBytes(), and call addJobPhoto mutation. Track and display upload progress using withUploadProgress. Render a delete icon button on each thumbnail that calls removeJobPhoto with the photo's array index. Show loading spinners during upload and deletion. Handle errors with user-friendly messages. Verify the blob-storage component's usage instructions before implementing."
+        }
+      ]
+    }
+  ]
 }

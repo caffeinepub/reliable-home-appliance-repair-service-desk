@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 13,
-  "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal, replaces NNS principal). Ryan is the authorized user with CRUD abilities. Starting with core job/client management and role-based access control, then building up to full feature set. Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
+  "projectStateVersion": 15,
+  "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal). Ryan is the authorized user with CRUD abilities. Owner has full access confirmed. Building incrementally: core job/client management, role-based access control, labor rates/inventory on jobs, on-screen signature blob storage, and job photo capture (open camera). Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
   "architectural_notes": [
     "Single canister ICP app: Motoko backend + responsive mobile-first frontend",
     "Roles: stable var owner Principal + TrieMap<Principal, Role> where Role = {#owner, #admin, #authorized}. hasPermission checks owner first then map.",
@@ -12,10 +12,9 @@
   ],
   "known_issues": [
     "Initial full prompt was too complex to process in one pass — building incrementally starting with core job/client/roles.",
-    "Build failed twice when trying to add labor rates + on-screen signatures + appliance type in one pass — retry with smaller incremental prompts.",
-    "Owner principal fix failing repeatedly — owner access still restricted after deployment; CRUD on inventory also not working for owner."
+    "Build failed twice when trying to add labor rates + on-screen signatures + appliance type in one pass — retry with smaller incremental prompts."
   ],
-  "isFixRequest": true,
+  "isFixRequest": false,
   "existing_features": [
     {
       "id": "feature-build-a-responsive-mobile-first-react-frontend-with-a-professional-green-and-silver-visual-theme-use-a-deep-forest-green-primary-color-silver-light-gray-accents-and-clean-sans-serif-typography-apply-this-theme-consistently-across-all-screens-cards-buttons-and-navigation-the-layout-should-use-a-bottom-navigation-bar-on-mobile-with-tabs-dashboard-clients-jobs-and-settings",
@@ -150,6 +149,38 @@
       "title": "Ensure the Dashboard metrics section (open jobs count, in-progress jobs count, complete jobs count, total clients count, and any revenue or summary statistics) is only visible to the #owner role. Authorized users navigating to the Dashboard should see jobs and inventory sections but not the owner-only metrics cards.",
       "reqIds": [
         "REQ-26"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-job-detail-page-add-a-labor-section-below-the-existing-fields-display-existing-labor-line-items-for-the-job-labor-rate-name-type-hours-if-hourly-and-computed-amount-include-an-add-labor-button-that-opens-an-inline-form-select-a-labor-rate-from-listlaborrates-enter-hours-if-hourly-type-and-a-description-allow-removing-individual-line-items-show-a-running-subtotal-for-labor-use-the-addlaborlineitem-and-removelaborlineitem-backend-endpoints",
+      "title": "On the Job Detail page, add a 'Labor' section below the existing fields. Display existing labor line items for the job (labor rate name, type, hours if hourly, and computed amount). Include an 'Add Labor' button that opens an inline form: select a labor rate from listLaborRates, enter hours (if hourly type), and a description. Allow removing individual line items. Show a running subtotal for labor. Use the addLaborLineItem and removeLaborLineItem backend endpoints.",
+      "reqIds": [
+        "REQ-31"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-job-detail-page-add-a-parts-used-section-that-displays-parts-already-associated-with-the-job-via-existing-usepartonjob-records-include-an-add-part-button-that-opens-an-inline-form-select-a-part-from-listparts-enter-a-quantity-to-deduct-and-confirm-this-calls-the-existing-usepartonjob-endpoint-show-part-name-sku-quantity-used-and-unit-cost-per-line-display-a-running-parts-subtotal",
+      "title": "On the Job Detail page, add a 'Parts Used' section that displays parts already associated with the job via existing usePartOnJob records. Include an 'Add Part' button that opens an inline form: select a part from listParts, enter a quantity to deduct, and confirm. This calls the existing usePartOnJob endpoint. Show part name, SKU, quantity used, and unit cost per line. Display a running parts subtotal.",
+      "reqIds": [
+        "REQ-32"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-login-page-loginpage-tsx-and-or-the-profile-setup-page-profilesetuppage-tsx-add-an-optional-signature-capture-step-after-the-user-authenticates-display-a-canvas-based-signature-pad-where-the-user-can-draw-their-signature-with-a-mouse-or-finger-include-clear-and-save-buttons-on-save-convert-the-canvas-drawing-to-a-blob-and-call-storeusersignature-show-a-confirmation-message-when-saved-skip-the-step-gracefully-if-the-user-dismisses-it",
+      "title": "On the Login page (LoginPage.tsx) and/or the Profile Setup page (ProfileSetupPage.tsx), add an optional signature capture step after the user authenticates. Display a canvas-based signature pad where the user can draw their signature with a mouse or finger. Include Clear and Save buttons. On Save, convert the canvas drawing to a Blob and call storeUserSignature. Show a confirmation message when saved. Skip the step gracefully if the user dismisses it.",
+      "reqIds": [
+        "REQ-34"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-job-detail-page-add-a-photos-section-that-displays-thumbnail-previews-of-all-stored-photos-for-the-job-include-a-take-photo-upload-button-that-uses-an-html-file-input-with-accept-image-and-capture-environment-to-open-the-device-camera-or-file-picker-on-selection-read-the-file-as-an-arraybuffer-convert-to-blob-and-call-addjobphoto-display-the-uploaded-photo-as-a-thumbnail-in-the-section-include-a-delete-icon-on-each-thumbnail-that-calls-removejobphoto",
+      "title": "On the Job Detail page, add a 'Photos' section that displays thumbnail previews of all stored photos for the job. Include a 'Take Photo / Upload' button that uses an HTML file input with accept='image/*' and capture='environment' to open the device camera or file picker. On selection, read the file as an ArrayBuffer, convert to Blob, and call addJobPhoto. Display the uploaded photo as a thumbnail in the section. Include a delete icon on each thumbnail that calls removeJobPhoto.",
+      "reqIds": [
+        "REQ-36"
       ],
       "version": 1
     }
@@ -374,6 +405,30 @@
       "summary": "In backend/main.mo, ensure that all inventory endpoints (createPart, getPart, listParts, updatePart, deletePart, usePartOnJob) correctly accept calls from principals with at minimum the #authorized role, and also from the #owner principal. Verify the hasPermission guard on every inventory function uses the updated owner principal so the owner can perform all inventory CRUD operations.",
       "reqIds": [
         "REQ-29"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-34",
+      "summary": "Extend the backend Job record to include a laborLineItems field: a list of records each containing laborRateId (Nat), rateType (variant { #hourly; #flat }), hours (optional Float), amount (Nat, in cents), and description (Text). Add addLaborLineItem and removeLaborLineItem endpoints on jobs restricted to #authorized. The job's total estimate amount should be derivable from the sum of labor line items plus parts used.",
+      "reqIds": [
+        "REQ-30"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-37",
+      "summary": "Extend the backend to store a signature blob associated with the login/onboarding flow. Add a storeUserSignature(sig: Blob) endpoint restricted to authenticated callers (minimum #authorized) that saves the signature blob keyed by the caller's principal in a stable TrieMap<Principal, Blob>. Add a getUserSignature() query that returns the stored blob for the caller. The signature should be associated with the user profile, not a specific job.",
+      "reqIds": [
+        "REQ-33"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-39",
+      "summary": "Extend the backend Job record to include a photos field: list of Blob (already present as [Blob] per prior spec). Add addJobPhoto(jobId: Nat, photo: Blob) and removeJobPhoto(jobId: Nat, photoIndex: Nat) endpoints restricted to #authorized. Ensure these persist in stable storage and are included in getJob and listJobs responses.",
+      "reqIds": [
+        "REQ-35"
       ],
       "status": "pending"
     }

@@ -1,12 +1,15 @@
 # Specification
 
 ## Summary
-**Goal:** Fix the owner principal in the backend stable variable so that the correct Internet Identity principal has full owner access.
+**Goal:** Add labor line items and parts tracking to job detail, signature capture on login/profile setup with blob storage, and photo capture/upload on jobs.
 
 **Planned changes:**
-- In `backend/main.mo`, set the stable owner principal variable to `q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe` using `Principal.fromText(...)`.
-- Update `hasPermission(caller, #owner)` to perform a direct equality comparison against this stable var, not via the roles TrieMap.
-- Remove any previously hardcoded owner principal value.
-- Ensure all inventory endpoints (`createPart`, `getPart`, `listParts`, `updatePart`, `deletePart`, `usePartOnJob`) use the updated owner principal check so the owner can perform all inventory CRUD operations without access-denied errors.
+- Extend the backend Job record with a `laborLineItems` field; add `addLaborLineItem` and `removeLaborLineItem` endpoints (restricted to #authorized)
+- Add a Labor section on the Job Detail page showing line items (rate name, type, hours, amount) with an inline Add Labor form and running labor subtotal
+- Add a Parts Used section on the Job Detail page showing parts (name, SKU, quantity, unit cost) with an inline Add Part form using the existing `usePartOnJob` endpoint and a running parts subtotal
+- Add a `storeUserSignature(sig: Blob)` endpoint and `getUserSignature()` query on the backend, storing blobs in a stable TrieMap keyed by caller principal
+- Add an optional signature capture canvas (mouse/touch) on the Login or Profile Setup page with Clear and Save buttons; Save converts canvas to Blob and calls `storeUserSignature`; user can skip
+- Extend the backend Job record with a `photos` field; add `addJobPhoto` and `removeJobPhoto` endpoints (restricted to #authorized), persisted in stable storage
+- Add a Photos section on the Job Detail page with thumbnail previews, a Take Photo / Upload button (using `<input accept="image/*" capture="environment">`), and per-thumbnail delete icons calling `removeJobPhoto`
 
-**User-visible outcome:** Logging in with the correct Internet Identity principal grants full owner access, including Settings, labor rate management, owner-only metrics, and all inventory operations.
+**User-visible outcome:** Technicians can log labor rates and parts against a job with running subtotals, capture and store their signature during login/profile setup, and take or upload photos directly on a job record.

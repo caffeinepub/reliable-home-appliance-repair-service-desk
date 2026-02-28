@@ -19,33 +19,41 @@ export interface Client {
   'notes' : string,
   'phone' : string,
 }
+export interface Estimate {
+  'sigData' : Uint8Array,
+  'sigTime' : Time,
+  'amount' : bigint,
+}
+export type ExternalBlob = Uint8Array;
 export interface Job {
   'id' : bigint,
-  'status' : { 'open' : null } |
-    { 'complete' : null } |
-    { 'inProgress' : null },
+  'status' : JobStatus,
   'clientId' : bigint,
-  'waiverType' : [] | [
-    { 'general' : null } |
-      { 'preexisting' : null } |
-      { 'potential' : null }
-  ],
+  'waiverType' : [] | [WaiverType],
   'date' : Time,
   'tech' : Principal,
-  'estimate' : [] | [
-    { 'sigData' : Uint8Array, 'sigTime' : Time, 'amount' : bigint }
-  ],
+  'estimate' : [] | [Estimate],
   'notes' : string,
   'stripePaymentId' : [] | [string],
   'maintenancePackage' : [] | [string],
-  'photos' : Array<Uint8Array>,
+  'laborLineItems' : Array<LaborLineItem>,
+  'photos' : Array<ExternalBlob>,
+}
+export type JobStatus = { 'open' : null } |
+  { 'complete' : null } |
+  { 'inProgress' : null };
+export interface LaborLineItem {
+  'hours' : [] | [number],
+  'laborRateId' : bigint,
+  'description' : string,
+  'amount' : bigint,
+  'rateType' : RateType,
 }
 export interface LaborRate {
   'id' : bigint,
   'name' : string,
   'amount' : bigint,
-  'rateType' : { 'flat' : null } |
-    { 'hourly' : null },
+  'rateType' : RateType,
 }
 export interface Part {
   'id' : bigint,
@@ -56,13 +64,46 @@ export interface Part {
   'quantityOnHand' : bigint,
   'unitCost' : bigint,
 }
+export type RateType = { 'flat' : null } |
+  { 'hourly' : null };
 export type Time = bigint;
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
+export type WaiverType = { 'general' : null } |
+  { 'preexisting' : null } |
+  { 'potential' : null };
+export interface _CaffeineStorageCreateCertificateResult {
+  'method' : string,
+  'blob_hash' : string,
+}
+export interface _CaffeineStorageRefillInformation {
+  'proposed_top_up_amount' : [] | [bigint],
+}
+export interface _CaffeineStorageRefillResult {
+  'success' : [] | [boolean],
+  'topped_up_amount' : [] | [bigint],
+}
 export interface _SERVICE {
+  '_caffeineStorageBlobIsLive' : ActorMethod<[Uint8Array], boolean>,
+  '_caffeineStorageBlobsToDelete' : ActorMethod<[], Array<Uint8Array>>,
+  '_caffeineStorageConfirmBlobDeletion' : ActorMethod<
+    [Array<Uint8Array>],
+    undefined
+  >,
+  '_caffeineStorageCreateCertificate' : ActorMethod<
+    [string],
+    _CaffeineStorageCreateCertificateResult
+  >,
+  '_caffeineStorageRefillCashier' : ActorMethod<
+    [[] | [_CaffeineStorageRefillInformation]],
+    _CaffeineStorageRefillResult
+  >,
+  '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'addJobPhoto' : ActorMethod<[bigint, ExternalBlob], undefined>,
+  'addLaborLineItem' : ActorMethod<[bigint, LaborLineItem], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'createClient' : ActorMethod<[Client], bigint>,
   'createJob' : ActorMethod<[Job], bigint>,
@@ -78,23 +119,19 @@ export interface _SERVICE {
   'getJob' : ActorMethod<[bigint], Job>,
   'getPart' : ActorMethod<[bigint], Part>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'getUserSignature' : ActorMethod<[], [] | [Uint8Array]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'listClients' : ActorMethod<[], Array<Client>>,
   'listJobs' : ActorMethod<[], Array<Job>>,
   'listLaborRates' : ActorMethod<[], Array<LaborRate>>,
   'listParts' : ActorMethod<[], Array<Part>>,
+  'removeJobPhoto' : ActorMethod<[bigint, bigint], undefined>,
+  'removeLaborLineItem' : ActorMethod<[bigint, bigint], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'storeUserSignature' : ActorMethod<[Uint8Array], undefined>,
   'updateClient' : ActorMethod<[Client], undefined>,
   'updateJob' : ActorMethod<[Job], undefined>,
-  'updateJobStatus' : ActorMethod<
-    [
-      bigint,
-      { 'open' : null } |
-        { 'complete' : null } |
-        { 'inProgress' : null },
-    ],
-    undefined
-  >,
+  'updateJobStatus' : ActorMethod<[bigint, JobStatus], undefined>,
   'updateLaborRate' : ActorMethod<[LaborRate], undefined>,
   'updatePart' : ActorMethod<[Part], undefined>,
   'usePartOnJob' : ActorMethod<[bigint, bigint, bigint], undefined>,
