@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, Star, Trash2 } from 'lucide-react';
+import { useNavigate, useParams } from '@tanstack/react-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useActor } from '../hooks/useActor';
+import { Client } from '../backend';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,89 +20,115 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { useGetClient, useCreateClient, useUpdateClient, useDeleteClient, useListClients } from '../hooks/useQueries';
-import type { Client } from '../backend';
 
-const DEFAULT_GOOGLE_REVIEW_URL =
-  'https://www.google.com/search?client=safari&hs=bqlU&sca_esv=477fbb8c9f03b619&hl=en-us&biw=393&bih=695&sxsrf=ANbL-n4RtO1QhvuqwZK_dXDG4LEsJQO68g:1772317989694&q=www.appliancerepairwalden.com+reviews&uds=ALYpb_kZB5BOMUFlRqxCQelgPO46flvNFV4llOp9FXmtgN0bFd_59aFqnzrv2lL_22fdcKjO_3pVePgz54Y0AhVY-GXqXefnH1qx8tFczBBdwApAdYXTD4RJ2fBkcTn2WMvET_C7noP7FDKpQdsny6qiyHWQVVEzt_rbESpi998me2Rg_kwCVEN74ocI_4XPNR22msLdpmHbL8GYbInBlVUBwAcIKp_O7ifZcZcIuUQQZROm0YQtZPTCZ3SVevvuwibzruurIRfjpjjybvX9x_eguP-hCuWxArDZZrO09vSYhCpocS_cwWMGzY0Rwgw8zjgH5WGiY2fHfDs2UCkdDDuktP48v8L24SA8xc5Ab-2pYFO3nVVnJjMPVJpHFf0r559CWqf2c7qmL2DlIq9LVmUhwLfYHaubp-qPmWjWko6lXf2oCXBA71Y3Lp6zVnH89YUnvqoKlmf1B2-nVHIk0CujdXTh7wl4QKF-8kTjNbCWi5TusYLAhMY&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qOR1dDOzNahzjiSdI7VdJYDnJGXelcQqzXSy0Yqcso2TsW1Ly5cwaMJIgfN94_biTlzTkpCdTbGgRuaEYR62-qzW3A8vAeLXPm0nS58Y2B2F8ZX0rKA%3D%3D&sa=X&ved=2ahUKEwiYrtGBn_2SAxVXE1kFHQkkMeYQk8gLegQIIhAB&ictx=1&stq=1&cs=0&lei=YG2jaeaXGK6l5NoPp7HaiAw#ebo=1';
+function useGetClient(clientId: bigint | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ['client', clientId?.toString()],
+    queryFn: async () => {
+      if (!actor || clientId === null) return null;
+      return actor.getClient(clientId);
+    },
+    enabled: !!actor && !isFetching && clientId !== null,
+  });
+}
+
+function useListClients() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ['clients'],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listClients();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
 
 export default function ClientDetailPage() {
-  // Try to get clientId from route params; if not present (e.g. /clients/new), treat as new
-  const params = useParams({ strict: false }) as { clientId?: string };
-  const clientId = params.clientId;
   const navigate = useNavigate();
-  const isNew = !clientId || clientId === 'new';
+  const params = useParams({ strict: false }) as { clientId?: string };
+  const clientId = params.clientId && params.clientId !== 'new' ? BigInt(params.clientId) : null;
+  const isNew = !clientId;
 
-  const { data: client, isLoading } = useGetClient(isNew ? undefined : BigInt(clientId!));
-  const { data: allClients } = useListClients();
-  const createClient = useCreateClient();
-  const updateClient = useUpdateClient();
-  const deleteClient = useDeleteClient();
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  const { data: client, isLoading } = useGetClient(clientId);
+  const { data: allClients = [] } = useListClients();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
-  const [googleReviewUrl, setGoogleReviewUrl] = useState(DEFAULT_GOOGLE_REVIEW_URL);
-  const [isSaving, setIsSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (client) {
       setName(client.name);
       setPhone(client.phone);
       setAddress(client.address);
-      setEmail(client.email ?? '');
+      setEmail(client.email || '');
       setNotes(client.notes);
-      setGoogleReviewUrl(client.googleReviewUrl ?? DEFAULT_GOOGLE_REVIEW_URL);
     }
   }, [client]);
 
-  const getNextId = (): bigint => {
-    if (!allClients || allClients.length === 0) return BigInt(1);
-    const maxId = allClients.reduce((max, c) => (c.id > max ? c.id : max), BigInt(0));
-    return maxId + BigInt(1);
-  };
-
   const handleSave = async () => {
-    if (!name.trim()) return;
-    setIsSaving(true);
+    if (!actor) return;
+    if (!name.trim()) { setSaveError('Name is required'); return; }
+    setSaving(true);
+    setSaveError(null);
     try {
+      const newId = isNew
+        ? BigInt(allClients.length > 0 ? Math.max(...allClients.map(c => Number(c.id))) + 1 : 1)
+        : clientId!;
+
       const clientData: Client = {
-        id: isNew ? getNextId() : BigInt(clientId!),
+        id: newId,
         name: name.trim(),
         phone: phone.trim(),
         address: address.trim(),
         email: email.trim() || undefined,
         notes: notes.trim(),
-        googleReviewUrl: googleReviewUrl.trim() || undefined,
+        googleReviewUrl: client?.googleReviewUrl,
       };
+
       if (isNew) {
-        await createClient.mutateAsync(clientData);
+        await actor.createClient(clientData);
       } else {
-        await updateClient.mutateAsync(clientData);
+        await actor.updateClient(clientData);
       }
+      await queryClient.invalidateQueries({ queryKey: ['clients'] });
+      await queryClient.invalidateQueries({ queryKey: ['client', newId.toString()] });
       navigate({ to: '/clients' });
+    } catch (e: any) {
+      setSaveError(e?.message || 'Failed to save client');
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!client) return;
-    await deleteClient.mutateAsync(client.id);
-    navigate({ to: '/clients' });
+    if (!actor || !clientId) return;
+    setDeleting(true);
+    try {
+      await actor.deleteClient(clientId);
+      await queryClient.invalidateQueries({ queryKey: ['clients'] });
+      navigate({ to: '/clients' });
+    } catch (e: any) {
+      setSaveError(e?.message || 'Failed to delete client');
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const handleRequestReview = () => {
-    const url = googleReviewUrl || DEFAULT_GOOGLE_REVIEW_URL;
-    window.open(url, '_blank');
-  };
-
-  if (!isNew && isLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -106,133 +137,100 @@ export default function ClientDetailPage() {
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <Button variant="ghost" size="icon" onClick={() => navigate({ to: '/clients' })}>
-          <ArrowLeft className="h-5 w-5" />
+        <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/clients' })}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Clients
         </Button>
-        <h1 className="font-semibold text-foreground">{isNew ? 'New Client' : 'Edit Client'}</h1>
-        {!isNew ? (
-          <Button variant="ghost" size="icon" onClick={handleRequestReview} title="Request Google Review">
-            <Star className="h-5 w-5 text-yellow-500" />
-          </Button>
-        ) : (
-          <div className="w-9" />
-        )}
+        <h1 className="font-semibold text-foreground">
+          {isNew ? 'New Client' : 'Edit Client'}
+        </h1>
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+          {isNew ? 'Create' : 'Save'}
+        </Button>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {/* Client Form */}
-        <div className="bg-card rounded-xl border border-border p-4 space-y-4">
-          <h2 className="font-semibold text-foreground">Client Information</h2>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">Name *</label>
-            <Input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Full name"
-            />
+      <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
+        {saveError && (
+          <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-4 py-3">
+            {saveError}
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">Phone</label>
-            <Input
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-              placeholder="(555) 555-5555"
-              type="tel"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">Address</label>
-            <Input
-              value={address}
-              onChange={e => setAddress(e.target.value)}
-              placeholder="123 Main St, City, State"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">Email</label>
-            <Input
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="email@example.com"
-              type="email"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">Notes</label>
-            <Textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Client notes..."
-              rows={3}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">
-              Google Review URL
-            </label>
-            <Input
-              value={googleReviewUrl}
-              onChange={e => setGoogleReviewUrl(e.target.value)}
-              placeholder="Google Review URL"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Leave as default or enter a custom review link for this client.
-            </p>
-          </div>
-        </div>
-
-        {/* Google Review Button */}
-        {!isNew && (
-          <Button
-            variant="outline"
-            className="w-full border-yellow-400/50 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
-            onClick={handleRequestReview}
-          >
-            <Star className="h-4 w-4 mr-2" />
-            Request Google Review
-          </Button>
         )}
 
-        {/* Save Button */}
-        <Button
-          className="w-full"
-          onClick={handleSave}
-          disabled={isSaving || !name.trim()}
-        >
-          {isSaving ? 'Saving...' : isNew ? 'Create Client' : 'Save Changes'}
-        </Button>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Client Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1">
+              <Label>Name *</Label>
+              <Input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Full name"
+              />
+            </div>
 
-        {/* Delete Button */}
+            <div className="space-y-1">
+              <Label>Phone</Label>
+              <Input
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="(555) 000-0000"
+                type="tel"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Email</Label>
+              <Input
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="email@example.com"
+                type="email"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Address</Label>
+              <Input
+                value={address}
+                onChange={e => setAddress(e.target.value)}
+                placeholder="123 Main St, City, State"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Notes</Label>
+              <Textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Any additional notes about this client..."
+                rows={3}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Delete */}
         {!isNew && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
+              <Button variant="destructive" className="w-full" disabled={deleting}>
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
                 Delete Client
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Client</AlertDialogTitle>
+                <AlertDialogTitle>Delete Client?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Are you sure you want to delete {name}? This action cannot be undone.
+                  This will permanently delete this client. This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                   Delete
                 </AlertDialogAction>
               </AlertDialogFooter>

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 21,
+  "projectStateVersion": 23,
   "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal). Ryan is the authorized user with CRUD abilities. Owner has full access confirmed. Building incrementally: core job/client management, role-based access control, labor rates/inventory on jobs, on-screen signature blob storage, and job photo capture (open camera). Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
   "architectural_notes": [
     "Single canister ICP app: Motoko backend + responsive mobile-first frontend",
@@ -15,7 +15,10 @@
     "Initial full prompt was too complex to process in one pass — building incrementally starting with core job/client/roles.",
     "Build failed twice when trying to add labor rates + on-screen signatures + appliance type in one pass — retry with smaller incremental prompts.",
     "Signature screen on estimates and Stripe integration not visible in build — needs re-implementation or fix.",
-    "Owner loses privileges after certain builds — root cause: possible overwrite of stable owner principal or mismatch between NNS principal and app-derived principal. Reverting to version 8 to troubleshoot."
+    "Owner loses privileges after certain builds — root cause: possible overwrite of stable owner principal or mismatch between NNS principal and app-derived principal. Reverting to version 8 to troubleshoot.",
+    "Invoice title shows wrong business name — must be changed to 'Reliable Home Appliance Repair LLC'.",
+    "Labor rates cannot be added manually/custom on job detail — only predefined rates supported currently.",
+    "Google Review URL may be causing code instability — candidate for removal if it breaks builds."
   ],
   "isFixRequest": true,
   "existing_features": [
@@ -280,6 +283,54 @@
       "title": "In the frontend Settings page (SettingsPage.tsx), update the owner-check logic that gates the Settings screen. The frontend isOwner check must compare the authenticated Internet Identity principal against the hardcoded string 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. Do not rely solely on a backend role query that could return a stale or missing result. If the backend getMyRole (or equivalent) query is used, also verify locally. The Settings screen must render fully for the owner principal.",
       "reqIds": [
         "REQ-52"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-invoice-estimate-preview-page-invoicepreviewpage-tsx-change-the-displayed-business-name-invoice-title-to-exactly-reliable-home-appliance-repair-llc-this-string-must-appear-as-the-primary-heading-on-the-printed-preview-invoice-and-in-the-downloaded-pdf-export",
+      "title": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), change the displayed business name / invoice title to exactly 'Reliable Home Appliance Repair LLC'. This string must appear as the primary heading on the printed/preview invoice and in the downloaded PDF export.",
+      "reqIds": [
+        "REQ-54"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-job-detail-page-jobdetailpage-tsx-ensure-the-labor-section-supports-fully-manual-custom-labor-line-item-entry-without-requiring-a-predefined-labor-rate-the-inline-add-labor-form-must-include-a-free-text-name-field-a-type-selector-hourly-or-flat-an-hours-field-shown-only-when-hourly-is-selected-an-editable-rate-amount-field-dollars-not-required-to-match-any-saved-rate-and-an-optional-description-field-each-added-line-item-must-display-its-computed-amount-hours-rate-for-hourly-flat-amount-for-flat-and-a-remove-button-show-a-running-labor-subtotal-below-the-list-persist-line-items-via-the-existing-addlaborlineitem-and-removelaborlineitem-backend-endpoints",
+      "title": "On the Job Detail page (JobDetailPage.tsx), ensure the Labor section supports fully manual/custom labor line item entry without requiring a predefined labor rate. The inline 'Add Labor' form must include: a free-text name field, a type selector (hourly or flat), an hours field (shown only when hourly is selected), an editable rate/amount field (dollars, not required to match any saved rate), and an optional description field. Each added line item must display its computed amount (hours × rate for hourly, flat amount for flat) and a remove button. Show a running labor subtotal below the list. Persist line items via the existing addLaborLineItem and removeLaborLineItem backend endpoints.",
+      "reqIds": [
+        "REQ-55"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-configurable-tax-rate-field-to-the-job-detail-and-invoice-estimate-workflow-on-the-job-detail-page-display-a-tax-rate-input-percentage-default-8-875-that-is-applied-to-the-combined-total-of-parts-subtotal-and-labor-subtotal-to-compute-the-tax-amount-and-final-post-tax-total-display-the-pre-tax-subtotal-tax-amount-labeled-with-the-rate-e-g-tax-8-875-and-the-post-tax-total-on-both-the-job-detail-page-and-the-invoice-estimate-preview-page-the-tax-rate-value-should-be-editable-by-the-user-on-the-job-invoice-screen-not-a-global-setting-and-should-be-included-in-the-pdf-export",
+      "title": "Add a configurable tax rate field to the job detail and invoice/estimate workflow. On the Job Detail page, display a tax rate input (percentage, default 8.875%) that is applied to the combined total of parts subtotal and labor subtotal to compute the tax amount and final post-tax total. Display the pre-tax subtotal, tax amount (labeled with the rate, e.g. 'Tax 8.875%'), and the post-tax total on both the Job Detail page and the Invoice/Estimate preview page. The tax rate value should be editable by the user on the job/invoice screen (not a global setting) and should be included in the PDF export.",
+      "reqIds": [
+        "REQ-56"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-remove-all-google-review-url-references-buttons-default-url-values-and-related-logic-from-the-entire-frontend-codebase-clientdetailpage-tsx-jobdetailpage-tsx-and-any-other-file-where-a-google-review-url-default-button-or-link-appears-if-the-google-review-feature-is-causing-build-instability-remove-it-completely-rather-than-patching-it-after-removal-no-request-google-review-button-link-or-url-constant-should-remain-anywhere-in-the-application",
+      "title": "Remove all Google Review URL references, buttons, default URL values, and related logic from the entire frontend codebase (ClientDetailPage.tsx, JobDetailPage.tsx, and any other file where a Google Review URL default, button, or link appears). If the Google Review feature is causing build instability, remove it completely rather than patching it. After removal, no 'Request Google Review' button, link, or URL constant should remain anywhere in the application.",
+      "reqIds": [
+        "REQ-57"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-verify-and-ensure-the-job-photo-blob-storage-section-on-the-job-detail-page-jobdetailpage-tsx-is-fully-operational-the-photos-section-must-display-thumbnail-previews-of-all-stored-job-photos-include-a-take-photo-upload-button-using-an-html-file-input-with-accept-image-and-capture-environment-read-the-selected-file-as-an-arraybuffer-convert-it-to-a-blob-and-call-addjobphoto-each-thumbnail-must-include-a-delete-icon-that-calls-removejobphoto-if-this-section-is-not-currently-rendering-or-is-broken-re-implement-it-using-the-existing-addjobphoto-and-removejobphoto-backend-endpoints",
+      "title": "Verify and ensure the job photo blob storage section on the Job Detail page (JobDetailPage.tsx) is fully operational. The 'Photos' section must display thumbnail previews of all stored job photos, include a 'Take Photo / Upload' button using an HTML file input with accept='image/*' and capture='environment', read the selected file as an ArrayBuffer, convert it to a Blob, and call addJobPhoto. Each thumbnail must include a delete icon that calls removeJobPhoto. If this section is not currently rendering or is broken, re-implement it using the existing addJobPhoto and removeJobPhoto backend endpoints.",
+      "reqIds": [
+        "REQ-58"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-confirm-the-stripe-payment-section-on-the-job-detail-page-jobdetailpage-tsx-remains-visible-and-functional-after-the-current-changes-the-section-must-show-a-charge-via-stripe-button-that-calls-createpaymentintent-with-the-job-s-post-tax-total-parts-labor-tax-stores-the-returned-payment-intent-id-via-updatejobpayment-and-displays-a-paid-unpaid-badge-based-on-whether-stripepaymentid-is-present-do-not-remove-or-regress-this-section-during-the-other-changes-in-this-build",
+      "title": "Confirm the Stripe payment section on the Job Detail page (JobDetailPage.tsx) remains visible and functional after the current changes. The section must show a 'Charge via Stripe' button that calls createPaymentIntent with the job's post-tax total (parts + labor + tax), stores the returned payment intent ID via updateJobPayment, and displays a 'Paid' / 'Unpaid' badge based on whether stripePaymentId is present. Do not remove or regress this section during the other changes in this build.",
+      "reqIds": [
+        "REQ-59"
       ],
       "version": 1
     }
@@ -611,6 +662,30 @@
       "reqIds": [
         "REQ-53"
       ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-53",
+      "summary": "Change the invoice title to 'Reliable Home Appliance Repair LLC' on the invoice/estimate preview page.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-54",
+      "summary": "Add manual/custom labor rate entry on the job detail page — allow users to add labor line items with custom name, type (hourly or flat), hours, and rate amount without requiring a predefined labor rate. Streamlined workflow: add client → add job → parts from inventory → labor on job → add tax.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-55",
+      "summary": "Add a configurable tax field to the job/invoice workflow so users can apply a tax rate to the total (parts + labor) before generating the invoice.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-56",
+      "summary": "If the Google Review URL/link is causing build errors or code issues, remove it entirely from the codebase rather than risk breaking the build.",
+      "reqIds": [],
       "status": "pending"
     }
   ],

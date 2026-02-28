@@ -1,12 +1,14 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useParams, useNavigate } from '@tanstack/react-router';
+import { useParams, useNavigate, useSearch } from '@tanstack/react-router';
 import { ArrowLeft, Download, Printer, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useGetJob, useGetClient, useGetUserSignature, useStoreUserSignature } from '../hooks/useQueries';
+import { useGetJob, useGetClient, useGetUserSignature, useStoreUserSignature, useListParts } from '../hooks/useQueries';
 import { useSignaturePad } from '../hooks/useSignaturePad';
 import { RateType } from '../backend';
 
-const DEFAULT_DIAGNOSTIC_FEE = 8500; // cents ($85.00)
+const BUSINESS_NAME = 'Reliable Home Appliance Repair LLC';
+const BUSINESS_PHONE = '(631) 831-3333';
+const BUSINESS_EMAIL = 'reliablehomeappliancerepair@gmail.com';
 
 function toSafeUint8Array(input: Uint8Array): Uint8Array<ArrayBuffer> {
   const buf = new ArrayBuffer(input.byteLength);
@@ -17,11 +19,15 @@ function toSafeUint8Array(input: Uint8Array): Uint8Array<ArrayBuffer> {
 export default function InvoicePreviewPage() {
   const { jobId } = useParams({ from: '/invoice/$jobId' });
   const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as { taxRate?: string };
   const invoiceRef = useRef<HTMLDivElement>(null);
+
+  const taxRate = parseFloat(search.taxRate || '8.875');
 
   const jobIdBig = BigInt(jobId);
   const { data: job, isLoading: jobLoading } = useGetJob(jobIdBig);
   const { data: client, isLoading: clientLoading } = useGetClient(job?.clientId);
+  const { data: allParts = [] } = useListParts();
   const { data: existingSigBytes } = useGetUserSignature();
   const storeSignature = useStoreUserSignature();
 
@@ -66,28 +72,33 @@ export default function InvoicePreviewPage() {
     }
   };
 
+  // ── Derived totals ──
+  const jobParts = allParts.filter(
+    p => p.jobId !== undefined && p.jobId !== null && job && p.jobId === job.id
+  );
+  const partsSubtotal = jobParts.reduce((sum, p) => sum + Number(p.unitCost), 0);
+  const laborSubtotal = (job?.laborLineItems || []).reduce(
+    (sum, item) => sum + Number(item.totalAmount),
+    0
+  );
+  const subtotal = partsSubtotal + laborSubtotal;
+  const taxAmount = subtotal * (taxRate / 100);
+  const grandTotal = subtotal + taxAmount;
+
+  const formatCurrency = (cents: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+
+  const formatDate = (time: bigint) =>
+    new Date(Number(time) / 1_000_000).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
   const buildInvoiceHTML = (): string => {
     if (!job || !client) return '';
 
-    const formatCurrency = (cents: number) =>
-      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
-
-    const formatDate = (time: bigint) =>
-      new Date(Number(time) / 1_000_000).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-
-    const laborSubtotal = job.laborLineItems.reduce(
-      (sum, item) => sum + Number(item.totalAmount),
-      0
-    );
-    const estimateAmount = job.estimate ? Number(job.estimate.amount) : 0;
-    const diagnosticFee = estimateAmount > 0 ? estimateAmount : DEFAULT_DIAGNOSTIC_FEE;
-    const grandTotal = diagnosticFee + laborSubtotal;
-
-    const laborRows = job.laborLineItems
+    const laborRows = (job.laborLineItems || [])
       .map(
         item => `
         <tr>
@@ -108,9 +119,26 @@ export default function InvoicePreviewPage() {
       )
       .join('');
 
+    const partRows = jobParts
+      .map(
+        part => `
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
+            <div style="font-weight:500">${part.name}</div>
+            ${part.partNumber ? `<div style="font-size:11px;color:#888">#${part.partNumber}</div>` : ''}
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right">—</td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right">1</td>
+          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:500">
+            ${formatCurrency(Number(part.unitCost))}
+          </td>
+        </tr>`
+      )
+      .join('');
+
     const sigSection = existingSigUrl
       ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0">
-           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;margin-bottom:8px">Customer Signature</div>
+           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;margin-bottom:8px">Technician Signature</div>
            <img src="${existingSigUrl}" alt="Signature" style="max-height:80px;border:1px solid #e0e0e0;border-radius:4px" />
          </div>`
       : '';
@@ -130,8 +158,9 @@ export default function InvoicePreviewPage() {
 <body>
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:24px;border-bottom:2px solid #2d6a4f">
     <div>
-      <div style="font-size:20px;font-weight:700;color:#2d6a4f">Appliance Repair Walden</div>
-      <div style="font-size:12px;color:#666;margin-top:4px">Professional Appliance Services</div>
+      <div style="font-size:20px;font-weight:700;color:#2d6a4f">${BUSINESS_NAME}</div>
+      <div style="font-size:12px;color:#666;margin-top:4px">${BUSINESS_PHONE}</div>
+      <div style="font-size:12px;color:#666">${BUSINESS_EMAIL}</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:28px;font-weight:800;color:#2d6a4f">INVOICE</div>
@@ -166,23 +195,27 @@ export default function InvoicePreviewPage() {
       </tr>
     </thead>
     <tbody>
-      <tr>
-        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0">Diagnostic Fee</td>
-        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right">—</td>
-        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right">1</td>
-        <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:500">${formatCurrency(diagnosticFee)}</td>
-      </tr>
+      ${partRows}
       ${laborRows}
     </tbody>
   </table>
 
   <div style="display:flex;justify-content:flex-end;margin-bottom:32px">
-    <div style="width:240px">
-      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;color:#555">
-        <span>Subtotal</span><span>${formatCurrency(grandTotal)}</span>
+    <div style="width:260px">
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:#555">
+        <span>Parts Subtotal</span><span>${formatCurrency(partsSubtotal)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:#555">
+        <span>Labor Subtotal</span><span>${formatCurrency(laborSubtotal)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:#555;border-top:1px solid #e0e0e0;margin-top:4px">
+        <span>Subtotal</span><span>${formatCurrency(subtotal)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:#555">
+        <span>Tax (${taxRate}%)</span><span>${formatCurrency(Math.round(taxAmount))}</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:10px 0;border-top:2px solid #1a1a1a;font-weight:700;font-size:15px">
-        <span>Total</span><span>${formatCurrency(grandTotal)}</span>
+        <span>Total</span><span>${formatCurrency(Math.round(grandTotal))}</span>
       </div>
     </div>
   </div>
@@ -196,7 +229,7 @@ export default function InvoicePreviewPage() {
   ${sigSection}
 
   <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e0e0e0;text-align:center;font-size:11px;color:#999">
-    <p>Thank you for your business! — Appliance Repair Walden</p>
+    <p>Thank you for your business! — ${BUSINESS_NAME}</p>
     <p style="margin-top:4px">Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
   </div>
 </body>
@@ -250,24 +283,6 @@ export default function InvoicePreviewPage() {
     );
   }
 
-  const laborSubtotal = job.laborLineItems.reduce(
-    (sum, item) => sum + Number(item.totalAmount),
-    0
-  );
-  const estimateAmount = job.estimate ? Number(job.estimate.amount) : 0;
-  const diagnosticFee = estimateAmount > 0 ? estimateAmount : DEFAULT_DIAGNOSTIC_FEE;
-  const grandTotal = diagnosticFee + laborSubtotal;
-
-  const formatCurrency = (cents: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
-
-  const formatDate = (time: bigint) =>
-    new Date(Number(time) / 1_000_000).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
@@ -290,18 +305,22 @@ export default function InvoicePreviewPage() {
       <div className="max-w-2xl mx-auto px-4 py-6">
         <div ref={invoiceRef} className="bg-white text-gray-900 rounded-xl shadow-lg p-8">
           {/* Company Header */}
-          <div className="flex items-start justify-between mb-8">
-            <div>
+          <div className="flex items-start justify-between mb-8 pb-6 border-b-2 border-green-700">
+            <div className="flex items-center gap-3">
               <img
                 src="/assets/generated/reliable-logo.dim_256x256.png"
                 alt="Logo"
-                className="h-16 w-16 object-contain mb-2"
+                className="h-16 w-16 object-contain"
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
-              <h2 className="text-xl font-bold text-gray-900">Appliance Repair Walden</h2>
-              <p className="text-sm text-gray-500">Professional Appliance Services</p>
+              <div>
+                <h2 className="text-xl font-bold text-green-800">{BUSINESS_NAME}</h2>
+                <p className="text-sm text-gray-500">{BUSINESS_PHONE}</p>
+                <p className="text-sm text-gray-500">{BUSINESS_EMAIL}</p>
+              </div>
             </div>
             <div className="text-right">
-              <h1 className="text-3xl font-bold text-gray-900">INVOICE</h1>
+              <h1 className="text-3xl font-bold text-green-800">INVOICE</h1>
               <p className="text-sm text-gray-500 mt-1">#{job.id.toString().padStart(5, '0')}</p>
               <p className="text-sm text-gray-500">{formatDate(job.date)}</p>
             </div>
@@ -338,68 +357,101 @@ export default function InvoicePreviewPage() {
             </div>
           </div>
 
-          {/* Line Items */}
-          <table className="w-full mb-6">
-            <thead>
-              <tr className="border-b-2 border-gray-200">
-                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
-                  Description
-                </th>
-                <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
-                  Rate
-                </th>
-                <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
-                  Qty/Hrs
-                </th>
-                <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
-                  Amount
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Diagnostic Fee */}
-              <tr className="border-b border-gray-100">
-                <td className="py-3 text-sm text-gray-700">Diagnostic Fee</td>
-                <td className="py-3 text-sm text-gray-700 text-right">—</td>
-                <td className="py-3 text-sm text-gray-700 text-right">1</td>
-                <td className="py-3 text-sm font-medium text-gray-900 text-right">
-                  {formatCurrency(diagnosticFee)}
-                </td>
-              </tr>
-              {/* Labor Line Items */}
-              {job.laborLineItems.map((item, idx) => (
-                <tr key={idx} className="border-b border-gray-100">
-                  <td className="py-3 text-sm text-gray-700">
-                    <div className="font-medium">{item.name}</div>
-                    {item.description && (
-                      <div className="text-xs text-gray-400">{item.description}</div>
-                    )}
-                  </td>
-                  <td className="py-3 text-sm text-gray-700 text-right">
-                    {formatCurrency(Number(item.rateAmount))}/
-                    {item.rateType === RateType.hourly ? 'hr' : 'flat'}
-                  </td>
-                  <td className="py-3 text-sm text-gray-700 text-right">
-                    {item.rateType === RateType.hourly ? item.hours.toFixed(1) : '1'}
-                  </td>
-                  <td className="py-3 text-sm font-medium text-gray-900 text-right">
-                    {formatCurrency(Number(item.totalAmount))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Parts Line Items */}
+          {jobParts.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Parts
+              </h3>
+              <table className="w-full mb-2">
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Part</th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Qty</th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobParts.map((part, idx) => (
+                    <tr key={idx} className="border-b border-gray-100">
+                      <td className="py-2 text-sm text-gray-700">
+                        <div className="font-medium">{part.name}</div>
+                        {part.partNumber && <div className="text-xs text-gray-400">#{part.partNumber}</div>}
+                      </td>
+                      <td className="py-2 text-sm text-gray-700 text-right">1</td>
+                      <td className="py-2 text-sm font-medium text-gray-900 text-right">
+                        {formatCurrency(Number(part.unitCost))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Labor Line Items */}
+          {job.laborLineItems.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Labor
+              </h3>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Description</th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Rate</th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Qty/Hrs</th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {job.laborLineItems.map((item, idx) => (
+                    <tr key={idx} className="border-b border-gray-100">
+                      <td className="py-3 text-sm text-gray-700">
+                        <div className="font-medium">{item.name}</div>
+                        {item.description && (
+                          <div className="text-xs text-gray-400">{item.description}</div>
+                        )}
+                      </td>
+                      <td className="py-3 text-sm text-gray-700 text-right">
+                        {formatCurrency(Number(item.rateAmount))}/
+                        {item.rateType === RateType.hourly ? 'hr' : 'flat'}
+                      </td>
+                      <td className="py-3 text-sm text-gray-700 text-right">
+                        {item.rateType === RateType.hourly ? item.hours.toFixed(1) : '1'}
+                      </td>
+                      <td className="py-3 text-sm font-medium text-gray-900 text-right">
+                        {formatCurrency(Number(item.totalAmount))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Totals */}
           <div className="flex justify-end mb-8">
-            <div className="w-64">
-              <div className="flex justify-between py-2 text-sm text-gray-600">
-                <span>Subtotal</span>
-                <span>{formatCurrency(grandTotal)}</span>
+            <div className="w-72 space-y-1">
+              <div className="flex justify-between py-1 text-sm text-gray-600">
+                <span>Parts Subtotal</span>
+                <span>{formatCurrency(partsSubtotal)}</span>
               </div>
-              <div className="flex justify-between py-2 border-t-2 border-gray-900 font-bold text-gray-900">
+              <div className="flex justify-between py-1 text-sm text-gray-600">
+                <span>Labor Subtotal</span>
+                <span>{formatCurrency(laborSubtotal)}</span>
+              </div>
+              <div className="flex justify-between py-1 text-sm text-gray-600 border-t border-gray-200 pt-2">
+                <span>Subtotal</span>
+                <span>{formatCurrency(subtotal)}</span>
+              </div>
+              <div className="flex justify-between py-1 text-sm text-gray-600">
+                <span>Tax ({taxRate}%)</span>
+                <span>{formatCurrency(Math.round(taxAmount))}</span>
+              </div>
+              <div className="flex justify-between py-2 border-t-2 border-gray-900 font-bold text-gray-900 text-base">
                 <span>Total</span>
-                <span>{formatCurrency(grandTotal)}</span>
+                <span>{formatCurrency(Math.round(grandTotal))}</span>
               </div>
             </div>
           </div>
@@ -417,71 +469,71 @@ export default function InvoicePreviewPage() {
           {/* Signature Section */}
           <div className="border-t border-gray-200 pt-6">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-              Customer Signature
+              Technician Signature
             </h3>
 
-            {/* Existing saved signature */}
-            {existingSigUrl && (
+            {existingSigUrl ? (
               <div className="mb-4">
                 <img
                   src={existingSigUrl}
-                  alt="Customer Signature"
-                  className="max-h-24 border border-gray-200 rounded bg-white"
+                  alt="Saved Signature"
+                  className="max-h-20 border border-gray-200 rounded"
                 />
-                <p className="text-xs text-gray-400 mt-1">Signature on file</p>
+                {sigSaved && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <CheckCircle className="h-3 w-3" /> Signature saved
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 mb-2">Draw your signature below:</p>
+                <canvas
+                  ref={canvasRef}
+                  width={400}
+                  height={120}
+                  className="border border-gray-300 rounded-lg bg-white touch-none w-full"
+                  style={{ maxWidth: '400px' }}
+                />
+                {sigError && <p className="text-xs text-red-500 mt-1">{sigError}</p>}
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" variant="outline" onClick={clear}>
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveSignature}
+                    disabled={storeSignature.isPending || isEmpty}
+                  >
+                    {storeSignature.isPending ? 'Saving...' : 'Save Signature'}
+                  </Button>
+                </div>
               </div>
             )}
 
-            {/* Signature pad */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 bg-gray-50">
-              <canvas
-                ref={canvasRef}
-                width={500}
-                height={150}
-                className="w-full touch-none cursor-crosshair bg-white rounded"
-                style={{ touchAction: 'none' }}
-              />
+            {/* Customer signature line */}
+            <div className="mt-6">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                Customer Signature
+              </h3>
+              <div className="border-b border-gray-400 w-64 h-16" />
+              <p className="text-xs text-gray-400 mt-1">
+                By signing, customer authorizes the work described above.
+              </p>
             </div>
-            <p className="text-xs text-gray-400 mt-1 mb-3">
-              {existingSigUrl
-                ? 'Draw a new signature to update'
-                : 'Draw your signature above'}
-            </p>
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={clear}
-                disabled={isEmpty}
-                className="text-gray-600"
-              >
-                Clear
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleSaveSignature}
-                disabled={storeSignature.isPending || isEmpty}
-                className="bg-primary text-primary-foreground"
-              >
-                {storeSignature.isPending ? 'Saving...' : 'Save Signature'}
-              </Button>
-            </div>
-
-            {sigSaved && (
-              <div className="flex items-center gap-2 mt-3 text-green-600 text-sm">
-                <CheckCircle className="h-4 w-4" />
-                <span>Signature saved successfully!</span>
-              </div>
-            )}
-            {sigError && <p className="mt-2 text-sm text-red-500">{sigError}</p>}
           </div>
 
           {/* Footer */}
-          <div className="mt-8 pt-4 border-t border-gray-100 text-center text-xs text-gray-400">
-            <p>Thank you for your business!</p>
+          <div className="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
+            <p>Thank you for your business! — {BUSINESS_NAME}</p>
+            <p className="mt-1">
+              Generated{' '}
+              {new Date().toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </p>
           </div>
         </div>
       </div>

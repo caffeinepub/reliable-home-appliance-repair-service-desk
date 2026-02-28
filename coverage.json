@@ -1,78 +1,95 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-02-28T23:18:11.721Z",
+  "generatedAt": "2026-02-28T23:37:37.143Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
     "total": 6,
-    "implemented": 1,
+    "implemented": 6,
     "items": [
       {
-        "id": "REQ-48",
-        "summary": "In backend/main.mo, declare the owner principal as a stable let constant (not a mutable stable var) initialized with Principal.fromText(\"q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe\"). This value must never be overwritten by any upgrade, migration, or role-management call. Remove any stable var or TrieMap entry that could shadow or replace the owner principal.",
-        "status": "unknown",
-        "plannedFiles": [],
-        "matchedFiles": []
-      },
-      {
-        "id": "REQ-49",
-        "summary": "In backend/main.mo, rewrite the hasPermission helper so that #owner checks are a direct equality comparison between the caller and the stable owner constant (REQ-48) and never fall through to the roles TrieMap. The roles TrieMap is only consulted for #authorized and #admin role checks. Ensure no code path can grant #owner via the TrieMap.",
-        "status": "unknown",
-        "plannedFiles": [],
-        "matchedFiles": []
-      },
-      {
-        "id": "REQ-50",
-        "summary": "Audit and fix every owner-guarded backend endpoint (setStripeKey, getStripeKey, addAuthorizedPrincipal, removeAuthorizedPrincipal, listAuthorizedPrincipals, createLaborRate, updateLaborRate, deleteLaborRate, createPackage, updatePackage, deletePackage, and any other #owner-only function) to use the hardened hasPermission check from REQ-49. Ensure none of these functions accept the roles TrieMap as a fallback for the owner check.",
-        "status": "unknown",
-        "plannedFiles": [],
-        "matchedFiles": []
-      },
-      {
-        "id": "REQ-51",
-        "summary": "Ensure all standard CRUD endpoints (createClient, updateClient, deleteClient, createJob, updateJob, deleteJob, updateJobStatus, createPart, updatePart, deletePart, usePartOnJob, addJobPhoto, removeJobPhoto, addLaborLineItem, removeLaborLineItem, updateJobSchedule, updateJobPayment, createPaymentIntent, storeUserSignature) accept calls from any principal that passes hasPermission(caller, #authorized) — which includes both the owner principal and any TrieMap-registered #authorized principal. This supports multiple technician/admin users with full CRUD access.",
-        "status": "unknown",
-        "plannedFiles": [],
-        "matchedFiles": []
-      },
-      {
-        "id": "REQ-52",
-        "summary": "In the frontend Settings page (SettingsPage.tsx), update the owner-check logic that gates the Settings screen. The frontend isOwner check must compare the authenticated Internet Identity principal against the hardcoded string 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe'. Do not rely solely on a backend role query that could return a stale or missing result. If the backend getMyRole (or equivalent) query is used, also verify locally. The Settings screen must render fully for the owner principal.",
+        "id": "REQ-54",
+        "summary": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), change the displayed business name / invoice title to exactly 'Reliable Home Appliance Repair LLC'. This string must appear as the primary heading on the printed/preview invoice and in the downloaded PDF export.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/pages/SettingsPage.tsx",
-          "frontend/src/pages/DashboardPage.tsx",
-          "frontend/src/hooks/useQueries.ts"
+          "frontend/src/pages/InvoicePreviewPage.tsx"
         ],
         "matchedFiles": [
-          "frontend/src/pages/SettingsPage.tsx",
-          "frontend/src/hooks/useQueries.ts"
+          "frontend/src/pages/InvoicePreviewPage.tsx"
         ]
       },
       {
-        "id": "REQ-53",
-        "summary": "Add a migration guard in backend/main.mo (or migration.mo if needed) to preserve the stable owner principal across all future upgrades. On upgrade, if any logic would reset or overwrite the ownerPrincipal value, abort or skip that step. Document the stable owner principal in a comment so future builds do not accidentally replace it.",
-        "status": "unknown",
-        "plannedFiles": [],
-        "matchedFiles": []
+        "id": "REQ-55",
+        "summary": "On the Job Detail page (JobDetailPage.tsx), ensure the Labor section supports fully manual/custom labor line item entry without requiring a predefined labor rate. The inline 'Add Labor' form must include: a free-text name field, a type selector (hourly or flat), an hours field (shown only when hourly is selected), an editable rate/amount field (dollars, not required to match any saved rate), and an optional description field. Each added line item must display its computed amount (hours × rate for hourly, flat amount for flat) and a remove button. Show a running labor subtotal below the list. Persist line items via the existing addLaborLineItem and removeLaborLineItem backend endpoints.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/JobDetailPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/JobDetailPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-56",
+        "summary": "Add a configurable tax rate field to the job detail and invoice/estimate workflow. On the Job Detail page, display a tax rate input (percentage, default 8.875%) that is applied to the combined total of parts subtotal and labor subtotal to compute the tax amount and final post-tax total. Display the pre-tax subtotal, tax amount (labeled with the rate, e.g. 'Tax 8.875%'), and the post-tax total on both the Job Detail page and the Invoice/Estimate preview page. The tax rate value should be editable by the user on the job/invoice screen (not a global setting) and should be included in the PDF export.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/JobDetailPage.tsx",
+          "frontend/src/pages/InvoicePreviewPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/JobDetailPage.tsx",
+          "frontend/src/pages/InvoicePreviewPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-57",
+        "summary": "Remove all Google Review URL references, buttons, default URL values, and related logic from the entire frontend codebase (ClientDetailPage.tsx, JobDetailPage.tsx, and any other file where a Google Review URL default, button, or link appears). If the Google Review feature is causing build instability, remove it completely rather than patching it. After removal, no 'Request Google Review' button, link, or URL constant should remain anywhere in the application.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/ClientDetailPage.tsx",
+          "frontend/src/pages/JobDetailPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/ClientDetailPage.tsx",
+          "frontend/src/pages/JobDetailPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-58",
+        "summary": "Verify and ensure the job photo blob storage section on the Job Detail page (JobDetailPage.tsx) is fully operational. The 'Photos' section must display thumbnail previews of all stored job photos, include a 'Take Photo / Upload' button using an HTML file input with accept='image/*' and capture='environment', read the selected file as an ArrayBuffer, convert it to a Blob, and call addJobPhoto. Each thumbnail must include a delete icon that calls removeJobPhoto. If this section is not currently rendering or is broken, re-implement it using the existing addJobPhoto and removeJobPhoto backend endpoints.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/JobDetailPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/JobDetailPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-59",
+        "summary": "Confirm the Stripe payment section on the Job Detail page (JobDetailPage.tsx) remains visible and functional after the current changes. The section must show a 'Charge via Stripe' button that calls createPaymentIntent with the job's post-tax total (parts + labor + tax), stores the returned payment intent ID via updateJobPayment, and displays a 'Paid' / 'Unpaid' badge based on whether stripePaymentId is present. Do not remove or regress this section during the other changes in this build.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/JobDetailPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/JobDetailPage.tsx"
+        ]
       }
     ]
   },
   "changedFiles": [
-    "backend/main.mo",
     "build-request.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
-    "frontend/src/backend.d.ts",
-    "frontend/src/backend.ts",
-    "frontend/src/declarations/backend.did.d.ts",
-    "frontend/src/declarations/backend.did.js",
-    "frontend/src/hooks/useQueries.ts",
-    "frontend/src/pages/SettingsPage.tsx",
+    "frontend/src/pages/ClientDetailPage.tsx",
+    "frontend/src/pages/InvoicePreviewPage.tsx",
+    "frontend/src/pages/JobDetailPage.tsx",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

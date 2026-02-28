@@ -1,562 +1,821 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, Plus, Trash2, FileText, Star, CreditCard, CheckCircle, XCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams } from '@tanstack/react-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useActor } from '../hooks/useActor';
+import { useInternetIdentity } from '../hooks/useInternetIdentity';
+import { Job, JobStatus, LaborLineItem, RateType, ExternalBlob, ShoppingItem } from '../backend';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  useGetJob,
-  useCreateJob,
-  useUpdateJob,
-  useDeleteJob,
-  useListClients,
-  useListJobs,
-  useListLaborRates,
-  useAddLaborLineItem,
-  useRemoveLaborLineItem,
-  useListParts,
-  useIsStripeConfigured,
-  useCreateCheckoutSession,
-} from '../hooks/useQueries';
-import { JobStatus, RateType, WaiverType } from '../backend';
-import type { LaborLineItem } from '../backend';
-import { useInternetIdentity } from '../hooks/useInternetIdentity';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { ArrowLeft, Plus, Trash2, Camera, FileText, CreditCard, Loader2, X, Image } from 'lucide-react';
 
-const DEFAULT_GOOGLE_REVIEW_URL =
-  'https://www.google.com/search?client=safari&hs=bqlU&sca_esv=477fbb8c9f03b619&hl=en-us&biw=393&bih=695&sxsrf=ANbL-n4RtO1QhvuqwZK_dXDG4LEsJQO68g:1772317989694&q=www.appliancerepairwalden.com+reviews&uds=ALYpb_kZB5BOMUFlRqxCQelgPO46flvNFV4llOp9FXmtgN0bFd_59aFqnzrv2lL_22fdcKjO_3pVePgz54Y0AhVY-GXqXefnH1qx8tFczBBdwApAdYXTD4RJ2fBkcTn2WMvET_C7noP7FDKpQdsny6qiyHWQVVEzt_rbESpi998me2Rg_kwCVEN74ocI_4XPNR22msLdpmHbL8GYbInBlVUBwAcIKp_O7ifZcZcIuUQQZROm0YQtZPTCZ3SVevvuwibzruurIRfjpjjybvX9x_eguP-hCuWxArDZZrO09vSYhCpocS_cwWMGzY0Rwgw8zjgH5WGiY2fHfDs2UCkdDDuktP48v8L24SA8xc5Ab-2pYFO3nVVnJjMPVJpHFf0r559CWqf2c7qmL2DlIq9LVmUhwLfYHaubp-qPmWjWko6lXf2oCXBA71Y3Lp6zVnH89YUnvqoKlmf1B2-nVHIk0CujdXTh7wl4QKF-8kTjNbCWi5TusYLAhMY&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qOR1dDOzNahzjiSdI7VdJYDnJGXelcQqzXSy0Yqcso2TsW1Ly5cwaMJIgfN94_biTlzTkpCdTbGgRuaEYR62-qzW3A8vAeLXPm0nS58Y2B2F8ZX0rKA%3D%3D&sa=X&ved=2ahUKEwiYrtGBn_2SAxVXE1kFHQkkMeYQk8gLegQIIhAB&ictx=1&stq=1&cs=0&lei=YG2jaeaXGK6l5NoPp7HaiAw#ebo=1';
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function centsToDisplay(cents: bigint): string {
+  return `$${(Number(cents) / 100).toFixed(2)}`;
+}
+
+// ─── Local hooks ────────────────────────────────────────────────────────────
+
+function useGetJob(jobId: bigint | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ['job', jobId?.toString()],
+    queryFn: async () => {
+      if (!actor || jobId === null) return null;
+      return actor.getJob(jobId);
+    },
+    enabled: !!actor && !isFetching && jobId !== null,
+  });
+}
+
+function useListClients() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ['clients'],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listClients();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+function useListParts() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ['parts'],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listParts();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+function useListJobs() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ['jobs'],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.listJobs();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+function useGetCallerProfile() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ['callerProfile'],
+    queryFn: async () => {
+      if (!actor) return null;
+      return actor.getCallerUserProfile();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function JobDetailPage() {
-  const params = useParams({ strict: false }) as { jobId?: string };
-  const jobId = params.jobId;
   const navigate = useNavigate();
+  const params = useParams({ strict: false }) as { jobId?: string };
+  const jobId = params.jobId && params.jobId !== 'new' ? BigInt(params.jobId) : null;
+  const isNew = !jobId;
+
+  const { actor } = useActor();
   const { identity } = useInternetIdentity();
-  const isNew = !jobId || jobId === 'new';
+  const queryClient = useQueryClient();
 
-  const { data: job, isLoading: jobLoading } = useGetJob(isNew ? undefined : BigInt(jobId!));
+  const { data: job, isLoading: jobLoading } = useGetJob(jobId);
   const { data: clients = [] } = useListClients();
+  const { data: allParts = [] } = useListParts();
   const { data: allJobs = [] } = useListJobs();
-  const { data: laborRates = [] } = useListLaborRates();
-  const { data: parts = [] } = useListParts();
-  const { data: stripeConfigured } = useIsStripeConfigured();
-  const createCheckoutSession = useCreateCheckoutSession();
+  const { data: callerProfile } = useGetCallerProfile();
 
-  const createJob = useCreateJob();
-  const updateJob = useUpdateJob();
-  const deleteJob = useDeleteJob();
-  const addLaborLineItem = useAddLaborLineItem();
-  const removeLaborLineItem = useRemoveLaborLineItem();
-
-  const [clientId, setClientId] = useState('');
+  // ── Form state ──
+  const [clientId, setClientId] = useState<string>('');
   const [status, setStatus] = useState<JobStatus>(JobStatus.open);
   const [notes, setNotes] = useState('');
-  const [waiverType, setWaiverType] = useState<string>('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [taxRate, setTaxRate] = useState<number>(8.875);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Labor line item form
+  // ── Labor form state ──
   const [laborName, setLaborName] = useState('');
+  const [laborType, setLaborType] = useState<'hourly' | 'flat'>('flat');
+  const [laborHours, setLaborHours] = useState('');
+  const [laborRate, setLaborRate] = useState('');
   const [laborDesc, setLaborDesc] = useState('');
-  const [laborRateType, setLaborRateType] = useState<RateType>(RateType.hourly);
-  const [laborRateAmount, setLaborRateAmount] = useState('');
-  const [laborHours, setLaborHours] = useState('1');
-  const [stripeError, setStripeError] = useState('');
-  const [stripeLoading, setStripeLoading] = useState(false);
+  const [addingLabor, setAddingLabor] = useState(false);
+  const [removingLaborIdx, setRemovingLaborIdx] = useState<number | null>(null);
 
+  // ── Parts state ──
+  const [selectedPartId, setSelectedPartId] = useState<string>('');
+  const [partQty, setPartQty] = useState('1');
+  const [addingPart, setAddingPart] = useState(false);
+
+  // ── Photos state ──
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [removingPhotoIdx, setRemovingPhotoIdx] = useState<number | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Stripe state ──
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeError, setStripeError] = useState<string | null>(null);
+
+  // ── Populate form when job loads ──
   useEffect(() => {
     if (job) {
       setClientId(job.clientId.toString());
       setStatus(job.status);
       setNotes(job.notes);
-      setWaiverType(job.waiverType ?? '');
     }
   }, [job]);
 
-  const getNextJobId = (): bigint => {
-    if (!allJobs || allJobs.length === 0) return BigInt(1);
-    const maxId = allJobs.reduce((max, j) => (j.id > max ? j.id : max), BigInt(0));
-    return maxId + BigInt(1);
-  };
+  // ── Derived values ──
+  const jobParts = allParts.filter(
+    p => p.jobId !== undefined && p.jobId !== null && job && p.jobId === job.id
+  );
+  const partsSubtotal = jobParts.reduce((sum, p) => sum + Number(p.unitCost), 0);
+  const laborItems = job?.laborLineItems || [];
+  const laborSubtotal = laborItems.reduce((sum, l) => sum + Number(l.totalAmount), 0);
+  const subtotal = partsSubtotal + laborSubtotal;
+  const taxAmount = subtotal * (taxRate / 100);
+  const totalAmount = subtotal + taxAmount;
 
-  const handleSelectLaborRate = (rateId: string) => {
-    const rate = laborRates.find(r => r.id.toString() === rateId);
-    if (rate) {
-      setLaborName(rate.name);
-      setLaborRateType(rate.rateType);
-      setLaborRateAmount((Number(rate.amount) / 100).toFixed(2));
-    }
-  };
+  const selectedClient = clients.find(c => c.id.toString() === clientId);
+  const availableParts = allParts.filter(p => Number(p.quantityOnHand) > 0 && !p.jobId);
 
+  // ── Save job ──
   const handleSave = async () => {
-    if (!clientId || !identity) return;
-    setIsSaving(true);
+    if (!actor || !identity) return;
+    if (!clientId) { setSaveError('Please select a client'); return; }
+    setSaving(true);
+    setSaveError(null);
     try {
-      const principal = identity.getPrincipal();
-      const waiverVal = waiverType && waiverType !== 'none'
-        ? (waiverType as WaiverType)
-        : undefined;
-      const jobData = {
-        id: isNew ? getNextJobId() : BigInt(jobId!),
+      const newId = isNew
+        ? BigInt(allJobs.length > 0 ? Math.max(...allJobs.map(j => Number(j.id))) + 1 : 1)
+        : jobId!;
+
+      const jobData: Job = {
+        id: newId,
         clientId: BigInt(clientId),
-        tech: principal,
-        date: isNew ? BigInt(Date.now() * 1_000_000) : job!.date,
+        tech: identity.getPrincipal(),
+        date: isNew
+          ? BigInt(Date.now()) * BigInt(1_000_000)
+          : (job?.date ?? BigInt(Date.now()) * BigInt(1_000_000)),
         status,
         notes,
-        photos: job?.photos ?? [],
+        photos: job?.photos || [],
         estimate: job?.estimate,
-        waiverType: waiverVal,
-        laborLineItems: job?.laborLineItems ?? [],
+        waiverType: job?.waiverType,
+        laborLineItems: job?.laborLineItems || [],
         stripePaymentId: job?.stripePaymentId,
       };
+
       if (isNew) {
-        await createJob.mutateAsync(jobData as any);
+        await actor.createJob(jobData);
       } else {
-        await updateJob.mutateAsync(jobData as any);
+        await actor.updateJob(jobData);
       }
-      navigate({ to: '/jobs' });
+      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      await queryClient.invalidateQueries({ queryKey: ['job', newId.toString()] });
+      if (isNew) {
+        navigate({ to: '/jobs/$jobId', params: { jobId: newId.toString() } });
+      }
+    } catch (e: any) {
+      setSaveError(e?.message || 'Failed to save job');
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!job) return;
-    await deleteJob.mutateAsync(job.id);
-    navigate({ to: '/jobs' });
-  };
-
-  const handleAddLaborItem = async () => {
-    if (!job || !laborName || !laborRateAmount) return;
-    const rateAmountCents = Math.round(parseFloat(laborRateAmount) * 100);
-    const hours = parseFloat(laborHours) || 1;
-    const totalAmount =
-      laborRateType === RateType.hourly
-        ? Math.round(rateAmountCents * hours)
-        : rateAmountCents;
-    const item: LaborLineItem = {
-      name: laborName,
-      description: laborDesc,
-      rateType: laborRateType,
-      rateAmount: BigInt(rateAmountCents),
-      hours,
-      totalAmount: BigInt(totalAmount),
-    };
-    await addLaborLineItem.mutateAsync({ jobId: job.id, item });
-    setLaborName('');
-    setLaborDesc('');
-    setLaborRateAmount('');
-    setLaborHours('1');
-  };
-
-  const handleRemoveLaborItem = async (index: number) => {
-    if (!job) return;
-    await removeLaborLineItem.mutateAsync({ jobId: job.id, index: BigInt(index) });
-  };
-
-  const handleStripeCharge = async () => {
-    if (!job) return;
-    setStripeError('');
-    setStripeLoading(true);
+  // ── Add labor ──
+  const handleAddLabor = async () => {
+    if (!actor || !jobId || !laborName.trim() || !laborRate.trim()) return;
+    setAddingLabor(true);
     try {
-      const laborSubtotal = job.laborLineItems.reduce(
-        (sum, item) => sum + Number(item.totalAmount),
-        0
-      );
-      const estimateAmount = job.estimate ? Number(job.estimate.amount) : 8500;
-      const total = estimateAmount + laborSubtotal;
-      const client = clients.find(c => c.id === job.clientId);
-      const session = await createCheckoutSession.mutateAsync([
+      const rateAmountCents = Math.round(parseFloat(laborRate) * 100);
+      const hours = laborType === 'hourly' ? parseFloat(laborHours) || 0 : 0;
+      const totalCents =
+        laborType === 'hourly'
+          ? Math.round(hours * rateAmountCents)
+          : rateAmountCents;
+
+      const item: LaborLineItem = {
+        name: laborName.trim(),
+        rateType: laborType === 'hourly' ? RateType.hourly : RateType.flat,
+        hours,
+        rateAmount: BigInt(rateAmountCents),
+        description: laborDesc.trim(),
+        totalAmount: BigInt(totalCents),
+      };
+      await actor.addLaborLineItem(jobId, item);
+      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
+      setLaborName('');
+      setLaborType('flat');
+      setLaborHours('');
+      setLaborRate('');
+      setLaborDesc('');
+    } catch (e: any) {
+      console.error('Failed to add labor:', e);
+    } finally {
+      setAddingLabor(false);
+    }
+  };
+
+  // ── Remove labor ──
+  const handleRemoveLabor = async (index: number) => {
+    if (!actor || !jobId) return;
+    setRemovingLaborIdx(index);
+    try {
+      await actor.removeLaborLineItem(jobId, BigInt(index));
+      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
+    } catch (e: any) {
+      console.error('Failed to remove labor:', e);
+    } finally {
+      setRemovingLaborIdx(null);
+    }
+  };
+
+  // ── Add part to job ──
+  const handleAddPart = async () => {
+    if (!actor || !jobId || !selectedPartId) return;
+    setAddingPart(true);
+    try {
+      await actor.usePartOnJob(BigInt(selectedPartId), jobId, BigInt(parseInt(partQty) || 1));
+      await queryClient.invalidateQueries({ queryKey: ['parts'] });
+      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
+      setSelectedPartId('');
+      setPartQty('1');
+    } catch (e: any) {
+      console.error('Failed to add part:', e);
+    } finally {
+      setAddingPart(false);
+    }
+  };
+
+  // ── Upload photo ──
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!actor || !jobId || !e.target.files?.[0]) return;
+    const file = e.target.files[0];
+    setUploadingPhoto(true);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      const blob = ExternalBlob.fromBytes(bytes);
+      await actor.addJobPhoto(jobId, blob);
+      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
+    } catch (e: any) {
+      console.error('Failed to upload photo:', e);
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  };
+
+  // ── Remove photo ──
+  const handleRemovePhoto = async (index: number) => {
+    if (!actor || !jobId) return;
+    setRemovingPhotoIdx(index);
+    try {
+      await actor.removeJobPhoto(jobId, BigInt(index));
+      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
+    } catch (e: any) {
+      console.error('Failed to remove photo:', e);
+    } finally {
+      setRemovingPhotoIdx(null);
+    }
+  };
+
+  // ── Stripe checkout ──
+  const handleStripeCheckout = async () => {
+    if (!actor || !jobId) return;
+    setStripeLoading(true);
+    setStripeError(null);
+    try {
+      const totalCents = Math.round(totalAmount);
+      const items: ShoppingItem[] = [
         {
-          productName: `Job #${job.id.toString()} - ${client?.name ?? 'Customer'}`,
-          productDescription: job.notes || 'Appliance Repair Service',
+          productName: `Job #${jobId} - ${selectedClient?.name || 'Service'}`,
+          productDescription: notes || 'Appliance repair service',
           currency: 'usd',
           quantity: BigInt(1),
-          priceInCents: BigInt(total),
+          priceInCents: BigInt(totalCents),
         },
-      ]);
+      ];
+      const baseUrl = `${window.location.protocol}//${window.location.host}`;
+      const result = await actor.createCheckoutSession(
+        items,
+        `${baseUrl}/payment-success`,
+        `${baseUrl}/payment-failure`
+      );
+      const session = JSON.parse(result);
       if (!session?.url) throw new Error('Stripe session missing url');
       window.location.href = session.url;
-    } catch (err: any) {
-      setStripeError(err.message || 'Failed to create Stripe session');
+    } catch (e: any) {
+      setStripeError(e?.message || 'Failed to create checkout session');
     } finally {
       setStripeLoading(false);
     }
   };
 
-  const handleRequestReview = () => {
-    const client = clients.find(c => c.id === job?.clientId);
-    const url = client?.googleReviewUrl || DEFAULT_GOOGLE_REVIEW_URL;
-    window.open(url, '_blank');
+  // ── Navigate to invoice ──
+  const handleViewInvoice = () => {
+    if (!jobId) return;
+    navigate({
+      to: '/invoice/$jobId',
+      params: { jobId: jobId.toString() },
+      search: { taxRate: taxRate.toString() },
+    });
   };
 
-  if (!isNew && jobLoading) {
+  if (jobLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
-
-  const jobParts = parts.filter(p => p.jobId !== undefined && p.jobId === job?.id);
-  const laborSubtotal =
-    job?.laborLineItems.reduce((sum, item) => sum + Number(item.totalAmount), 0) ?? 0;
-  const estimateAmount = job?.estimate ? Number(job.estimate.amount) : 0;
-  const grandTotal = estimateAmount + laborSubtotal;
 
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <Button variant="ghost" size="icon" onClick={() => navigate({ to: '/jobs' })}>
-          <ArrowLeft className="h-5 w-5" />
+        <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/jobs' })}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Jobs
         </Button>
-        <h1 className="font-semibold text-foreground">{isNew ? 'New Job' : 'Edit Job'}</h1>
-        <div className="flex gap-2">
-          {!isNew && job?.status === JobStatus.complete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleRequestReview}
-              title="Request Google Review"
-            >
-              <Star className="h-5 w-5 text-yellow-500" />
-            </Button>
-          )}
-          {!isNew && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() =>
-                navigate({ to: '/invoice/$jobId', params: { jobId: jobId! } })
-              }
-              title="View Invoice"
-            >
-              <FileText className="h-5 w-5" />
-            </Button>
-          )}
-        </div>
+        <h1 className="font-semibold text-foreground">
+          {isNew ? 'New Job' : `Job #${jobId}`}
+        </h1>
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+          {isNew ? 'Create' : 'Save'}
+        </Button>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {/* Basic Info */}
-        <div className="bg-card rounded-xl border border-border p-4 space-y-4">
-          <h2 className="font-semibold text-foreground">Job Information</h2>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">Client</label>
-            <Select value={clientId} onValueChange={setClientId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a client" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map(c => (
-                  <SelectItem key={c.id.toString()} value={c.id.toString()}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {saveError && (
+          <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-4 py-3">
+            {saveError}
           </div>
+        )}
 
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">Status</label>
-            <Select value={status} onValueChange={v => setStatus(v as JobStatus)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={JobStatus.open}>Open</SelectItem>
-                <SelectItem value={JobStatus.inProgress}>In Progress</SelectItem>
-                <SelectItem value={JobStatus.complete}>Complete</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        {/* ── Job Info ── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Job Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1">
+              <Label>Client *</Label>
+              <Select value={clientId} onValueChange={setClientId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map(c => (
+                    <SelectItem key={c.id.toString()} value={c.id.toString()}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">
-              Waiver Type
-            </label>
-            <Select value={waiverType} onValueChange={setWaiverType}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select waiver type (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value={WaiverType.general}>General</SelectItem>
-                <SelectItem value={WaiverType.preexisting}>Pre-existing</SelectItem>
-                <SelectItem value={WaiverType.potential}>Potential</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-1">
+              <Label>Status</Label>
+              <Select value={status} onValueChange={v => setStatus(v as JobStatus)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={JobStatus.open}>Open</SelectItem>
+                  <SelectItem value={JobStatus.inProgress}>In Progress</SelectItem>
+                  <SelectItem value={JobStatus.complete}>Complete</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-1 block">Notes</label>
-            <Textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Job notes..."
-              rows={3}
-            />
-          </div>
-        </div>
+            <div className="space-y-1">
+              <Label>Notes</Label>
+              <Textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Describe the job, appliance, issue..."
+                rows={3}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Labor Line Items */}
+        {/* ── Parts from Inventory ── */}
         {!isNew && (
-          <div className="bg-card rounded-xl border border-border p-4 space-y-4">
-            <h2 className="font-semibold text-foreground">Labor</h2>
-
-            {job?.laborLineItems && job.laborLineItems.length > 0 && (
-              <div className="space-y-2">
-                {job.laborLineItems.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.rateType === RateType.hourly
-                          ? `${item.hours}h × $${(Number(item.rateAmount) / 100).toFixed(2)}/hr`
-                          : `Flat: $${(Number(item.rateAmount) / 100).toFixed(2)}`}
-                      </p>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Parts from Inventory</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {jobParts.length > 0 && (
+                <div className="space-y-2">
+                  {jobParts.map(part => (
+                    <div
+                      key={part.id.toString()}
+                      className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <div>
+                        <span className="font-medium">{part.name}</span>
+                        {part.partNumber && (
+                          <span className="text-muted-foreground ml-2">#{part.partNumber}</span>
+                        )}
+                      </div>
+                      <span className="font-semibold">{centsToDisplay(part.unitCost)}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">
-                        ${(Number(item.totalAmount) / 100).toFixed(2)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => handleRemoveLaborItem(idx)}
-                        disabled={removeLaborLineItem.isPending}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                  ))}
+                  <div className="flex justify-between text-sm font-semibold pt-1 border-t border-border">
+                    <span>Parts Subtotal</span>
+                    <span>{formatCents(partsSubtotal)}</span>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* Add Labor Form */}
-            <div className="space-y-3 border-t border-border pt-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Add Labor Item
-              </p>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  Quick-fill from rate
-                </label>
-                <Select onValueChange={handleSelectLaborRate}>
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Select a labor rate..." />
+              <div className="flex gap-2">
+                <Select value={selectedPartId} onValueChange={setSelectedPartId}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select part from inventory" />
                   </SelectTrigger>
                   <SelectContent>
-                    {laborRates.map(r => (
-                      <SelectItem key={r.id.toString()} value={r.id.toString()}>
-                        {r.name} — ${(Number(r.amount) / 100).toFixed(2)}/
-                        {r.rateType === RateType.hourly ? 'hr' : 'flat'}
+                    {availableParts.map(p => (
+                      <SelectItem key={p.id.toString()} value={p.id.toString()}>
+                        {p.name} — {centsToDisplay(p.unitCost)} (qty:{' '}
+                        {p.quantityOnHand.toString()})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
                 <Input
-                  placeholder="Name"
-                  value={laborName}
-                  onChange={e => setLaborName(e.target.value)}
-                  className="h-8 text-sm"
+                  type="number"
+                  min="1"
+                  value={partQty}
+                  onChange={e => setPartQty(e.target.value)}
+                  className="w-16"
+                  placeholder="Qty"
                 />
-                <Select
-                  value={laborRateType}
-                  onValueChange={v => setLaborRateType(v as RateType)}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={RateType.hourly}>Hourly</SelectItem>
-                    <SelectItem value={RateType.flat}>Flat</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Button size="sm" onClick={handleAddPart} disabled={addingPart || !selectedPartId}>
+                  {addingPart ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                </Button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Labor ── */}
+        {!isNew && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Labor</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {laborItems.length > 0 && (
+                <div className="space-y-2">
+                  {laborItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium">{item.name}</span>
+                        {item.description && (
+                          <span className="text-muted-foreground ml-2 text-xs">
+                            {item.description}
+                          </span>
+                        )}
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {item.rateType === RateType.hourly
+                            ? `${item.hours}h × ${centsToDisplay(item.rateAmount)}/hr`
+                            : 'Flat rate'}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-2">
+                        <span className="font-semibold">{centsToDisplay(item.totalAmount)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => handleRemoveLabor(idx)}
+                          disabled={removingLaborIdx === idx}
+                        >
+                          {removingLaborIdx === idx ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-sm font-semibold pt-1 border-t border-border">
+                    <span>Labor Subtotal</span>
+                    <span>{formatCents(laborSubtotal)}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Add labor form */}
+              <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/20">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Add Labor
+                </p>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Description *</Label>
+                  <Input
+                    value={laborName}
+                    onChange={e => setLaborName(e.target.value)}
+                    placeholder="e.g. Diagnostic, Compressor replacement..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Type</Label>
+                    <Select
+                      value={laborType}
+                      onValueChange={v => setLaborType(v as 'hourly' | 'flat')}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="flat">Flat Rate</SelectItem>
+                        <SelectItem value="hourly">Hourly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      {laborType === 'hourly' ? 'Rate ($/hr)' : 'Amount ($)'}
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={laborRate}
+                      onChange={e => setLaborRate(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                {laborType === 'hourly' && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Hours</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.25"
+                      value={laborHours}
+                      onChange={e => setLaborHours(e.target.value)}
+                      placeholder="0.0"
+                    />
+                  </div>
+                )}
+
+                {laborRate && (
+                  <div className="text-sm text-muted-foreground">
+                    Line total:{' '}
+                    <span className="font-semibold text-foreground">
+                      {laborType === 'hourly'
+                        ? formatCents(
+                            Math.round(
+                              (parseFloat(laborHours) || 0) * parseFloat(laborRate) * 100
+                            )
+                          )
+                        : formatCents(Math.round(parseFloat(laborRate) * 100))}
+                    </span>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Notes (optional)</Label>
+                  <Input
+                    value={laborDesc}
+                    onChange={e => setLaborDesc(e.target.value)}
+                    placeholder="Additional details..."
+                  />
+                </div>
+
+                <Button
+                  size="sm"
+                  onClick={handleAddLabor}
+                  disabled={addingLabor || !laborName.trim() || !laborRate.trim()}
+                  className="w-full"
+                >
+                  {addingLabor ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <Plus className="w-4 h-4 mr-2" />
+                  )}
+                  Add Labor Line
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Tax & Totals ── */}
+        {!isNew && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Tax &amp; Total</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Label className="w-28 shrink-0">Tax Rate (%)</Label>
                 <Input
-                  placeholder="Rate ($)"
-                  value={laborRateAmount}
-                  onChange={e => setLaborRateAmount(e.target.value)}
                   type="number"
                   min="0"
-                  step="0.01"
-                  className="h-8 text-sm"
+                  max="100"
+                  step="0.001"
+                  value={taxRate}
+                  onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
+                  className="w-32"
                 />
-                {laborRateType === RateType.hourly && (
-                  <Input
-                    placeholder="Hours"
-                    value={laborHours}
-                    onChange={e => setLaborHours(e.target.value)}
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    className="h-8 text-sm"
-                  />
-                )}
               </div>
-              <Input
-                placeholder="Description (optional)"
-                value={laborDesc}
-                onChange={e => setLaborDesc(e.target.value)}
-                className="h-8 text-sm"
+              <Separator />
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Parts Subtotal</span>
+                  <span>{formatCents(partsSubtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Labor Subtotal</span>
+                  <span>{formatCents(laborSubtotal)}</span>
+                </div>
+                <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
+                  <span>Subtotal</span>
+                  <span>{formatCents(subtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tax ({taxRate}%)</span>
+                  <span>{formatCents(Math.round(taxAmount))}</span>
+                </div>
+                <div className="flex justify-between text-base font-bold text-primary border-t-2 border-primary pt-2 mt-1">
+                  <span>Total</span>
+                  <span>{formatCents(Math.round(totalAmount))}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Photos ── */}
+        {!isNew && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Image className="w-4 h-4" />
+                Photos
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {job?.photos && job.photos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {job.photos.map((photo, idx) => (
+                    <div
+                      key={idx}
+                      className="relative group aspect-square rounded-lg overflow-hidden bg-muted"
+                    >
+                      <img
+                        src={photo.getDirectURL()}
+                        alt={`Job photo ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => handleRemovePhoto(idx)}
+                        disabled={removingPhotoIdx === idx}
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        {removingPhotoIdx === idx ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <X className="w-3 h-3" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handlePhotoUpload}
               />
               <Button
+                variant="outline"
                 size="sm"
-                onClick={handleAddLaborItem}
-                disabled={!laborName || !laborRateAmount || addLaborLineItem.isPending}
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploadingPhoto}
                 className="w-full"
               >
-                <Plus className="h-4 w-4 mr-1" />
-                {addLaborLineItem.isPending ? 'Adding...' : 'Add Labor Item'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Parts Used */}
-        {!isNew && jobParts.length > 0 && (
-          <div className="bg-card rounded-xl border border-border p-4 space-y-3">
-            <h2 className="font-semibold text-foreground">Parts Used</h2>
-            {jobParts.map(part => (
-              <div
-                key={part.id.toString()}
-                className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
-              >
-                <div>
-                  <p className="text-sm font-medium text-foreground">{part.name}</p>
-                  <p className="text-xs text-muted-foreground">#{part.partNumber}</p>
-                </div>
-                <span className="text-sm font-semibold text-foreground">
-                  ${(Number(part.unitCost) / 100).toFixed(2)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Payment Section */}
-        {!isNew && (
-          <div className="bg-card rounded-xl border border-border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-foreground">Payment</h2>
-              {job?.stripePaymentId ? (
-                <Badge className="bg-green-100 text-green-700 border-green-200">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Paid
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground">
-                  <XCircle className="h-3 w-3 mr-1" />
-                  Unpaid
-                </Badge>
-              )}
-            </div>
-
-            {/* Cost Summary */}
-            <div className="bg-muted/30 rounded-lg p-3 space-y-1 text-sm">
-              {estimateAmount > 0 && (
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Diagnostic Fee</span>
-                  <span>${(estimateAmount / 100).toFixed(2)}</span>
-                </div>
-              )}
-              {laborSubtotal > 0 && (
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Labor</span>
-                  <span>${(laborSubtotal / 100).toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-1">
-                <span>Total</span>
-                <span>${(grandTotal / 100).toFixed(2)}</span>
-              </div>
-            </div>
-
-            {!job?.stripePaymentId && (
-              <>
-                {stripeConfigured ? (
-                  <Button
-                    className="w-full"
-                    onClick={handleStripeCharge}
-                    disabled={stripeLoading || grandTotal === 0}
-                  >
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    {stripeLoading
-                      ? 'Redirecting to Stripe...'
-                      : `Charge $${(grandTotal / 100).toFixed(2)} via Stripe`}
-                  </Button>
+                {uploadingPhoto ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Uploading...
+                  </>
                 ) : (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Configure Stripe in Settings to enable payments.
-                  </p>
+                  <>
+                    <Camera className="w-4 h-4 mr-2" />
+                    Take Photo / Upload
+                  </>
                 )}
-                {stripeError && (
-                  <p className="text-xs text-destructive">{stripeError}</p>
-                )}
-              </>
-            )}
-          </div>
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Action Buttons */}
-        <div className="space-y-3">
-          <Button
-            className="w-full"
-            onClick={handleSave}
-            disabled={isSaving || !clientId}
-          >
-            {isSaving ? 'Saving...' : isNew ? 'Create Job' : 'Save Changes'}
-          </Button>
-
-          {!isNew && (
-            <>
-              {showDeleteConfirm ? (
-                <div className="flex gap-2">
-                  <Button
-                    variant="destructive"
-                    className="flex-1"
-                    onClick={handleDelete}
-                    disabled={deleteJob.isPending}
-                  >
-                    {deleteJob.isPending ? 'Deleting...' : 'Confirm Delete'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setShowDeleteConfirm(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
+        {/* ── Stripe Payment ── */}
+        {!isNew && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                Payment
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Status</span>
+                {job?.stripePaymentId ? (
+                  <Badge className="bg-green-600 text-white">Paid</Badge>
+                ) : (
+                  <Badge variant="outline">Unpaid</Badge>
+                )}
+              </div>
+              {job?.stripePaymentId && (
+                <p className="text-xs text-muted-foreground">
+                  Payment ID: {job.stripePaymentId}
+                </p>
+              )}
+              {stripeError && <p className="text-xs text-destructive">{stripeError}</p>}
+              {!job?.stripePaymentId && (
                 <Button
-                  variant="outline"
-                  className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
-                  onClick={() => setShowDeleteConfirm(true)}
+                  onClick={handleStripeCheckout}
+                  disabled={stripeLoading || totalAmount <= 0}
+                  className="w-full"
                 >
-                  Delete Job
+                  {stripeLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>Charge via Stripe — {formatCents(Math.round(totalAmount))}</>
+                  )}
                 </Button>
               )}
-            </>
-          )}
-        </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Invoice / Estimate ── */}
+        {!isNew && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Invoice / Estimate
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" onClick={handleViewInvoice} className="w-full">
+                <FileText className="w-4 h-4 mr-2" />
+                View / Print Invoice
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

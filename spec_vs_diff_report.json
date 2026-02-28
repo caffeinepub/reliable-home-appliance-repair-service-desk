@@ -1,66 +1,16 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-02-28T23:18:11.717Z",
-  "summary": "The diff implements most of the required changes for hardening the owner principal and role checks. The backend declares ownerPrincipal as an immutable let constant with the correct value and comment, frontend SettingsPage.tsx uses a local OWNER_PRINCIPAL constant for isOwner checks, and useQueries.ts exposes a useIsOwner hook using the hardcoded principal. However, several specific requirements have partial or missing evidence in the diff due to truncation.",
-  "missing_requirements": [
-    {
-      "id": "REQ-49",
-      "requirement": "Rewrite hasPermission so #owner checks are a direct equality comparison against the stable owner constant and never fall through to the TrieMap.",
-      "reason": "The AccessControl module files (authorization/access-control, authorization/MixinAuthorization) are not shown as modified in the diff. The hasPermission function itself is not visible. It is unclear whether #owner permission in the AccessControl module still consults the TrieMap or short-circuits to an equality check.",
-      "evidence": [
-        "backend/main.mo"
-      ]
-    },
-    {
-      "id": "REQ-50",
-      "requirement": "Audit and fix every owner-guarded endpoint (setStripeKey, getStripeKey, addAuthorizedPrincipal, removeAuthorizedPrincipal, listAuthorizedPrincipals, createLaborRate, updateLaborRate, deleteLaborRate, createPackage, updatePackage, deletePackage) to use the hardened hasPermission check.",
-      "reason": "The diff for backend/main.mo is truncated and does not show the implementation of these owner-guarded endpoints or confirm they use the hardened owner check.",
-      "evidence": [
-        "backend/main.mo"
-      ]
-    },
-    {
-      "id": "REQ-51",
-      "requirement": "All standard CRUD endpoints accept calls from any principal passing hasPermission(caller, #authorized), including the owner and any TrieMap-registered #authorized principal.",
-      "reason": "The truncated diff shows createClient using isAuthorizedOrOwner which checks caller == ownerPrincipal OR AccessControl.hasPermission(..., #user). The use of #user instead of #authorized is inconsistent with the requirement. The remaining CRUD endpoints are not visible due to truncation.",
-      "evidence": [
-        "backend/main.mo"
-      ]
-    },
-    {
-      "id": "REQ-52",
-      "requirement": "The Dashboard owner-only metrics card and Labor Rates card render for the owner principal. No page shows 'Metrics restricted' when the owner is logged in.",
-      "reason": "DashboardPage.tsx is not listed as a modified file in the diff. The file summary mentions it uses useIsOwner but there is no direct diff evidence that the Dashboard page was actually updated.",
-      "evidence": [
-        "frontend-file-summaries.txt"
-      ]
-    },
-    {
-      "id": "REQ-53",
-      "requirement": "Add a migration guard to preserve the stable owner principal across all future upgrades, actively aborting or skipping any logic that would reset the owner.",
-      "reason": "The diff declares ownerPrincipal as a let constant with a comment but does not show explicit migration guards in preupgrade/postupgrade hooks or a migration.mo file that actively prevents reset logic.",
-      "evidence": [
-        "backend/main.mo"
-      ]
-    }
-  ],
-  "hallucinated_features": [
-    {
-      "description": "A reusable useIsOwner hook exported from useQueries.ts and used across multiple pages including Dashboard and Inventory",
-      "reason": "The build request only requires the Settings page isOwner check to use a hardcoded principal comparison (REQ-52). Adding a shared hook used in DashboardPage and InventoryPage goes beyond the explicitly requested scope.",
-      "evidence": [
-        "frontend/src/hooks/useQueries.ts",
-        "frontend-file-summaries.txt"
-      ]
-    }
-  ],
-  "confidence": 0.62,
+  "generatedAt": "2026-02-28T23:37:37.137Z",
+  "summary": "The diff implements the majority of the requested requirements. REQ-54 (business name), REQ-55 (custom labor), REQ-56 (tax rate), REQ-57 (Google Review removal), REQ-58 (photo section), and REQ-59 (Stripe section) all appear to be addressed in the modified files. However, due to truncation of JobDetailPage.tsx and InvoicePreviewPage.tsx, full verification of several acceptance criteria is limited. One notable concern is that the Stripe createPaymentIntent call's amount argument (REQ-59 AC: post-tax total) cannot be confirmed from the truncated diff. Similarly, the complete photo section implementation (REQ-58) and the full PDF export content for REQ-56 cannot be fully verified. The file summaries corroborate that all features were implemented as described.",
+  "missing_requirements": [],
+  "hallucinated_features": [],
+  "confidence": 0.75,
   "changed_files": [
-    "backend/main.mo",
     "frontend-file-summaries.txt",
-    "frontend/src/hooks/useQueries.ts",
-    "frontend/src/pages/SettingsPage.tsx",
+    "frontend/src/pages/ClientDetailPage.tsx",
+    "frontend/src/pages/InvoicePreviewPage.tsx",
+    "frontend/src/pages/JobDetailPage.tsx",
     "project_state.json"
   ]
 }
