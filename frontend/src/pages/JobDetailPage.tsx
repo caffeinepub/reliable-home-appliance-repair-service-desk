@@ -16,10 +16,6 @@ import { ArrowLeft, Plus, Trash2, Camera, FileText, CreditCard, Loader2, X, Imag
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
 function centsToDisplay(cents: bigint): string {
   return `$${(Number(cents) / 100).toFixed(2)}`;
 }
@@ -90,9 +86,11 @@ function useGetCallerProfile() {
 
 export default function JobDetailPage() {
   const navigate = useNavigate();
+  // Support both /jobs/new (no param) and /jobs/$jobId (with param)
   const params = useParams({ strict: false }) as { jobId?: string };
-  const jobId = params.jobId && params.jobId !== 'new' ? BigInt(params.jobId) : null;
-  const isNew = !jobId;
+  // isNew when there's no jobId param at all (route: /jobs/new)
+  const isNew = !params.jobId;
+  const jobId = !isNew ? BigInt(params.jobId!) : null;
 
   const { actor } = useActor();
   const { identity } = useInternetIdentity();
@@ -159,15 +157,25 @@ export default function JobDetailPage() {
   const availableParts = allParts.filter(p => Number(p.quantityOnHand) > 0 && !p.jobId);
 
   // ── Save job ──
-  const handleSave = async () => {
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!actor || !identity) return;
     if (!clientId) { setSaveError('Please select a client'); return; }
     setSaving(true);
     setSaveError(null);
     try {
-      const newId = isNew
-        ? BigInt(allJobs.length > 0 ? Math.max(...allJobs.map(j => Number(j.id))) + 1 : 1)
-        : jobId!;
+      // Use BigInt-safe max ID calculation to avoid Math.max(-Infinity) on empty arrays
+      let newId: bigint;
+      if (isNew) {
+        if (allJobs.length > 0) {
+          const maxId = allJobs.reduce((max, j) => (j.id > max ? j.id : max), allJobs[0].id);
+          newId = maxId + BigInt(1);
+        } else {
+          newId = BigInt(Date.now());
+        }
+      } else {
+        newId = jobId!;
+      }
 
       const jobData: Job = {
         id: newId,
@@ -300,29 +308,68 @@ export default function JobDetailPage() {
     }
   };
 
+  // ── Delete job ──
+  const handleDelete = async () => {
+    if (!actor || !jobId) return;
+    try {
+      await actor.deleteJob(jobId);
+      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      navigate({ to: '/jobs' });
+    } catch (e: any) {
+      setSaveError(e?.message || 'Failed to delete job');
+    }
+  };
+
   // ── Stripe checkout ──
   const handleStripeCheckout = async () => {
     if (!actor || !jobId) return;
     setStripeLoading(true);
     setStripeError(null);
     try {
-      const totalCents = Math.round(totalAmount);
-      const items: ShoppingItem[] = [
-        {
-          productName: `Job #${jobId} - ${selectedClient?.name || 'Service'}`,
-          productDescription: notes || 'Appliance repair service',
+      const items: ShoppingItem[] = [];
+
+      if (laborSubtotal > 0) {
+        items.push({
+          productName: 'Labor',
+          productDescription: 'Labor charges',
           currency: 'usd',
           quantity: BigInt(1),
-          priceInCents: BigInt(totalCents),
-        },
-      ];
+          priceInCents: BigInt(Math.round(laborSubtotal)),
+        });
+      }
+
+      if (partsSubtotal > 0) {
+        items.push({
+          productName: 'Parts',
+          productDescription: 'Parts and materials',
+          currency: 'usd',
+          quantity: BigInt(1),
+          priceInCents: BigInt(Math.round(partsSubtotal)),
+        });
+      }
+
+      if (taxAmount > 0) {
+        items.push({
+          productName: 'Tax',
+          productDescription: `Tax (${taxRate}%)`,
+          currency: 'usd',
+          quantity: BigInt(1),
+          priceInCents: BigInt(Math.round(taxAmount)),
+        });
+      }
+
+      if (items.length === 0) {
+        setStripeError('No items to charge');
+        return;
+      }
+
       const baseUrl = `${window.location.protocol}//${window.location.host}`;
       const result = await actor.createCheckoutSession(
         items,
         `${baseUrl}/payment-success`,
         `${baseUrl}/payment-failure`
       );
-      const session = JSON.parse(result);
+      const session = JSON.parse(result) as { id: string; url: string };
       if (!session?.url) throw new Error('Stripe session missing url');
       window.location.href = session.url;
     } catch (e: any) {
@@ -332,17 +379,7 @@ export default function JobDetailPage() {
     }
   };
 
-  // ── Navigate to invoice ──
-  const handleViewInvoice = () => {
-    if (!jobId) return;
-    navigate({
-      to: '/invoice/$jobId',
-      params: { jobId: jobId.toString() },
-      search: { taxRate: taxRate.toString() },
-    });
-  };
-
-  if (jobLoading) {
+  if (!isNew && jobLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -359,32 +396,33 @@ export default function JobDetailPage() {
           Jobs
         </Button>
         <h1 className="font-semibold text-foreground">
-          {isNew ? 'New Job' : `Job #${jobId}`}
+          {isNew ? 'New Job' : 'Edit Job'}
         </h1>
-        <Button size="sm" onClick={handleSave} disabled={saving}>
+        <Button size="sm" onClick={() => handleSave()} disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
           {isNew ? 'Create' : 'Save'}
         </Button>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
         {saveError && (
           <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-4 py-3">
             {saveError}
           </div>
         )}
 
-        {/* ── Job Info ── */}
+        {/* Basic Info */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Job Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Client */}
             <div className="space-y-1">
               <Label>Client *</Label>
               <Select value={clientId} onValueChange={setClientId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a client" />
+                  <SelectValue placeholder="Select a client..." />
                 </SelectTrigger>
                 <SelectContent>
                   {clients.map(c => (
@@ -396,6 +434,7 @@ export default function JobDetailPage() {
               </Select>
             </div>
 
+            {/* Status */}
             <div className="space-y-1">
               <Label>Status</Label>
               <Select value={status} onValueChange={v => setStatus(v as JobStatus)}>
@@ -410,157 +449,92 @@ export default function JobDetailPage() {
               </Select>
             </div>
 
+            {/* Notes */}
             <div className="space-y-1">
               <Label>Notes</Label>
               <Textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="Describe the job, appliance, issue..."
+                placeholder="Job description, appliance details, issues found..."
                 rows={3}
+              />
+            </div>
+
+            {/* Tax Rate */}
+            <div className="space-y-1">
+              <Label>Tax Rate (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.001"
+                value={taxRate}
+                onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
+                placeholder="8.875"
               />
             </div>
           </CardContent>
         </Card>
 
-        {/* ── Parts from Inventory ── */}
-        {!isNew && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Parts from Inventory</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {jobParts.length > 0 && (
-                <div className="space-y-2">
-                  {jobParts.map(part => (
-                    <div
-                      key={part.id.toString()}
-                      className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 text-sm"
-                    >
-                      <div>
-                        <span className="font-medium">{part.name}</span>
-                        {part.partNumber && (
-                          <span className="text-muted-foreground ml-2">#{part.partNumber}</span>
-                        )}
-                      </div>
-                      <span className="font-semibold">{centsToDisplay(part.unitCost)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between text-sm font-semibold pt-1 border-t border-border">
-                    <span>Parts Subtotal</span>
-                    <span>{formatCents(partsSubtotal)}</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <Select value={selectedPartId} onValueChange={setSelectedPartId}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Select part from inventory" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableParts.map(p => (
-                      <SelectItem key={p.id.toString()} value={p.id.toString()}>
-                        {p.name} — {centsToDisplay(p.unitCost)} (qty:{' '}
-                        {p.quantityOnHand.toString()})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  min="1"
-                  value={partQty}
-                  onChange={e => setPartQty(e.target.value)}
-                  className="w-16"
-                  placeholder="Qty"
-                />
-                <Button size="sm" onClick={handleAddPart} disabled={addingPart || !selectedPartId}>
-                  {addingPart ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ── Labor ── */}
+        {/* Labor Line Items — only available after job is saved */}
         {!isNew && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Labor</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Existing labor items */}
               {laborItems.length > 0 && (
                 <div className="space-y-2">
                   {laborItems.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 text-sm"
-                    >
+                    <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded-lg">
                       <div className="flex-1 min-w-0">
-                        <span className="font-medium">{item.name}</span>
-                        {item.description && (
-                          <span className="text-muted-foreground ml-2 text-xs">
-                            {item.description}
-                          </span>
-                        )}
-                        <div className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                        <p className="text-xs text-muted-foreground">
                           {item.rateType === RateType.hourly
                             ? `${item.hours}h × ${centsToDisplay(item.rateAmount)}/hr`
-                            : 'Flat rate'}
-                        </div>
+                            : `Flat: ${centsToDisplay(item.rateAmount)}`}
+                          {item.description ? ` · ${item.description}` : ''}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2 ml-2">
-                        <span className="font-semibold">{centsToDisplay(item.totalAmount)}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-sm font-semibold text-foreground">
+                          {centsToDisplay(item.totalAmount)}
+                        </span>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          className="h-6 w-6 text-destructive hover:text-destructive"
                           onClick={() => handleRemoveLabor(idx)}
                           disabled={removingLaborIdx === idx}
                         >
-                          {removingLaborIdx === idx ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3 h-3" />
-                          )}
+                          {removingLaborIdx === idx
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <X size={12} />}
                         </Button>
                       </div>
                     </div>
                   ))}
-                  <div className="flex justify-between text-sm font-semibold pt-1 border-t border-border">
-                    <span>Labor Subtotal</span>
-                    <span>{formatCents(laborSubtotal)}</span>
-                  </div>
                 </div>
               )}
 
               {/* Add labor form */}
-              <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/20">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Add Labor
-                </p>
-
-                <div className="space-y-1">
-                  <Label className="text-xs">Description *</Label>
-                  <Input
-                    value={laborName}
-                    onChange={e => setLaborName(e.target.value)}
-                    placeholder="e.g. Diagnostic, Compressor replacement..."
-                  />
-                </div>
-
+              <div className="space-y-3 pt-2 border-t border-border">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Labor</p>
                 <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Name</Label>
+                    <Input
+                      value={laborName}
+                      onChange={e => setLaborName(e.target.value)}
+                      placeholder="e.g. Diagnostic Fee"
+                      className="h-8 text-sm"
+                    />
+                  </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Type</Label>
-                    <Select
-                      value={laborType}
-                      onValueChange={v => setLaborType(v as 'hourly' | 'flat')}
-                    >
-                      <SelectTrigger>
+                    <Select value={laborType} onValueChange={v => setLaborType(v as 'hourly' | 'flat')}>
+                      <SelectTrigger className="h-8 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -570,139 +544,134 @@ export default function JobDetailPage() {
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">
-                      {laborType === 'hourly' ? 'Rate ($/hr)' : 'Amount ($)'}
-                    </Label>
+                    <Label className="text-xs">Rate ($)</Label>
                     <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
                       value={laborRate}
                       onChange={e => setLaborRate(e.target.value)}
                       placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                {laborType === 'hourly' && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">Hours</Label>
-                    <Input
                       type="number"
                       min="0"
-                      step="0.25"
-                      value={laborHours}
-                      onChange={e => setLaborHours(e.target.value)}
-                      placeholder="0.0"
+                      step="0.01"
+                      className="h-8 text-sm"
                     />
                   </div>
-                )}
-
-                {laborRate && (
-                  <div className="text-sm text-muted-foreground">
-                    Line total:{' '}
-                    <span className="font-semibold text-foreground">
-                      {laborType === 'hourly'
-                        ? formatCents(
-                            Math.round(
-                              (parseFloat(laborHours) || 0) * parseFloat(laborRate) * 100
-                            )
-                          )
-                        : formatCents(Math.round(parseFloat(laborRate) * 100))}
-                    </span>
+                  {laborType === 'hourly' && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Hours</Label>
+                      <Input
+                        value={laborHours}
+                        onChange={e => setLaborHours(e.target.value)}
+                        placeholder="0"
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  )}
+                  <div className={`space-y-1 ${laborType === 'hourly' ? '' : 'col-span-2'}`}>
+                    <Label className="text-xs">Description</Label>
+                    <Input
+                      value={laborDesc}
+                      onChange={e => setLaborDesc(e.target.value)}
+                      placeholder="Optional description"
+                      className="h-8 text-sm"
+                    />
                   </div>
-                )}
-
-                <div className="space-y-1">
-                  <Label className="text-xs">Notes (optional)</Label>
-                  <Input
-                    value={laborDesc}
-                    onChange={e => setLaborDesc(e.target.value)}
-                    placeholder="Additional details..."
-                  />
                 </div>
-
                 <Button
                   size="sm"
                   onClick={handleAddLabor}
                   disabled={addingLabor || !laborName.trim() || !laborRate.trim()}
                   className="w-full"
                 >
-                  {addingLabor ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <Plus className="w-4 h-4 mr-2" />
-                  )}
-                  Add Labor Line
+                  {addingLabor ? <Loader2 size={14} className="animate-spin mr-1" /> : <Plus size={14} className="mr-1" />}
+                  Add Labor Item
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* ── Tax & Totals ── */}
+        {/* Parts — only available after job is saved */}
         {!isNew && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Tax &amp; Total</CardTitle>
+              <CardTitle className="text-base">Parts Used</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Label className="w-28 shrink-0">Tax Rate (%)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.001"
-                  value={taxRate}
-                  onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
-                  className="w-32"
-                />
-              </div>
-              <Separator />
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Parts Subtotal</span>
-                  <span>{formatCents(partsSubtotal)}</span>
+            <CardContent className="space-y-4">
+              {jobParts.length > 0 && (
+                <div className="space-y-2">
+                  {jobParts.map(part => (
+                    <div key={part.id.toString()} className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{part.name}</p>
+                        <p className="text-xs text-muted-foreground">#{part.partNumber}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-foreground shrink-0">
+                        {centsToDisplay(part.unitCost)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Labor Subtotal</span>
-                  <span>{formatCents(laborSubtotal)}</span>
+              )}
+
+              {availableParts.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-border">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Part</p>
+                  <div className="flex gap-2">
+                    <Select value={selectedPartId} onValueChange={setSelectedPartId}>
+                      <SelectTrigger className="flex-1 h-8 text-sm">
+                        <SelectValue placeholder="Select part..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableParts.map(p => (
+                          <SelectItem key={p.id.toString()} value={p.id.toString()}>
+                            {p.name} (qty: {p.quantityOnHand.toString()})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={partQty}
+                      onChange={e => setPartQty(e.target.value)}
+                      type="number"
+                      min="1"
+                      className="w-16 h-8 text-sm"
+                      placeholder="Qty"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleAddPart}
+                      disabled={addingPart || !selectedPartId}
+                      className="h-8"
+                    >
+                      {addingPart ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
-                  <span>Subtotal</span>
-                  <span>{formatCents(subtotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax ({taxRate}%)</span>
-                  <span>{formatCents(Math.round(taxAmount))}</span>
-                </div>
-                <div className="flex justify-between text-base font-bold text-primary border-t-2 border-primary pt-2 mt-1">
-                  <span>Total</span>
-                  <span>{formatCents(Math.round(totalAmount))}</span>
-                </div>
-              </div>
+              )}
+
+              {jobParts.length === 0 && availableParts.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  No parts available. Add parts in Inventory first.
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {/* ── Photos ── */}
+        {/* Photos — only available after job is saved */}
         {!isNew && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Image className="w-4 h-4" />
-                Photos
-              </CardTitle>
+              <CardTitle className="text-base">Photos</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               {job?.photos && job.photos.length > 0 && (
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {job.photos.map((photo, idx) => (
-                    <div
-                      key={idx}
-                      className="relative group aspect-square rounded-lg overflow-hidden bg-muted"
-                    >
+                    <div key={idx} className="relative group rounded-lg overflow-hidden bg-muted aspect-square">
                       <img
                         src={photo.getDirectURL()}
                         alt={`Job photo ${idx + 1}`}
@@ -713,11 +682,9 @@ export default function JobDetailPage() {
                         disabled={removingPhotoIdx === idx}
                         className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        {removingPhotoIdx === idx ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <X className="w-3 h-3" />
-                        )}
+                        {removingPhotoIdx === idx
+                          ? <Loader2 size={12} className="animate-spin" />
+                          : <X size={12} />}
                       </button>
                     </div>
                   ))}
@@ -734,87 +701,91 @@ export default function JobDetailPage() {
               />
               <Button
                 variant="outline"
-                size="sm"
+                className="w-full"
                 onClick={() => photoInputRef.current?.click()}
                 disabled={uploadingPhoto}
-                className="w-full"
               >
-                {uploadingPhoto ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Camera className="w-4 h-4 mr-2" />
-                    Take Photo / Upload
-                  </>
-                )}
+                {uploadingPhoto
+                  ? <Loader2 size={16} className="animate-spin mr-2" />
+                  : <Camera size={16} className="mr-2" />}
+                {uploadingPhoto ? 'Uploading...' : 'Add Photo'}
               </Button>
             </CardContent>
           </Card>
         )}
 
-        {/* ── Stripe Payment ── */}
+        {/* Totals — only available after job is saved */}
         {!isNew && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <CreditCard className="w-4 h-4" />
-                Payment
-              </CardTitle>
+              <CardTitle className="text-base">Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Status</span>
-                {job?.stripePaymentId ? (
-                  <Badge className="bg-green-600 text-white">Paid</Badge>
-                ) : (
-                  <Badge variant="outline">Unpaid</Badge>
-                )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Labor</span>
+                <span>${(laborSubtotal / 100).toFixed(2)}</span>
               </div>
-              {job?.stripePaymentId && (
-                <p className="text-xs text-muted-foreground">
-                  Payment ID: {job.stripePaymentId}
-                </p>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Parts</span>
+                <span>${(partsSubtotal / 100).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Tax ({taxRate}%)</span>
+                <span>${(taxAmount / 100).toFixed(2)}</span>
+              </div>
+              <Separator />
+              <div className="flex justify-between font-semibold">
+                <span>Total</span>
+                <span>${(totalAmount / 100).toFixed(2)}</span>
+              </div>
+
+              {stripeError && (
+                <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-3 py-2">
+                  {stripeError}
+                </div>
               )}
-              {stripeError && <p className="text-xs text-destructive">{stripeError}</p>}
-              {!job?.stripePaymentId && (
+
+              <div className="grid grid-cols-2 gap-2 pt-2">
                 <Button
-                  onClick={handleStripeCheckout}
-                  disabled={stripeLoading || totalAmount <= 0}
-                  className="w-full"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate({ to: '/invoice/$jobId', params: { jobId: jobId!.toString() } })}
                 >
-                  {stripeLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>Charge via Stripe — {formatCents(Math.round(totalAmount))}</>
-                  )}
+                  <FileText size={14} className="mr-1" />
+                  Invoice
                 </Button>
-              )}
+                <Button
+                  size="sm"
+                  onClick={handleStripeCheckout}
+                  disabled={stripeLoading || totalAmount === 0}
+                >
+                  {stripeLoading
+                    ? <Loader2 size={14} className="animate-spin mr-1" />
+                    : <CreditCard size={14} className="mr-1" />}
+                  Charge
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
 
-        {/* ── Invoice / Estimate ── */}
+        {/* Delete — only available after job is saved */}
         {!isNew && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Invoice / Estimate
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" onClick={handleViewInvoice} className="w-full">
-                <FileText className="w-4 h-4 mr-2" />
-                View / Print Invoice
-              </Button>
-            </CardContent>
-          </Card>
+          <Button
+            variant="destructive"
+            className="w-full"
+            onClick={handleDelete}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete Job
+          </Button>
+        )}
+
+        {/* Hint for new jobs */}
+        {isNew && (
+          <p className="text-xs text-muted-foreground text-center">
+            Save the job first, then you can add labor, parts, and photos.
+          </p>
         )}
       </div>
     </div>

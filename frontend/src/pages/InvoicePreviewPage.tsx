@@ -1,14 +1,15 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useSearch } from '@tanstack/react-router';
-import { ArrowLeft, Download, Printer, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Download, Printer, CheckCircle, PenLine, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useGetJob, useGetClient, useGetUserSignature, useStoreUserSignature, useListParts } from '../hooks/useQueries';
+import { useGetJob, useGetClient, useListParts } from '../hooks/useQueries';
 import { useSignaturePad } from '../hooks/useSignaturePad';
 import { RateType } from '../backend';
 
 const BUSINESS_NAME = 'Reliable Home Appliance Repair LLC';
-const BUSINESS_PHONE = '(631) 831-3333';
-const BUSINESS_EMAIL = 'reliablehomeappliancerepair@gmail.com';
+const BUSINESS_PHONE_1 = '(845) 544-3077';
+const BUSINESS_PHONE_2 = '(845) 636-3574';
+const BUSINESS_EMAIL = 'rhappliance1@gmail.com';
 
 function toSafeUint8Array(input: Uint8Array): Uint8Array<ArrayBuffer> {
   const buf = new ArrayBuffer(input.byteLength);
@@ -28,47 +29,48 @@ export default function InvoicePreviewPage() {
   const { data: job, isLoading: jobLoading } = useGetJob(jobIdBig);
   const { data: client, isLoading: clientLoading } = useGetClient(job?.clientId);
   const { data: allParts = [] } = useListParts();
-  const { data: existingSigBytes } = useGetUserSignature();
-  const storeSignature = useStoreUserSignature();
 
-  const { canvasRef, clear, getSignatureBytes, isEmpty } = useSignaturePad();
-  const [sigSaved, setSigSaved] = useState(false);
-  const [sigError, setSigError] = useState('');
-  const [existingSigUrl, setExistingSigUrl] = useState<string | null>(null);
+  // Client signature (local only — not stored to backend)
+  const { canvasRef: clientCanvasRef, clear: clearClientSig, getSignatureBytes: getClientSigBytes, isEmpty: clientSigIsEmpty } = useSignaturePad();
+  const [clientSigSaved, setClientSigSaved] = useState(false);
+  const [clientSigUrl, setClientSigUrl] = useState<string | null>(null);
+  const [clientSigError, setClientSigError] = useState('');
 
+  // Cleanup blob URL on unmount
   useEffect(() => {
-    if (existingSigBytes && existingSigBytes.length > 0) {
-      const safe = toSafeUint8Array(existingSigBytes);
-      const blob = new Blob([safe], { type: 'image/png' });
-      const url = URL.createObjectURL(blob);
-      setExistingSigUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-  }, [existingSigBytes]);
+    return () => {
+      if (clientSigUrl) URL.revokeObjectURL(clientSigUrl);
+    };
+  }, [clientSigUrl]);
 
-  const handleSaveSignature = async () => {
-    setSigError('');
-    if (isEmpty) {
-      setSigError('Please draw your signature before saving.');
+  const handleSaveClientSignature = async () => {
+    setClientSigError('');
+    if (clientSigIsEmpty) {
+      setClientSigError('Please draw the customer signature before saving.');
       return;
     }
-    const bytes = await getSignatureBytes();
+    const bytes = await getClientSigBytes();
     if (!bytes) {
-      setSigError('Failed to capture signature.');
+      setClientSigError('Failed to capture signature.');
       return;
     }
-    try {
-      await storeSignature.mutateAsync(bytes);
-      setSigSaved(true);
-      const safe = toSafeUint8Array(bytes);
-      const blob = new Blob([safe], { type: 'image/png' });
-      const url = URL.createObjectURL(blob);
-      setExistingSigUrl(prev => {
-        if (prev) URL.revokeObjectURL(prev);
-        return url;
-      });
-    } catch {
-      setSigError('Failed to save signature. Please try again.');
+    const safe = toSafeUint8Array(bytes);
+    const blob = new Blob([safe], { type: 'image/png' });
+    const url = URL.createObjectURL(blob);
+    setClientSigUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+    setClientSigSaved(true);
+  };
+
+  const handleClearClientSignature = () => {
+    clearClientSig();
+    setClientSigSaved(false);
+    setClientSigError('');
+    if (clientSigUrl) {
+      URL.revokeObjectURL(clientSigUrl);
+      setClientSigUrl(null);
     }
   };
 
@@ -136,12 +138,19 @@ export default function InvoicePreviewPage() {
       )
       .join('');
 
-    const sigSection = existingSigUrl
-      ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0">
-           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;margin-bottom:8px">Technician Signature</div>
-           <img src="${existingSigUrl}" alt="Signature" style="max-height:80px;border:1px solid #e0e0e0;border-radius:4px" />
+    const clientSigSection = clientSigUrl
+      ? `<div style="margin-top:32px;padding-top:20px;border-top:2px solid #e0e0e0">
+           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#2d6a4f;margin-bottom:12px">Customer Signature</div>
+           <img src="${clientSigUrl}" alt="Customer Signature" style="max-height:90px;border:1px solid #e0e0e0;border-radius:4px;display:block" />
+           <div style="margin-top:8px;font-size:11px;color:#888">Signed on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
          </div>`
-      : '';
+      : `<div style="margin-top:32px;padding-top:20px;border-top:2px solid #e0e0e0">
+           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#2d6a4f;margin-bottom:12px">Customer Signature</div>
+           <div style="height:70px;border:1px solid #ccc;border-radius:4px;background:#fafafa;display:flex;align-items:flex-end;padding:8px">
+             <div style="width:200px;border-bottom:1px solid #999;"></div>
+           </div>
+           <div style="margin-top:6px;font-size:11px;color:#888">Date: _______________</div>
+         </div>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -159,8 +168,8 @@ export default function InvoicePreviewPage() {
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:24px;border-bottom:2px solid #2d6a4f">
     <div>
       <div style="font-size:20px;font-weight:700;color:#2d6a4f">${BUSINESS_NAME}</div>
-      <div style="font-size:12px;color:#666;margin-top:4px">${BUSINESS_PHONE}</div>
-      <div style="font-size:12px;color:#666">${BUSINESS_EMAIL}</div>
+      <div style="font-size:12px;color:#666;margin-top:4px">${BUSINESS_PHONE_1} &nbsp;|&nbsp; ${BUSINESS_PHONE_2}</div>
+      <div style="font-size:12px;color:#666;margin-top:2px">${BUSINESS_EMAIL}</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:28px;font-weight:800;color:#2d6a4f">INVOICE</div>
@@ -226,7 +235,7 @@ export default function InvoicePreviewPage() {
     <div style="font-size:13px;color:#444;white-space:pre-wrap">${job.notes}</div>
   </div>` : ''}
 
-  ${sigSection}
+  ${clientSigSection}
 
   <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e0e0e0;text-align:center;font-size:11px;color:#999">
     <p>Thank you for your business! — ${BUSINESS_NAME}</p>
@@ -315,7 +324,7 @@ export default function InvoicePreviewPage() {
               />
               <div>
                 <h2 className="text-xl font-bold text-green-800">{BUSINESS_NAME}</h2>
-                <p className="text-sm text-gray-500">{BUSINESS_PHONE}</p>
+                <p className="text-sm text-gray-500">{BUSINESS_PHONE_1} &nbsp;|&nbsp; {BUSINESS_PHONE_2}</p>
                 <p className="text-sm text-gray-500">{BUSINESS_EMAIL}</p>
               </div>
             </div>
@@ -407,20 +416,17 @@ export default function InvoicePreviewPage() {
                 <tbody>
                   {job.laborLineItems.map((item, idx) => (
                     <tr key={idx} className="border-b border-gray-100">
-                      <td className="py-3 text-sm text-gray-700">
+                      <td className="py-2 text-sm text-gray-700">
                         <div className="font-medium">{item.name}</div>
-                        {item.description && (
-                          <div className="text-xs text-gray-400">{item.description}</div>
-                        )}
+                        {item.description && <div className="text-xs text-gray-400">{item.description}</div>}
                       </td>
-                      <td className="py-3 text-sm text-gray-700 text-right">
-                        {formatCurrency(Number(item.rateAmount))}/
-                        {item.rateType === RateType.hourly ? 'hr' : 'flat'}
+                      <td className="py-2 text-sm text-gray-700 text-right">
+                        {formatCurrency(Number(item.rateAmount))}/{item.rateType === RateType.hourly ? 'hr' : 'flat'}
                       </td>
-                      <td className="py-3 text-sm text-gray-700 text-right">
+                      <td className="py-2 text-sm text-gray-700 text-right">
                         {item.rateType === RateType.hourly ? item.hours.toFixed(1) : '1'}
                       </td>
-                      <td className="py-3 text-sm font-medium text-gray-900 text-right">
+                      <td className="py-2 text-sm font-medium text-gray-900 text-right">
                         {formatCurrency(Number(item.totalAmount))}
                       </td>
                     </tr>
@@ -432,24 +438,24 @@ export default function InvoicePreviewPage() {
 
           {/* Totals */}
           <div className="flex justify-end mb-8">
-            <div className="w-72 space-y-1">
-              <div className="flex justify-between py-1 text-sm text-gray-600">
+            <div className="w-64">
+              <div className="flex justify-between py-1.5 text-sm text-gray-600">
                 <span>Parts Subtotal</span>
                 <span>{formatCurrency(partsSubtotal)}</span>
               </div>
-              <div className="flex justify-between py-1 text-sm text-gray-600">
+              <div className="flex justify-between py-1.5 text-sm text-gray-600">
                 <span>Labor Subtotal</span>
                 <span>{formatCurrency(laborSubtotal)}</span>
               </div>
-              <div className="flex justify-between py-1 text-sm text-gray-600 border-t border-gray-200 pt-2">
+              <div className="flex justify-between py-1.5 text-sm text-gray-600 border-t border-gray-200 mt-1">
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between py-1 text-sm text-gray-600">
+              <div className="flex justify-between py-1.5 text-sm text-gray-600">
                 <span>Tax ({taxRate}%)</span>
                 <span>{formatCurrency(Math.round(taxAmount))}</span>
               </div>
-              <div className="flex justify-between py-2 border-t-2 border-gray-900 font-bold text-gray-900 text-base">
+              <div className="flex justify-between py-2.5 border-t-2 border-gray-900 font-bold text-base">
                 <span>Total</span>
                 <span>{formatCurrency(Math.round(grandTotal))}</span>
               </div>
@@ -458,84 +464,107 @@ export default function InvoicePreviewPage() {
 
           {/* Notes */}
           {job.notes && (
-            <div className="mb-8 p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                Notes
-              </h3>
-              <p className="text-sm text-gray-600">{job.notes}</p>
+            <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Notes</h3>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">{job.notes}</p>
             </div>
           )}
 
-          {/* Signature Section */}
-          <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-              Technician Signature
-            </h3>
+          {/* Customer Signature Section */}
+          <div className="mt-6 pt-6 border-t-2 border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <PenLine className="h-4 w-4 text-green-700" />
+              <h3 className="text-xs font-semibold text-green-700 uppercase tracking-wider">
+                Customer Signature
+              </h3>
+            </div>
 
-            {existingSigUrl ? (
-              <div className="mb-4">
-                <img
-                  src={existingSigUrl}
-                  alt="Saved Signature"
-                  className="max-h-20 border border-gray-200 rounded"
-                />
-                {sigSaved && (
-                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                    <CheckCircle className="h-3 w-3" /> Signature saved
-                  </p>
-                )}
+            {clientSigSaved && clientSigUrl ? (
+              /* Saved signature display */
+              <div>
+                <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 inline-block">
+                  <img
+                    src={clientSigUrl}
+                    alt="Customer Signature"
+                    className="max-h-20 block"
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Signed on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <div className="flex items-center gap-1.5 text-green-700 text-sm font-medium">
+                    <CheckCircle className="h-4 w-4" />
+                    Signature saved
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-gray-500 hover:text-red-600 h-7 px-2"
+                    onClick={handleClearClientSignature}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Clear
+                  </Button>
+                </div>
               </div>
             ) : (
-              <div className="mb-4">
-                <p className="text-xs text-gray-500 mb-2">Draw your signature below:</p>
-                <canvas
-                  ref={canvasRef}
-                  width={400}
-                  height={120}
-                  className="border border-gray-300 rounded-lg bg-white touch-none w-full"
-                  style={{ maxWidth: '400px' }}
-                />
-                {sigError && <p className="text-xs text-red-500 mt-1">{sigError}</p>}
-                <div className="flex gap-2 mt-2">
-                  <Button size="sm" variant="outline" onClick={clear}>
+              /* Signature pad */
+              <div>
+                <p className="text-xs text-gray-500 mb-2">
+                  Please sign below to acknowledge the work performed and authorize payment.
+                </p>
+                <div className="relative border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 overflow-hidden"
+                  style={{ touchAction: 'none' }}>
+                  <canvas
+                    ref={clientCanvasRef}
+                    width={560}
+                    height={140}
+                    className="w-full block cursor-crosshair"
+                    style={{ height: '140px', touchAction: 'none' }}
+                  />
+                  {clientSigIsEmpty && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="text-gray-300 text-sm select-none">Sign here</span>
+                    </div>
+                  )}
+                  {/* Signature line */}
+                  <div className="absolute bottom-8 left-6 right-6 border-b border-gray-300 pointer-events-none" />
+                </div>
+
+                {clientSigError && (
+                  <p className="text-xs text-red-500 mt-1">{clientSigError}</p>
+                )}
+
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearClientSignature}
+                    className="text-gray-600"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                     Clear
                   </Button>
                   <Button
                     size="sm"
-                    onClick={handleSaveSignature}
-                    disabled={storeSignature.isPending || isEmpty}
+                    onClick={handleSaveClientSignature}
+                    disabled={clientSigIsEmpty}
+                    className="bg-green-700 hover:bg-green-800 text-white"
                   >
-                    {storeSignature.isPending ? 'Saving...' : 'Save Signature'}
+                    <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                    Save Signature
                   </Button>
                 </div>
               </div>
             )}
-
-            {/* Customer signature line */}
-            <div className="mt-6">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-                Customer Signature
-              </h3>
-              <div className="border-b border-gray-400 w-64 h-16" />
-              <p className="text-xs text-gray-400 mt-1">
-                By signing, customer authorizes the work described above.
-              </p>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
-            <p>Thank you for your business! — {BUSINESS_NAME}</p>
-            <p className="mt-1">
-              Generated{' '}
-              {new Date().toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </p>
           </div>
         </div>
+
+        {/* Footer note */}
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          Thank you for choosing {BUSINESS_NAME}
+        </p>
       </div>
     </div>
   );

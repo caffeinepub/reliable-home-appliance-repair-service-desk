@@ -29,6 +29,7 @@ const clientsRoute = createRoute({
   component: ClientsPage,
 });
 
+// Static /clients/new MUST be declared BEFORE the dynamic /clients/$clientId
 const clientNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients/new',
@@ -47,6 +48,7 @@ const jobsRoute = createRoute({
   component: JobsPage,
 });
 
+// Static /jobs/new MUST be declared BEFORE the dynamic /jobs/$jobId
 const jobNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/jobs/new',

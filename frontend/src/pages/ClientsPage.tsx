@@ -34,7 +34,7 @@ export default function ClientsPage() {
         <h1 className="font-semibold text-foreground">Clients</h1>
         <Button
           size="sm"
-          onClick={() => navigate({ to: '/clients/$clientId', params: { clientId: 'new' } })}
+          onClick={() => navigate({ to: '/clients/new' })}
         >
           <Plus className="h-4 w-4 mr-1" />
           Add Client

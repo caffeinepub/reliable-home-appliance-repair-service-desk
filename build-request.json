@@ -1,148 +1,78 @@
 {
   "kind": "build_request",
-  "title": "Fix invoice title, add custom labor on job, add tax field, and remove Google Review link",
+  "title": "Restore fully functional Create Client form submission",
   "projectName": "Reliable Home Appliance Repair",
   "priority": "high",
   "requirements": [
     {
-      "id": "REQ-54",
-      "text": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), change the displayed business name / invoice title to exactly 'Reliable Home Appliance Repair LLC'. This string must appear as the primary heading on the printed/preview invoice and in the downloaded PDF export.",
+      "id": "REQ-70",
+      "text": "In ClientDetailPage.tsx, fix the 'Create' / 'Save' button so that submitting the new-client form in create mode actually calls createClient with the entered field values and navigates back to '/clients' on success. The button must not be disabled, must have a valid onClick or form onSubmit handler, and must not silently fail. Ensure the mutation is correctly wired to the backend actor via the useQueries hook and that any loading or error states are surfaced to the user.",
       "target": "frontend",
       "source": {
         "messageIds": [
           "msg-4"
         ],
         "quotes": [
-          "you have to change the invoice title to \"Reliable Home Appliance Repair LLC\""
+          "Yes it takes me to the create screen- problem is after typing in my example *create* button does not actually work. Please restore the fully functional UI as designed."
         ]
       },
       "acceptanceCriteria": [
-        "The invoice preview page displays 'Reliable Home Appliance Repair LLC' as the primary business name heading.",
-        "The downloaded PDF includes 'Reliable Home Appliance Repair LLC' as the invoice title.",
-        "No other business name string appears as the primary heading."
+        "Navigating to '/clients/new' renders the ClientDetailPage in create mode with all form fields empty.",
+        "Filling in the form fields (name, phone, address, notes, email) and clicking the 'Create' / 'Save' button triggers the createClient mutation.",
+        "On successful createClient response the user is navigated back to '/clients' and the new client appears in the list.",
+        "If createClient fails, an error message is displayed and the user remains on the form.",
+        "The button is never rendered in a permanently disabled state when the form has valid input.",
+        "No console errors or unhandled promise rejections occur during the create flow."
       ]
     },
     {
-      "id": "REQ-55",
-      "text": "On the Job Detail page (JobDetailPage.tsx), ensure the Labor section supports fully manual/custom labor line item entry without requiring a predefined labor rate. The inline 'Add Labor' form must include: a free-text name field, a type selector (hourly or flat), an hours field (shown only when hourly is selected), an editable rate/amount field (dollars, not required to match any saved rate), and an optional description field. Each added line item must display its computed amount (hours × rate for hourly, flat amount for flat) and a remove button. Show a running labor subtotal below the list. Persist line items via the existing addLaborLineItem and removeLaborLineItem backend endpoints.",
+      "id": "REQ-71",
+      "text": "In JobDetailPage.tsx, verify and fix the 'Create' / 'Save' button in new-job create mode so that it calls createJob with the entered field values and navigates to the job detail page or '/jobs' on success. The mutation must be correctly wired to the backend actor and must not be a no-op.",
       "target": "frontend",
       "source": {
         "messageIds": [
           "msg-4"
         ],
         "quotes": [
-          "still missing the labor rates that can be added manually or custom",
-          "Easy work flow as possible- I want it like this -add client-add job-parts from inventory - labor on job- add tax"
+          "Please restore the fully functional UI as designed."
         ]
       },
       "acceptanceCriteria": [
-        "The 'Add Labor' form on Job Detail accepts a free-text name with no requirement to select a predefined rate.",
-        "Type selector supports 'hourly' and 'flat' options.",
-        "Hours field is visible only when 'hourly' is selected.",
-        "Rate/amount field is fully editable per line item.",
-        "Computed amount is displayed per line item.",
-        "A running labor subtotal is shown below all line items.",
-        "Line items are saved via addLaborLineItem and removed via removeLaborLineItem.",
-        "No predefined labor rate selection is required to add a line item."
+        "Navigating to '/jobs/new' renders JobDetailPage in create mode with form fields empty.",
+        "Clicking 'Create' / 'Save' with valid input calls the createJob mutation.",
+        "On success the user is navigated away from the create form.",
+        "On failure an error message is shown and the user remains on the form."
       ]
     },
     {
-      "id": "REQ-56",
-      "text": "Add a configurable tax rate field to the job detail and invoice/estimate workflow. On the Job Detail page, display a tax rate input (percentage, default 8.875%) that is applied to the combined total of parts subtotal and labor subtotal to compute the tax amount and final post-tax total. Display the pre-tax subtotal, tax amount (labeled with the rate, e.g. 'Tax 8.875%'), and the post-tax total on both the Job Detail page and the Invoice/Estimate preview page. The tax rate value should be editable by the user on the job/invoice screen (not a global setting) and should be included in the PDF export.",
+      "id": "REQ-72",
+      "text": "Audit all form submission handlers (onSubmit / onClick) across ClientDetailPage.tsx and JobDetailPage.tsx to ensure: (1) event.preventDefault() is called where needed to prevent page reloads, (2) the mutation functions returned by useQueries hooks are invoked with the correct argument shapes matching the backend endpoint signatures, and (3) async mutation calls are properly awaited or use onSuccess/onError callbacks so navigation and error handling fire correctly.",
       "target": "frontend",
       "source": {
         "messageIds": [
           "msg-4"
         ],
         "quotes": [
-          "add tax",
-          "Easy work flow as possible- I want it like this -add client-add job-parts from inventory - labor on job- add tax"
+          "Please restore the fully functional UI as designed."
         ]
       },
       "acceptanceCriteria": [
-        "A tax rate input field (percentage) is present on the Job Detail page, defaulting to 8.875%.",
-        "The user can change the tax rate value for the job.",
-        "Pre-tax subtotal (parts + labor) is displayed.",
-        "Tax amount is computed as (parts subtotal + labor subtotal) × (tax rate / 100) and displayed with the rate label.",
-        "Post-tax total is displayed.",
-        "The Invoice/Estimate preview page renders the tax rate, tax amount, and post-tax total.",
-        "The downloaded PDF includes all three values (pre-tax subtotal, tax, post-tax total)."
-      ]
-    },
-    {
-      "id": "REQ-57",
-      "text": "Remove all Google Review URL references, buttons, default URL values, and related logic from the entire frontend codebase (ClientDetailPage.tsx, JobDetailPage.tsx, and any other file where a Google Review URL default, button, or link appears). If the Google Review feature is causing build instability, remove it completely rather than patching it. After removal, no 'Request Google Review' button, link, or URL constant should remain anywhere in the application.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-4"
-        ],
-        "quotes": [
-          "If the Google review link is messing up the code remove it."
-        ]
-      },
-      "acceptanceCriteria": [
-        "No 'Request Google Review' button or link exists on the Client Detail page.",
-        "No 'Request Google Review' button or link exists on the Job Detail page.",
-        "No Google Review URL default constant or variable exists anywhere in the frontend source.",
-        "The build completes without errors related to Google Review URL.",
-        "The Client Detail form no longer includes a googleReviewUrl input field visible to users (the field may remain in the data model if needed for backward compatibility, but the UI must not surface it)."
-      ]
-    },
-    {
-      "id": "REQ-58",
-      "text": "Verify and ensure the job photo blob storage section on the Job Detail page (JobDetailPage.tsx) is fully operational. The 'Photos' section must display thumbnail previews of all stored job photos, include a 'Take Photo / Upload' button using an HTML file input with accept='image/*' and capture='environment', read the selected file as an ArrayBuffer, convert it to a Blob, and call addJobPhoto. Each thumbnail must include a delete icon that calls removeJobPhoto. If this section is not currently rendering or is broken, re-implement it using the existing addJobPhoto and removeJobPhoto backend endpoints.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-4"
-        ],
-        "quotes": [
-          "still need blob storage for pictures on job screen"
-        ]
-      },
-      "acceptanceCriteria": [
-        "The 'Photos' section is visibly rendered on the Job Detail page.",
-        "A 'Take Photo / Upload' button opens the device camera or file picker.",
-        "Selected images are uploaded via addJobPhoto and displayed as thumbnails.",
-        "Each thumbnail has a delete icon that calls removeJobPhoto and removes the thumbnail.",
-        "Photo thumbnails persist across page refreshes (loaded from the backend via getJob)."
-      ]
-    },
-    {
-      "id": "REQ-59",
-      "text": "Confirm the Stripe payment section on the Job Detail page (JobDetailPage.tsx) remains visible and functional after the current changes. The section must show a 'Charge via Stripe' button that calls createPaymentIntent with the job's post-tax total (parts + labor + tax), stores the returned payment intent ID via updateJobPayment, and displays a 'Paid' / 'Unpaid' badge based on whether stripePaymentId is present. Do not remove or regress this section during the other changes in this build.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-4"
-        ],
-        "quotes": [
-          "stripe is integrated"
-        ]
-      },
-      "acceptanceCriteria": [
-        "The Stripe payment section is visible on the Job Detail page.",
-        "'Charge via Stripe' button is present and calls createPaymentIntent.",
-        "The amount passed to createPaymentIntent reflects the post-tax total (parts + labor + tax).",
-        "The returned payment intent ID is stored via updateJobPayment.",
-        "A 'Paid' badge is shown when stripePaymentId is present; 'Unpaid' when absent."
+        "Form submission does not cause a full page reload.",
+        "Mutation arguments match the expected backend input types.",
+        "Success and error callbacks execute reliably after mutation resolution.",
+        "No orphaned async calls that resolve after the component has unmounted."
       ]
     }
   ],
   "constraints": [
-    "Do not modify files listed in frontend.immutablePaths.",
-    "All Motoko logic must remain in the single backend/main.mo actor.",
-    "The stable owner principal 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe' must not be changed or overwritten.",
-    "Google Review URL must be removed entirely rather than patched if it risks build stability.",
-    "Do not regress the Stripe payment integration, signature capture, or photo blob storage already implemented."
+    "Do not change backend endpoints or data models.",
+    "Do not remove or regress any existing working features (photos, labor, Stripe payment, invoice, signature, inventory, calendar).",
+    "Do not modify files listed in frontend.immutablePaths."
   ],
   "nonGoals": [
-    "Adding any new Google Review URL or replacing it with another URL.",
-    "Adding a new global labor rate settings flow — custom rates are entered per line item on the job.",
-    "Changing the backend data model for jobs beyond what is needed for tax rate display.",
-    "Adding GPS or live location tracking.",
-    "Any new authentication or role management changes."
+    "Adding new fields or features to the client or job forms.",
+    "Changing routing structure beyond what is needed to fix form submission.",
+    "Backend changes of any kind."
   ],
   "imageRequirements": {
     "required": [],

@@ -1,29 +1,29 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-02-28T23:37:37.143Z",
+  "generatedAt": "2026-03-01T00:25:59.801Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 6,
-    "implemented": 6,
+    "total": 3,
+    "implemented": 3,
     "items": [
       {
-        "id": "REQ-54",
-        "summary": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), change the displayed business name / invoice title to exactly 'Reliable Home Appliance Repair LLC'. This string must appear as the primary heading on the printed/preview invoice and in the downloaded PDF export.",
+        "id": "REQ-70",
+        "summary": "In ClientDetailPage.tsx, fix the 'Create' / 'Save' button so that submitting the new-client form in create mode actually calls createClient with the entered field values and navigates back to '/clients' on success. The button must not be disabled, must have a valid onClick or form onSubmit handler, and must not silently fail. Ensure the mutation is correctly wired to the backend actor via the useQueries hook and that any loading or error states are surfaced to the user.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/pages/InvoicePreviewPage.tsx"
+          "frontend/src/pages/ClientDetailPage.tsx"
         ],
         "matchedFiles": [
-          "frontend/src/pages/InvoicePreviewPage.tsx"
+          "frontend/src/pages/ClientDetailPage.tsx"
         ]
       },
       {
-        "id": "REQ-55",
-        "summary": "On the Job Detail page (JobDetailPage.tsx), ensure the Labor section supports fully manual/custom labor line item entry without requiring a predefined labor rate. The inline 'Add Labor' form must include: a free-text name field, a type selector (hourly or flat), an hours field (shown only when hourly is selected), an editable rate/amount field (dollars, not required to match any saved rate), and an optional description field. Each added line item must display its computed amount (hours × rate for hourly, flat amount for flat) and a remove button. Show a running labor subtotal below the list. Persist line items via the existing addLaborLineItem and removeLaborLineItem backend endpoints.",
+        "id": "REQ-71",
+        "summary": "In JobDetailPage.tsx, verify and fix the 'Create' / 'Save' button in new-job create mode so that it calls createJob with the entered field values and navigates to the job detail page or '/jobs' on success. The mutation must be correctly wired to the backend actor and must not be a no-op.",
         "status": "implemented",
         "plannedFiles": [
           "frontend/src/pages/JobDetailPage.tsx"
@@ -33,21 +33,8 @@
         ]
       },
       {
-        "id": "REQ-56",
-        "summary": "Add a configurable tax rate field to the job detail and invoice/estimate workflow. On the Job Detail page, display a tax rate input (percentage, default 8.875%) that is applied to the combined total of parts subtotal and labor subtotal to compute the tax amount and final post-tax total. Display the pre-tax subtotal, tax amount (labeled with the rate, e.g. 'Tax 8.875%'), and the post-tax total on both the Job Detail page and the Invoice/Estimate preview page. The tax rate value should be editable by the user on the job/invoice screen (not a global setting) and should be included in the PDF export.",
-        "status": "implemented",
-        "plannedFiles": [
-          "frontend/src/pages/JobDetailPage.tsx",
-          "frontend/src/pages/InvoicePreviewPage.tsx"
-        ],
-        "matchedFiles": [
-          "frontend/src/pages/JobDetailPage.tsx",
-          "frontend/src/pages/InvoicePreviewPage.tsx"
-        ]
-      },
-      {
-        "id": "REQ-57",
-        "summary": "Remove all Google Review URL references, buttons, default URL values, and related logic from the entire frontend codebase (ClientDetailPage.tsx, JobDetailPage.tsx, and any other file where a Google Review URL default, button, or link appears). If the Google Review feature is causing build instability, remove it completely rather than patching it. After removal, no 'Request Google Review' button, link, or URL constant should remain anywhere in the application.",
+        "id": "REQ-72",
+        "summary": "Audit all form submission handlers (onSubmit / onClick) across ClientDetailPage.tsx and JobDetailPage.tsx to ensure: (1) event.preventDefault() is called where needed to prevent page reloads, (2) the mutation functions returned by useQueries hooks are invoked with the correct argument shapes matching the backend endpoint signatures, and (3) async mutation calls are properly awaited or use onSuccess/onError callbacks so navigation and error handling fire correctly.",
         "status": "implemented",
         "plannedFiles": [
           "frontend/src/pages/ClientDetailPage.tsx",
@@ -55,28 +42,6 @@
         ],
         "matchedFiles": [
           "frontend/src/pages/ClientDetailPage.tsx",
-          "frontend/src/pages/JobDetailPage.tsx"
-        ]
-      },
-      {
-        "id": "REQ-58",
-        "summary": "Verify and ensure the job photo blob storage section on the Job Detail page (JobDetailPage.tsx) is fully operational. The 'Photos' section must display thumbnail previews of all stored job photos, include a 'Take Photo / Upload' button using an HTML file input with accept='image/*' and capture='environment', read the selected file as an ArrayBuffer, convert it to a Blob, and call addJobPhoto. Each thumbnail must include a delete icon that calls removeJobPhoto. If this section is not currently rendering or is broken, re-implement it using the existing addJobPhoto and removeJobPhoto backend endpoints.",
-        "status": "implemented",
-        "plannedFiles": [
-          "frontend/src/pages/JobDetailPage.tsx"
-        ],
-        "matchedFiles": [
-          "frontend/src/pages/JobDetailPage.tsx"
-        ]
-      },
-      {
-        "id": "REQ-59",
-        "summary": "Confirm the Stripe payment section on the Job Detail page (JobDetailPage.tsx) remains visible and functional after the current changes. The section must show a 'Charge via Stripe' button that calls createPaymentIntent with the job's post-tax total (parts + labor + tax), stores the returned payment intent ID via updateJobPayment, and displays a 'Paid' / 'Unpaid' badge based on whether stripePaymentId is present. Do not remove or regress this section during the other changes in this build.",
-        "status": "implemented",
-        "plannedFiles": [
-          "frontend/src/pages/JobDetailPage.tsx"
-        ],
-        "matchedFiles": [
           "frontend/src/pages/JobDetailPage.tsx"
         ]
       }
@@ -88,7 +53,6 @@
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
     "frontend/src/pages/ClientDetailPage.tsx",
-    "frontend/src/pages/InvoicePreviewPage.tsx",
     "frontend/src/pages/JobDetailPage.tsx",
     "project_state.json",
     "scratch/component-selection.json",

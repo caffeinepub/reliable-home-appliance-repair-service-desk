@@ -1,14 +1,15 @@
 # Specification
 
 ## Summary
-**Goal:** Fix the invoice title, add fully custom labor line item entry on the job screen, add a per-job tax rate field, remove all Google Review link references, ensure photo blob storage works, and preserve the Stripe payment section.
+**Goal:** Restore fully functional form submission for creating new clients and new jobs in the frontend.
 
 **Planned changes:**
-- Change the primary business name heading on the Invoice/Estimate preview page and PDF export to "Reliable Home Appliance Repair LLC"
-- Replace the labor entry form on the Job Detail page with a fully custom/manual labor line item form (free-text name, hourly or flat type, hours field for hourly only, editable rate/amount, optional description, computed amount per line, running labor subtotal, remove button per item)
-- Add a tax rate input field (default 8.875%) to the Job Detail page that computes and displays pre-tax subtotal, tax amount (labeled with rate), and post-tax total; include all three values on the Invoice/Estimate preview and PDF export
-- Remove all Google Review URL references, buttons, links, and constants from the entire frontend codebase
-- Verify and re-implement if needed the job photo blob storage section on the Job Detail page (Take Photo / Upload button, thumbnail previews, delete per photo)
-- Ensure the Stripe payment section remains intact and passes the post-tax total to createPaymentIntent
+- Fix the Create/Save button in `ClientDetailPage.tsx` so that submitting the new-client form calls `createClient` with the entered field values and navigates to `/clients` on success.
+- Fix the Create/Save button in `JobDetailPage.tsx` so that submitting the new-job form calls `createJob` with the entered field values and navigates away on success.
+- Ensure `event.preventDefault()` is called where needed to prevent page reloads.
+- Ensure mutation functions are invoked with the correct argument shapes matching backend signatures.
+- Ensure async mutations are properly awaited or use `onSuccess`/`onError` callbacks for reliable navigation and error handling.
+- Display error messages to the user when a mutation fails, keeping them on the form.
+- Ensure the Create/Save button is never permanently disabled when the form has valid input.
 
-**User-visible outcome:** Users can create jobs with custom labor entries and a configurable tax rate, view correct totals on the job screen and invoice, download a PDF with "Reliable Home Appliance Repair LLC" as the title including tax breakdown, upload and delete job photos, and process Stripe payments — with no Google Review links anywhere in the app.
+**User-visible outcome:** Users can fill out the new client or new job form, click Create/Save, and have the record successfully created with navigation to the appropriate list or detail page. Errors are surfaced clearly if submission fails.

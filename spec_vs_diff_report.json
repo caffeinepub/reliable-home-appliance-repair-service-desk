@@ -1,15 +1,14 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-02-28T23:37:37.137Z",
-  "summary": "The diff implements the majority of the requested requirements. REQ-54 (business name), REQ-55 (custom labor), REQ-56 (tax rate), REQ-57 (Google Review removal), REQ-58 (photo section), and REQ-59 (Stripe section) all appear to be addressed in the modified files. However, due to truncation of JobDetailPage.tsx and InvoicePreviewPage.tsx, full verification of several acceptance criteria is limited. One notable concern is that the Stripe createPaymentIntent call's amount argument (REQ-59 AC: post-tax total) cannot be confirmed from the truncated diff. Similarly, the complete photo section implementation (REQ-58) and the full PDF export content for REQ-56 cannot be fully verified. The file summaries corroborate that all features were implemented as described.",
+  "generatedAt": "2026-03-01T00:25:59.795Z",
+  "summary": "The diff modifies ClientDetailPage.tsx and JobDetailPage.tsx to fix form submission in create mode. Both files implement handleSave with event.preventDefault(), direct actor calls (createClient/createJob), error state surfacing, and query invalidation followed by navigation. The changes appear to address all three requirements. Some details are truncated but the file summaries confirm the intent and implementation.",
   "missing_requirements": [],
   "hallucinated_features": [],
-  "confidence": 0.75,
+  "confidence": 0.82,
   "changed_files": [
     "frontend-file-summaries.txt",
     "frontend/src/pages/ClientDetailPage.tsx",
-    "frontend/src/pages/InvoicePreviewPage.tsx",
     "frontend/src/pages/JobDetailPage.tsx",
     "project_state.json"
   ]

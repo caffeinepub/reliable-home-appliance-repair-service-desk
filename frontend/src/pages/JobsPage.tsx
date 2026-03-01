@@ -104,6 +104,10 @@ export default function JobsPage() {
 
   const isLoading = jobsLoading;
 
+  const handleNewJob = () => {
+    navigate({ to: '/jobs/new' });
+  };
+
   return (
     <div className="px-4 py-5 space-y-5 animate-fade-in">
       {/* Header */}
@@ -113,7 +117,7 @@ export default function JobsPage() {
           <h2 className="font-display font-bold text-xl text-foreground">Jobs</h2>
         </div>
         <Button
-          onClick={() => navigate({ to: '/jobs/new' })}
+          onClick={handleNewJob}
           size="sm"
           className="bg-primary text-primary-foreground rounded-xl h-8 px-3 text-xs font-semibold"
         >
@@ -171,7 +175,7 @@ export default function JobsPage() {
           </p>
           {activeGroup === 'all' && (
             <Button
-              onClick={() => navigate({ to: '/jobs/new' })}
+              onClick={handleNewJob}
               size="sm"
               className="mt-4 rounded-xl bg-primary text-primary-foreground"
             >

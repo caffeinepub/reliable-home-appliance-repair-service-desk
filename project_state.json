@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 23,
+  "projectStateVersion": 31,
   "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal). Ryan is the authorized user with CRUD abilities. Owner has full access confirmed. Building incrementally: core job/client management, role-based access control, labor rates/inventory on jobs, on-screen signature blob storage, and job photo capture (open camera). Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
   "architectural_notes": [
     "Single canister ICP app: Motoko backend + responsive mobile-first frontend",
@@ -18,7 +18,10 @@
     "Owner loses privileges after certain builds — root cause: possible overwrite of stable owner principal or mismatch between NNS principal and app-derived principal. Reverting to version 8 to troubleshoot.",
     "Invoice title shows wrong business name — must be changed to 'Reliable Home Appliance Repair LLC'.",
     "Labor rates cannot be added manually/custom on job detail — only predefined rates supported currently.",
-    "Google Review URL may be causing code instability — candidate for removal if it breaks builds."
+    "Google Review URL may be causing code instability — candidate for removal if it breaks builds.",
+    "Signature capture on invoice/estimate preview page not working — client cannot sign on the invoice line. Needs fix.",
+    "CRUD broken for clients, parts, and jobs after Version 12 build — all create links go nowhere, navigation/form wiring lost.",
+    "Add Client tab/button is non-responsive in Version 13 — client creation flow broken after CRUD re-wire attempt."
   ],
   "isFixRequest": true,
   "existing_features": [
@@ -331,6 +334,94 @@
       "title": "Confirm the Stripe payment section on the Job Detail page (JobDetailPage.tsx) remains visible and functional after the current changes. The section must show a 'Charge via Stripe' button that calls createPaymentIntent with the job's post-tax total (parts + labor + tax), stores the returned payment intent ID via updateJobPayment, and displays a 'Paid' / 'Unpaid' badge based on whether stripePaymentId is present. Do not remove or regress this section during the other changes in this build.",
       "reqIds": [
         "REQ-59"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-invoice-estimate-preview-page-invoicepreviewpage-tsx-ensure-the-canvas-based-signature-capture-section-is-fully-visible-and-functional-so-that-a-client-can-sign-directly-on-the-invoice-the-signature-pad-canvas-must-be-rendered-at-the-bottom-of-the-invoice-with-clearly-labeled-clear-and-save-signature-buttons-on-save-the-signature-image-must-render-inline-within-the-invoice-preview-below-the-totals-section-in-a-dedicated-customer-signature-area-the-saved-signature-must-also-be-captured-and-included-in-the-downloaded-pdf-export-if-the-usesignaturepad-hook-or-signaturecapture-component-is-not-currently-wired-in-on-this-page-wire-them-in-now",
+      "title": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), ensure the canvas-based signature capture section is fully visible and functional so that a client can sign directly on the invoice. The signature pad canvas must be rendered at the bottom of the invoice with clearly labeled 'Clear' and 'Save Signature' buttons. On save, the signature image must render inline within the invoice preview (below the totals section, in a dedicated 'Customer Signature' area). The saved signature must also be captured and included in the downloaded PDF export. If the useSignaturePad hook or SignatureCapture component is not currently wired in on this page, wire them in now.",
+      "reqIds": [
+        "REQ-60"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-invoice-estimate-preview-page-invoicepreviewpage-tsx-add-the-business-contact-information-to-the-invoice-header-or-contact-block-the-following-details-must-appear-on-both-the-on-screen-preview-and-the-downloaded-pdf-export-phone-numbers-845-544-3077-and-845-636-3574-and-email-rhappliance1-gmail-com-these-must-be-displayed-near-the-business-name-reliable-home-appliance-repair-llc-at-the-top-of-the-invoice",
+      "title": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), add the business contact information to the invoice header or contact block. The following details must appear on both the on-screen preview and the downloaded PDF export: phone numbers '(845) 544-3077' and '(845) 636-3574', and email 'rhappliance1@gmail.com'. These must be displayed near the business name 'Reliable Home Appliance Repair LLC' at the top of the invoice.",
+      "reqIds": [
+        "REQ-61"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-audit-and-fix-all-navigation-links-and-route-definitions-in-app-tsx-for-clients-jobs-and-inventory-parts-so-that-the-add-client-add-job-and-add-part-buttons-navigate-to-their-correct-create-detail-pages-without-going-nowhere-verify-that-every-route-path-registered-in-the-tanstack-router-tree-has-a-corresponding-page-component-mounted-and-that-no-route-is-missing-or-misconfigured",
+      "title": "Audit and fix all navigation links and route definitions in App.tsx for Clients, Jobs, and Inventory/Parts so that the 'Add Client', 'Add Job', and 'Add Part' buttons navigate to their correct create/detail pages without going nowhere. Verify that every route path registered in the TanStack Router tree has a corresponding page component mounted, and that no route is missing or misconfigured.",
+      "reqIds": [
+        "REQ-62"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-verify-and-fix-the-clientdetailpage-tsx-create-and-edit-form-submission-flow-when-creating-a-new-client-the-form-must-call-createclient-and-redirect-back-to-the-clients-list-on-success-when-editing-an-existing-client-the-form-must-call-updateclient-the-delete-button-must-call-deleteclient-and-redirect-to-the-clients-list-ensure-that-the-page-correctly-detects-create-vs-edit-mode-based-on-route-params",
+      "title": "Verify and fix the ClientDetailPage.tsx create and edit form submission flow. When creating a new client, the form must call createClient and redirect back to the clients list on success. When editing an existing client, the form must call updateClient. The delete button must call deleteClient and redirect to the clients list. Ensure that the page correctly detects create vs. edit mode based on route params.",
+      "reqIds": [
+        "REQ-63"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-verify-and-fix-the-jobdetailpage-tsx-create-and-edit-form-submission-flow-when-creating-a-new-job-the-form-must-call-createjob-and-navigate-to-the-job-detail-edit-page-or-jobs-list-on-success-when-editing-updatejob-must-be-called-the-delete-button-must-call-deletejob-and-navigate-back-ensure-the-page-correctly-detects-create-vs-edit-mode-from-route-params",
+      "title": "Verify and fix the JobDetailPage.tsx create and edit form submission flow. When creating a new job, the form must call createJob and navigate to the job detail/edit page or jobs list on success. When editing, updateJob must be called. The delete button must call deleteJob and navigate back. Ensure the page correctly detects create vs. edit mode from route params.",
+      "reqIds": [
+        "REQ-64"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-ensure-all-tanstack-router-link-components-and-programmatic-navigate-calls-in-clientspage-tsx-jobspage-tsx-and-inventorypage-tsx-use-route-paths-that-exactly-match-the-route-definitions-registered-in-app-tsx-fix-any-path-mismatches-missing-route-parameters-or-broken-link-href-values-that-would-cause-navigation-to-fail-silently-or-render-a-blank-screen",
+      "title": "Ensure all TanStack Router link components and programmatic navigate() calls in ClientsPage.tsx, JobsPage.tsx, and InventoryPage.tsx use route paths that exactly match the route definitions registered in App.tsx. Fix any path mismatches, missing route parameters, or broken Link href values that would cause navigation to fail silently or render a blank screen.",
+      "reqIds": [
+        "REQ-66"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-app-tsx-verify-that-the-static-route-for-creating-a-new-client-e-g-clients-new-is-registered-before-any-dynamic-client-route-e-g-clients-id-in-the-tanstack-router-route-tree-and-that-it-mounts-clientdetailpage-in-create-mode-if-the-route-is-missing-add-it-if-it-exists-but-is-shadowed-by-the-dynamic-route-reorder-the-route-definitions-so-clients-new-takes-precedence",
+      "title": "In App.tsx, verify that the static route for creating a new client (e.g. '/clients/new') is registered before any dynamic client route (e.g. '/clients/:id') in the TanStack Router route tree, and that it mounts ClientDetailPage in create mode. If the route is missing, add it. If it exists but is shadowed by the dynamic route, reorder the route definitions so '/clients/new' takes precedence.",
+      "reqIds": [
+        "REQ-68"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-clientdetailpage-tsx-confirm-that-when-the-page-is-rendered-without-an-existing-client-id-create-mode-the-form-fields-are-empty-the-submit-button-calls-createclient-and-on-success-navigates-back-to-clients-ensure-that-the-create-vs-edit-mode-detection-logic-based-on-route-params-correctly-identifies-the-new-param-as-create-mode-and-does-not-attempt-to-call-getclient-or-updateclient-in-that-path",
+      "title": "In ClientDetailPage.tsx, confirm that when the page is rendered without an existing client ID (create mode), the form fields are empty, the submit button calls createClient, and on success navigates back to '/clients'. Ensure that the create-vs-edit mode detection logic (based on route params) correctly identifies the 'new' param as create mode and does not attempt to call getClient or updateClient in that path.",
+      "reqIds": [
+        "REQ-69"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-clientdetailpage-tsx-fix-the-create-save-button-so-that-submitting-the-new-client-form-in-create-mode-actually-calls-createclient-with-the-entered-field-values-and-navigates-back-to-clients-on-success-the-button-must-not-be-disabled-must-have-a-valid-onclick-or-form-onsubmit-handler-and-must-not-silently-fail-ensure-the-mutation-is-correctly-wired-to-the-backend-actor-via-the-usequeries-hook-and-that-any-loading-or-error-states-are-surfaced-to-the-user",
+      "title": "In ClientDetailPage.tsx, fix the 'Create' / 'Save' button so that submitting the new-client form in create mode actually calls createClient with the entered field values and navigates back to '/clients' on success. The button must not be disabled, must have a valid onClick or form onSubmit handler, and must not silently fail. Ensure the mutation is correctly wired to the backend actor via the useQueries hook and that any loading or error states are surfaced to the user.",
+      "reqIds": [
+        "REQ-70"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-jobdetailpage-tsx-verify-and-fix-the-create-save-button-in-new-job-create-mode-so-that-it-calls-createjob-with-the-entered-field-values-and-navigates-to-the-job-detail-page-or-jobs-on-success-the-mutation-must-be-correctly-wired-to-the-backend-actor-and-must-not-be-a-no-op",
+      "title": "In JobDetailPage.tsx, verify and fix the 'Create' / 'Save' button in new-job create mode so that it calls createJob with the entered field values and navigates to the job detail page or '/jobs' on success. The mutation must be correctly wired to the backend actor and must not be a no-op.",
+      "reqIds": [
+        "REQ-71"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-audit-all-form-submission-handlers-onsubmit-onclick-across-clientdetailpage-tsx-and-jobdetailpage-tsx-to-ensure-1-event-preventdefault-is-called-where-needed-to-prevent-page-reloads-2-the-mutation-functions-returned-by-usequeries-hooks-are-invoked-with-the-correct-argument-shapes-matching-the-backend-endpoint-signatures-and-3-async-mutation-calls-are-properly-awaited-or-use-onsuccess-onerror-callbacks-so-navigation-and-error-handling-fire-correctly",
+      "title": "Audit all form submission handlers (onSubmit / onClick) across ClientDetailPage.tsx and JobDetailPage.tsx to ensure: (1) event.preventDefault() is called where needed to prevent page reloads, (2) the mutation functions returned by useQueries hooks are invoked with the correct argument shapes matching the backend endpoint signatures, and (3) async mutation calls are properly awaited or use onSuccess/onError callbacks so navigation and error handling fire correctly.",
+      "reqIds": [
+        "REQ-72"
       ],
       "version": 1
     }
@@ -686,6 +777,40 @@
       "id": "AR-56",
       "summary": "If the Google Review URL/link is causing build errors or code issues, remove it entirely from the codebase rather than risk breaking the build.",
       "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-57",
+      "summary": "Fix signature capture on the invoice/estimate preview page so clients can sign on the invoice line. Ensure the canvas-based signature pad is visible, functional, and the saved signature renders inline on the invoice and in the PDF export.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-58",
+      "summary": "Add business contact info to the invoice/estimate preview: phone numbers 8455443077 and 8456363574, and email rhappliance1@gmail.com. These must appear on the printed/preview invoice and in the downloaded PDF export.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-59",
+      "summary": "Fix broken CRUD on clients, parts, and jobs — all create/edit/delete links are non-functional and go nowhere. Re-wire navigation and form submission for these modules.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-63",
+      "summary": "Verify and fix the InventoryPage.tsx add and edit part flows. The 'Add Part' button must open the inline add-part form and successfully call createPart on submit. Tapping an existing part must open the edit/detail view calling updatePart on save and deletePart on delete. Ensure all mutation calls are correctly wired to the actor via the useQueries hooks.",
+      "reqIds": [
+        "REQ-65"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-64",
+      "summary": "In ClientsPage.tsx, ensure the 'Add Client' button (and any navigation link to create a new client) uses the exact route path registered in App.tsx for the new-client route (e.g. '/clients/new'). The button must be a functional TanStack Router Link or programmatic navigate() call — not a disabled, missing, or incorrectly href'd element. Tapping/clicking it must reliably navigate to the ClientDetailPage in create mode.",
+      "reqIds": [
+        "REQ-67"
+      ],
       "status": "pending"
     }
   ],
