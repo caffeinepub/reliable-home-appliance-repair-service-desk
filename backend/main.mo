@@ -5,10 +5,12 @@ import Text "mo:core/Text";
 import Blob "mo:core/Blob";
 import Time "mo:core/Time";
 import Iter "mo:core/Iter";
+import Array "mo:core/Array";
+import Int "mo:core/Int";
 import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
-import Float "mo:core/Float";
 import Option "mo:core/Option";
+import Float "mo:core/Float";
 
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
@@ -16,25 +18,22 @@ import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
 import Stripe "stripe/stripe";
 import OutCall "http-outcalls/outcall";
+import Migration "migration";
 
-
-
+(with migration = Migration.run)
 actor {
   include MixinStorage();
 
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  // This : `ownerPrincipal` must never be changed.
-  // Do never reassign this. 
-  // This is constant for max security.
-  let ownerPrincipal : Principal = Principal.fromText(
+  let ownerPrincipal = Principal.fromText(
     "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe"
   );
 
   public type UserProfile = { name : Text };
-  stable let userProfiles = Map.empty<Principal, UserProfile>();
-  stable let userSignatures = Map.empty<Principal, Blob>();
+  var userProfiles = Map.empty<Principal, UserProfile>();
+  var userSignatures = Map.empty<Principal, Blob>();
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
@@ -99,6 +98,11 @@ actor {
     #general;
   };
 
+  public type DamageWaiver = {
+    enabled : Bool;
+    waiverText : Text;
+  };
+
   public type Job = {
     id : Nat;
     clientId : Nat;
@@ -111,6 +115,9 @@ actor {
     waiverType : ?WaiverType;
     laborLineItems : [LaborLineItem];
     stripePaymentId : ?Text;
+    scheduledStart : ?Time.Time;
+    scheduledEnd : ?Time.Time;
+    damageWaiver : ?DamageWaiver;
   };
 
   public type Part = {
@@ -123,11 +130,10 @@ actor {
     jobId : ?Nat;
   };
 
-  stable let clientStore = Map.empty<Nat, Client>();
-  stable let jobStore = Map.empty<Nat, Job>();
-  stable let partStore = Map.empty<Nat, Part>();
-  stable let laborRatesStore = Map.empty<Nat, LaborRate>();
-
+  var clientStore = Map.empty<Nat, Client>();
+  var jobStore = Map.empty<Nat, Job>();
+  var partStore = Map.empty<Nat, Part>();
+  var laborRatesStore = Map.empty<Nat, LaborRate>();
   var stripeKey : ?Text = null;
   var stripeConfigured : Bool = false;
 
@@ -280,18 +286,6 @@ actor {
     };
   };
 
-  func getStripeConfiguration() : Stripe.StripeConfiguration {
-    switch (stripeKey) {
-      case (null) { Runtime.trap("Stripe key not set") };
-      case (?key) {
-        {
-          secretKey = key;
-          allowedCountries = ["US"];
-        };
-      };
-    };
-  };
-
   public shared ({ caller }) func addLaborLineItem(jobId : Nat, laborLineItem : LaborLineItem) : async () {
     if (not isAuthorizedOrOwner(caller)) {
       Runtime.trap("Unauthorized: Only authorized users or owner can add labor line items");
@@ -330,6 +324,18 @@ actor {
     };
   };
 
+  func getStripeConfiguration() : Stripe.StripeConfiguration {
+    switch (stripeKey) {
+      case (null) { Runtime.trap("Stripe key not set") };
+      case (?key) {
+        {
+          secretKey = key;
+          allowedCountries = ["US"];
+        };
+      };
+    };
+  };
+
   public query ({ caller }) func isStripeConfigured() : async Bool {
     stripeConfigured;
   };
@@ -343,10 +349,16 @@ actor {
   };
 
   public shared ({ caller }) func getStripeSessionStatus(sessionId : Text) : async Stripe.StripeSessionStatus {
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users or owner can get Stripe session status");
+    };
     await Stripe.getSessionStatus(getStripeConfiguration(), sessionId, transform);
   };
 
   public shared ({ caller }) func createCheckoutSession(items : [Stripe.ShoppingItem], successUrl : Text, cancelUrl : Text) : async Text {
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users or owner can create checkout sessions");
+    };
     await Stripe.createCheckoutSession(
       getStripeConfiguration(),
       caller,
@@ -361,7 +373,6 @@ actor {
     OutCall.transform(input);
   };
 
-  // Store the caller's signature blob. Requires at minimum #user role (or owner).
   public shared ({ caller }) func storeUserSignature(sig : Blob) : async () {
     if (not isAuthorizedOrOwner(caller)) {
       Runtime.trap("Unauthorized: Only authorized users or owner can store signatures");
@@ -369,7 +380,6 @@ actor {
     userSignatures.add(caller, sig);
   };
 
-  // Retrieve the caller's stored signature blob. Requires at minimum #user role (or owner).
   public query ({ caller }) func getUserSignature() : async ?Blob {
     if (not isAuthorizedOrOwner(caller)) {
       Runtime.trap("Unauthorized: Only authorized users or owner can get signatures");
@@ -473,5 +483,96 @@ actor {
     };
     laborRatesStore.remove(laborRateId);
   };
-};
 
+  public query ({ caller }) func getTotalPartCostByJob(jobId : Nat) : async Nat {
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users or owner can get total part cost");
+    };
+    let parts = partStore.values().toArray();
+    let jobParts = parts.filter(func(p) { p.jobId == ?jobId });
+    let total = jobParts.foldLeft(
+      0,
+      func(acc, part) { acc + part.unitCost },
+    );
+    total;
+  };
+
+  public shared ({ caller }) func updateJobSchedule(jobId : Nat, scheduledStart : ?Time.Time, scheduledEnd : ?Time.Time) : async () {
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users or owner can update job schedule");
+    };
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) {
+        let updatedJob = {
+          job with
+          scheduledStart;
+          scheduledEnd;
+        };
+        jobStore.add(jobId, updatedJob);
+      };
+    };
+  };
+
+  public shared ({ caller }) func updateJobPayment(jobId : Nat, paymentIntentId : Text) : async () {
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users or owner can update job payment");
+    };
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) {
+        let updatedJob = { job with stripePaymentId = ?paymentIntentId };
+        jobStore.add(jobId, updatedJob);
+      };
+    };
+  };
+
+  public shared ({ caller }) func createPaymentIntent(jobId : Nat, amountInCents : Nat) : async Text {
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users or owner can create payment intents");
+    };
+
+    let amount = Int.abs(amountInCents);
+
+    let url = "https://api.stripe.com/v1/payment_intents";
+    let headers : [OutCall.Header] = [
+      {
+        name = "Authorization";
+        value = "Bearer " # getStripeConfiguration().secretKey;
+      },
+      { name = "Content-Type"; value = "application/x-www-form-urlencoded" },
+    ];
+    let body = "amount=" # amount.toText() # "&currency=usd";
+
+    let response = await OutCall.httpPostRequest(url, headers, body, transform);
+
+    switch (response.size()) {
+      case (0) { Runtime.trap("Stripe API call failed or returned no data") };
+      case (_) { response };
+    };
+  };
+
+  // Damage Waiver Management
+  public query ({ caller }) func getDamageWaiver(jobId : Nat) : async ?DamageWaiver {
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users can get damage waivers");
+    };
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) { job.damageWaiver };
+    };
+  };
+
+  public shared ({ caller }) func updateDamageWaiver(jobId : Nat, waiver : DamageWaiver) : async () {
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users can update damage waivers");
+    };
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) {
+        let updatedJob = { job with damageWaiver = ?waiver };
+        jobStore.add(jobId, updatedJob);
+      };
+    };
+  };
+};

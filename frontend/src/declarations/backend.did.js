@@ -55,26 +55,33 @@ export const JobStatus = IDL.Variant({
   'complete' : IDL.Null,
   'inProgress' : IDL.Null,
 });
+export const Time = IDL.Int;
 export const WaiverType = IDL.Variant({
   'general' : IDL.Null,
   'preexisting' : IDL.Null,
   'potential' : IDL.Null,
 });
-export const Time = IDL.Int;
 export const Estimate = IDL.Record({
   'sigData' : IDL.Vec(IDL.Nat8),
   'sigTime' : Time,
   'amount' : IDL.Nat,
 });
+export const DamageWaiver = IDL.Record({
+  'waiverText' : IDL.Text,
+  'enabled' : IDL.Bool,
+});
 export const Job = IDL.Record({
   'id' : IDL.Nat,
   'status' : JobStatus,
   'clientId' : IDL.Nat,
+  'scheduledStart' : IDL.Opt(Time),
   'waiverType' : IDL.Opt(WaiverType),
   'date' : Time,
   'tech' : IDL.Principal,
   'estimate' : IDL.Opt(Estimate),
   'notes' : IDL.Text,
+  'damageWaiver' : IDL.Opt(DamageWaiver),
+  'scheduledEnd' : IDL.Opt(Time),
   'stripePaymentId' : IDL.Opt(IDL.Text),
   'laborLineItems' : IDL.Vec(LaborLineItem),
   'photos' : IDL.Vec(ExternalBlob),
@@ -165,6 +172,7 @@ export const idlService = IDL.Service({
   'createJob' : IDL.Func([Job], [IDL.Nat], []),
   'createLaborRate' : IDL.Func([LaborRate], [IDL.Nat], []),
   'createPart' : IDL.Func([Part], [IDL.Nat], []),
+  'createPaymentIntent' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Text], []),
   'deleteClient' : IDL.Func([IDL.Nat], [], []),
   'deleteJob' : IDL.Func([IDL.Nat], [], []),
   'deleteLaborRate' : IDL.Func([IDL.Nat], [], []),
@@ -172,9 +180,11 @@ export const idlService = IDL.Service({
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getClient' : IDL.Func([IDL.Nat], [Client], ['query']),
+  'getDamageWaiver' : IDL.Func([IDL.Nat], [IDL.Opt(DamageWaiver)], ['query']),
   'getJob' : IDL.Func([IDL.Nat], [Job], ['query']),
   'getPart' : IDL.Func([IDL.Nat], [Part], ['query']),
   'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
+  'getTotalPartCostByJob' : IDL.Func([IDL.Nat], [IDL.Nat], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
@@ -198,8 +208,15 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'updateClient' : IDL.Func([Client], [], []),
+  'updateDamageWaiver' : IDL.Func([IDL.Nat, DamageWaiver], [], []),
   'updateEstimate' : IDL.Func([IDL.Nat, Estimate], [], []),
   'updateJob' : IDL.Func([Job], [], []),
+  'updateJobPayment' : IDL.Func([IDL.Nat, IDL.Text], [], []),
+  'updateJobSchedule' : IDL.Func(
+      [IDL.Nat, IDL.Opt(Time), IDL.Opt(Time)],
+      [],
+      [],
+    ),
   'updateJobStatus' : IDL.Func([IDL.Nat, JobStatus], [], []),
   'updateLaborRate' : IDL.Func([LaborRate], [], []),
   'updatePart' : IDL.Func([Part], [], []),
@@ -256,26 +273,33 @@ export const idlFactory = ({ IDL }) => {
     'complete' : IDL.Null,
     'inProgress' : IDL.Null,
   });
+  const Time = IDL.Int;
   const WaiverType = IDL.Variant({
     'general' : IDL.Null,
     'preexisting' : IDL.Null,
     'potential' : IDL.Null,
   });
-  const Time = IDL.Int;
   const Estimate = IDL.Record({
     'sigData' : IDL.Vec(IDL.Nat8),
     'sigTime' : Time,
     'amount' : IDL.Nat,
   });
+  const DamageWaiver = IDL.Record({
+    'waiverText' : IDL.Text,
+    'enabled' : IDL.Bool,
+  });
   const Job = IDL.Record({
     'id' : IDL.Nat,
     'status' : JobStatus,
     'clientId' : IDL.Nat,
+    'scheduledStart' : IDL.Opt(Time),
     'waiverType' : IDL.Opt(WaiverType),
     'date' : Time,
     'tech' : IDL.Principal,
     'estimate' : IDL.Opt(Estimate),
     'notes' : IDL.Text,
+    'damageWaiver' : IDL.Opt(DamageWaiver),
+    'scheduledEnd' : IDL.Opt(Time),
     'stripePaymentId' : IDL.Opt(IDL.Text),
     'laborLineItems' : IDL.Vec(LaborLineItem),
     'photos' : IDL.Vec(ExternalBlob),
@@ -363,6 +387,7 @@ export const idlFactory = ({ IDL }) => {
     'createJob' : IDL.Func([Job], [IDL.Nat], []),
     'createLaborRate' : IDL.Func([LaborRate], [IDL.Nat], []),
     'createPart' : IDL.Func([Part], [IDL.Nat], []),
+    'createPaymentIntent' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Text], []),
     'deleteClient' : IDL.Func([IDL.Nat], [], []),
     'deleteJob' : IDL.Func([IDL.Nat], [], []),
     'deleteLaborRate' : IDL.Func([IDL.Nat], [], []),
@@ -370,9 +395,11 @@ export const idlFactory = ({ IDL }) => {
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getClient' : IDL.Func([IDL.Nat], [Client], ['query']),
+    'getDamageWaiver' : IDL.Func([IDL.Nat], [IDL.Opt(DamageWaiver)], ['query']),
     'getJob' : IDL.Func([IDL.Nat], [Job], ['query']),
     'getPart' : IDL.Func([IDL.Nat], [Part], ['query']),
     'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
+    'getTotalPartCostByJob' : IDL.Func([IDL.Nat], [IDL.Nat], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
@@ -396,8 +423,15 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'updateClient' : IDL.Func([Client], [], []),
+    'updateDamageWaiver' : IDL.Func([IDL.Nat, DamageWaiver], [], []),
     'updateEstimate' : IDL.Func([IDL.Nat, Estimate], [], []),
     'updateJob' : IDL.Func([Job], [], []),
+    'updateJobPayment' : IDL.Func([IDL.Nat, IDL.Text], [], []),
+    'updateJobSchedule' : IDL.Func(
+        [IDL.Nat, IDL.Opt(Time), IDL.Opt(Time)],
+        [],
+        [],
+      ),
     'updateJobStatus' : IDL.Func([IDL.Nat, JobStatus], [], []),
     'updateLaborRate' : IDL.Func([LaborRate], [], []),
     'updatePart' : IDL.Func([Part], [], []),

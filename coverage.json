@@ -1,54 +1,68 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-03-01T03:11:56.589Z",
+  "generatedAt": "2026-03-01T03:53:34.481Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
     "total": 3,
-    "implemented": 2,
+    "implemented": 3,
     "items": [
       {
-        "id": "REQ-87",
-        "summary": "In useQueries.ts and useActor.ts, diagnose and fix the root cause of the 'Actor not available' error that surfaces on the New Client page (ClientDetailPage in create mode) when the user is authenticated via Internet Identity. The actor must be initialized and ready before any mutation (createClient) is attempted. If the actor is not yet ready, the page must show a loading state rather than an error banner. Once the actor is available, the createClient mutation must fire successfully when the Create button is pressed.",
+        "id": "REQ-95",
+        "summary": "Remove the verbose Stripe explanation text and instructional copy from the Job Detail page (JobDetailPage.tsx) Stripe payment section. The section must only display the 'Charge via Stripe' button and the 'Paid' / 'Unpaid' payment status badge. Do not remove the button or badge functionality — only strip the explanatory prose and UI note copy.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/pages/ClientDetailPage.tsx"
+          "frontend/src/pages/JobDetailPage.tsx"
         ],
         "matchedFiles": [
-          "frontend/src/pages/ClientDetailPage.tsx"
+          "frontend/src/pages/JobDetailPage.tsx"
         ]
       },
       {
-        "id": "REQ-88",
-        "summary": "In useActor.ts, ensure the actor is created as soon as an authenticated identity is available and that React Query caches it so subsequent hook calls on the same page receive the same actor instance without re-triggering initialization. The actor query must not return undefined or null once the identity is confirmed; if initialization is in progress it must return a loading state, not an error state.",
-        "status": "missing",
-        "plannedFiles": [
-          "frontend/src/hooks/useQueries.ts"
-        ],
-        "matchedFiles": []
-      },
-      {
-        "id": "REQ-89",
-        "summary": "In ClientDetailPage.tsx, guard the createClient mutation call so it only fires when the actor is confirmed non-null. If the actor is not yet available when the Create button is pressed, show an inline loading indicator on the button rather than propagating an error. Wire the useCreateClient mutation from useQueries.ts so it receives the actor reference correctly and does not fall back to a no-op when the actor is undefined.",
+        "id": "REQ-96",
+        "summary": "Move the damage waiver section so it appears exclusively on the Job Detail page (JobDetailPage.tsx) as an optional, toggleable field — not on the Invoice/Estimate preview page header or as a globally visible element. On the Job Detail page, add a 'Damage Waiver' toggle or checkbox that, when enabled, stores the waiver acceptance on the job record. The default waiver text is: 'I acknowledge that pre-existing damage, cosmetic issues, or conditions not caused by the repair technician are not the responsibility of Reliable Home Appliance Repair LLC. By signing below, I agree to these terms.' The waiver text must be configurable/editable inline on the job form. When the waiver is enabled on a job, the waiver text must be passed through to the Invoice/Estimate preview page and displayed prominently before the signature section on the estimate/invoice.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/pages/ClientDetailPage.tsx"
+          "frontend/src/pages/JobDetailPage.tsx",
+          "frontend/src/pages/InvoicePreviewPage.tsx"
         ],
         "matchedFiles": [
-          "frontend/src/pages/ClientDetailPage.tsx"
+          "frontend/src/pages/JobDetailPage.tsx",
+          "frontend/src/pages/InvoicePreviewPage.tsx"
+        ]
+      },
+      {
+        "id": "REQ-97",
+        "summary": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), once a customer signs and saves the signature, the saved signature image must render inline in the 'Customer Signature' area and persist so it is included in all export and share actions. The signed invoice must be shareable via four channels: (1) PDF download using html2canvas + jsPDF — the existing 'Download PDF' button must capture the full invoice including the rendered signature image; (2) HTML file share — generate a self-contained HTML string of the invoice (including the signature as a base64 data URL image) and trigger a file download as an .html file; (3) Email share — open a mailto: link pre-populated with a subject line 'Your Estimate from Reliable Home Appliance Repair LLC' and a plain-text body summarizing job details (client name, date, total, and a note that the signed estimate is attached); (4) SMS/phone share — open an sms: link pre-populated with a short message: 'Your estimate from Reliable Home Appliance Repair LLC is ready. Total: $[amount]. Please reply to confirm.' All four share actions must be rendered as clearly labeled buttons on the Invoice/Estimate preview page. For HTML and PDF shares the saved signature data URL must be embedded in the exported content.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/InvoicePreviewPage.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/InvoicePreviewPage.tsx"
         ]
       }
     ]
   },
   "changedFiles": [
+    "backend/main.mo",
+    "backend/migration.mo",
     "build-request.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
-    "frontend/src/pages/ClientDetailPage.tsx",
+    "frontend/src/backend.d.ts",
+    "frontend/src/backend.ts",
+    "frontend/src/declarations/backend.did.d.ts",
+    "frontend/src/declarations/backend.did.js",
+    "frontend/src/hooks/useQueries.ts",
+    "frontend/src/pages/InventoryPage.tsx",
+    "frontend/src/pages/InvoicePreviewPage.tsx",
+    "frontend/src/pages/JobDetailPage.tsx",
+    "frontend/src/pages/SettingsPage.tsx",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

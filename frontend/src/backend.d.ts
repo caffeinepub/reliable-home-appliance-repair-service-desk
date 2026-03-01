@@ -56,11 +56,14 @@ export interface Job {
     id: bigint;
     status: JobStatus;
     clientId: bigint;
+    scheduledStart?: Time;
     waiverType?: WaiverType;
     date: Time;
     tech: Principal;
     estimate?: Estimate;
     notes: string;
+    damageWaiver?: DamageWaiver;
+    scheduledEnd?: Time;
     stripePaymentId?: string;
     laborLineItems: Array<LaborLineItem>;
     photos: Array<ExternalBlob>;
@@ -96,6 +99,10 @@ export type StripeSessionStatus = {
 export interface StripeConfiguration {
     allowedCountries: Array<string>;
     secretKey: string;
+}
+export interface DamageWaiver {
+    waiverText: string;
+    enabled: boolean;
 }
 export interface Client {
     id: bigint;
@@ -137,6 +144,7 @@ export interface backendInterface {
     createJob(job: Job): Promise<bigint>;
     createLaborRate(laborRate: LaborRate): Promise<bigint>;
     createPart(part: Part): Promise<bigint>;
+    createPaymentIntent(jobId: bigint, amountInCents: bigint): Promise<string>;
     deleteClient(clientId: bigint): Promise<void>;
     deleteJob(jobId: bigint): Promise<void>;
     deleteLaborRate(laborRateId: bigint): Promise<void>;
@@ -144,9 +152,11 @@ export interface backendInterface {
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getClient(_clientId: bigint): Promise<Client>;
+    getDamageWaiver(jobId: bigint): Promise<DamageWaiver | null>;
     getJob(_jobId: bigint): Promise<Job>;
     getPart(partId: bigint): Promise<Part>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
+    getTotalPartCostByJob(jobId: bigint): Promise<bigint>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getUserSignature(): Promise<Uint8Array | null>;
     isCallerAdmin(): Promise<boolean>;
@@ -162,8 +172,11 @@ export interface backendInterface {
     storeUserSignature(sig: Uint8Array): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
     updateClient(client: Client): Promise<void>;
+    updateDamageWaiver(jobId: bigint, waiver: DamageWaiver): Promise<void>;
     updateEstimate(jobId: bigint, estimate: Estimate): Promise<void>;
     updateJob(job: Job): Promise<void>;
+    updateJobPayment(jobId: bigint, paymentIntentId: string): Promise<void>;
+    updateJobSchedule(jobId: bigint, scheduledStart: Time | null, scheduledEnd: Time | null): Promise<void>;
     updateJobStatus(jobId: bigint, newStatus: JobStatus): Promise<void>;
     updateLaborRate(laborRate: LaborRate): Promise<void>;
     updatePart(part: Part): Promise<void>;

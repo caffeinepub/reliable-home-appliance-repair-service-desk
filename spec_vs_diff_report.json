@@ -1,39 +1,39 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-03-01T03:11:56.583Z",
-  "summary": "The diff modifies ClientDetailPage.tsx to guard createClient mutations, show loading/connecting states, and map raw errors to friendly messages. The file-diff summaries reference useQueries.ts and useActor.ts changes, but only ClientDetailPage.tsx is shown in full detail. REQ-88 requirements around useActor.ts caching and stable references cannot be fully verified. REQ-87 and REQ-89 are largely addressed in ClientDetailPage.tsx, though some AC items have gaps.",
+  "generatedAt": "2026-03-01T03:53:34.474Z",
+  "summary": "The diff implements most of REQ-95, REQ-96, and REQ-97, but has a notable deviation from REQ-97: the PDF export uses a print-optimised popup window instead of html2canvas + jsPDF as explicitly required. The damage waiver (REQ-96) and share buttons (REQ-97) are implemented. Backend migration and new DamageWaiver type are added.",
   "missing_requirements": [
     {
-      "id": "REQ-88",
-      "requirement": "In useActor.ts, ensure the actor is created as soon as an authenticated identity is available and that React Query caches it so subsequent hook calls on the same page receive the same actor instance without re-triggering initialization. The actor query must not return undefined or null once the identity is confirmed; if initialization is in progress it must return a loading state, not an error state.",
-      "reason": "useActor.ts is listed as an immutable file and no changes to it appear in the diff. The AC items for REQ-88 (stable actor reference, loading state instead of error, invalidation only on identity change) cannot be confirmed as implemented from the diff.",
+      "id": "REQ-97",
+      "requirement": "PDF download must use html2canvas + jsPDF to capture the full invoice including the rendered signature image.",
+      "reason": "The file summary for InvoicePreviewPage.tsx explicitly states: 'PDF export uses a print-optimised popup window instead of html2canvas/jsPDF (avoiding missing package errors)'. The requirement mandates html2canvas + jsPDF specifically, and the AC states 'A Download PDF button exports the full invoice (including the inline signature image) as a PDF via html2canvas + jsPDF.' The popup print approach does not satisfy this AC.",
       "evidence": [
-        "frontend/src/hooks/useActor.ts"
-      ]
-    },
-    {
-      "id": "REQ-89",
-      "requirement": "Pressing Create when the actor is not yet ready shows a loading spinner on the button and retries once the actor is available.",
-      "reason": "In ClientDetailPage.tsx handleSave, when actorReady is false, the code sets an error message and returns early rather than showing a spinner on the button or automatically retrying once the actor becomes available.",
-      "evidence": [
-        "frontend/src/pages/ClientDetailPage.tsx"
+        "frontend/src/pages/InvoicePreviewPage.tsx",
+        "frontend-file-summaries.txt"
       ]
     }
   ],
   "hallucinated_features": [
     {
-      "description": "Client-side BigInt ID generation using a reduce over existing clients with a Date.now() fallback for the first client.",
-      "reason": "The build request does not specify client-side ID generation logic. This is an implementation detail added beyond the stated requirements.",
+      "description": "PDF export via print-optimised popup window instead of html2canvas + jsPDF",
+      "reason": "The build request explicitly requires html2canvas + jsPDF for PDF export. The implementation substitutes a popup window print approach, which was not requested and does not fulfill the specified AC.",
       "evidence": [
-        "frontend/src/pages/ClientDetailPage.tsx"
+        "frontend/src/pages/InvoicePreviewPage.tsx",
+        "frontend-file-summaries.txt"
       ]
     }
   ],
-  "confidence": 0.72,
+  "confidence": 0.88,
   "changed_files": [
+    "backend/main.mo",
+    "backend/migration.mo",
     "frontend-file-summaries.txt",
-    "frontend/src/pages/ClientDetailPage.tsx",
+    "frontend/src/hooks/useQueries.ts",
+    "frontend/src/pages/InventoryPage.tsx",
+    "frontend/src/pages/InvoicePreviewPage.tsx",
+    "frontend/src/pages/JobDetailPage.tsx",
+    "frontend/src/pages/SettingsPage.tsx",
     "project_state.json"
   ]
 }

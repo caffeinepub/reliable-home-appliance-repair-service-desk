@@ -1,76 +1,82 @@
 {
   "kind": "build_request",
-  "title": "Fix 'Actor not available' error on client creation",
+  "title": "Damage waiver as job-only option, signed estimate flows to shareable invoice",
   "projectName": "Reliable Home Appliance Repair",
-  "priority": "high",
+  "priority": "normal",
   "requirements": [
     {
-      "id": "REQ-87",
-      "text": "In useQueries.ts and useActor.ts, diagnose and fix the root cause of the 'Actor not available' error that surfaces on the New Client page (ClientDetailPage in create mode) when the user is authenticated via Internet Identity. The actor must be initialized and ready before any mutation (createClient) is attempted. If the actor is not yet ready, the page must show a loading state rather than an error banner. Once the actor is available, the createClient mutation must fire successfully when the Create button is pressed.",
+      "id": "REQ-95",
+      "text": "Remove the verbose Stripe explanation text and instructional copy from the Job Detail page (JobDetailPage.tsx) Stripe payment section. The section must only display the 'Charge via Stripe' button and the 'Paid' / 'Unpaid' payment status badge. Do not remove the button or badge functionality — only strip the explanatory prose and UI note copy.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-1"
+          "msg-3"
         ],
         "quotes": [
-          "Actor not available error on creating client now during testing."
+          "the stripe explanation is not necessary"
         ]
       },
       "acceptanceCriteria": [
-        "When a fully authenticated user navigates to /clients/new, no 'Actor not available' error banner is displayed.",
-        "The Create button is not disabled while the actor is initializing — the page shows a spinner or loading indicator instead.",
-        "Once the actor is ready, pressing Create with valid field values calls createClient on the backend actor and navigates back to /clients on success.",
-        "If the actor genuinely fails to initialize, a user-friendly error message is shown (not a raw 'Actor not available' string)."
+        "No instructional text, inline notes, or explanatory copy appears near the Stripe button on the Job Detail page.",
+        "The 'Charge via Stripe' button remains visible and functional.",
+        "The 'Paid' / 'Unpaid' badge remains visible and reflects stripePaymentId presence."
       ]
     },
     {
-      "id": "REQ-88",
-      "text": "In useActor.ts, ensure the actor is created as soon as an authenticated identity is available and that React Query caches it so subsequent hook calls on the same page receive the same actor instance without re-triggering initialization. The actor query must not return undefined or null once the identity is confirmed; if initialization is in progress it must return a loading state, not an error state.",
-      "target": "frontend",
+      "id": "REQ-96",
+      "text": "Move the damage waiver section so it appears exclusively on the Job Detail page (JobDetailPage.tsx) as an optional, toggleable field — not on the Invoice/Estimate preview page header or as a globally visible element. On the Job Detail page, add a 'Damage Waiver' toggle or checkbox that, when enabled, stores the waiver acceptance on the job record. The default waiver text is: 'I acknowledge that pre-existing damage, cosmetic issues, or conditions not caused by the repair technician are not the responsibility of Reliable Home Appliance Repair LLC. By signing below, I agree to these terms.' The waiver text must be configurable/editable inline on the job form. When the waiver is enabled on a job, the waiver text must be passed through to the Invoice/Estimate preview page and displayed prominently before the signature section on the estimate/invoice.",
+      "target": "both",
       "source": {
         "messageIds": [
-          "msg-1"
+          "msg-3"
         ],
         "quotes": [
-          "Actor not available error on creating client now during testing."
+          "Correct the damage waiver forms only an option on the job"
         ]
       },
       "acceptanceCriteria": [
-        "useActor returns a stable actor reference for the same identity without reinitialization on each render.",
-        "While the actor is being created, useActor returns { isLoading: true, actor: undefined } — no error is thrown.",
-        "After the actor is ready, isLoading is false and actor is the authenticated backend actor instance.",
-        "The actor instance is invalidated and recreated only when the identity changes (login/logout)."
+        "The damage waiver does not appear on any page other than JobDetailPage.tsx as a job-level option and on InvoicePreviewPage.tsx when the waiver is enabled for that job.",
+        "JobDetailPage.tsx has a damage waiver toggle/checkbox that is off by default.",
+        "When the waiver is toggled on, the editable waiver text field is revealed with the default text pre-populated.",
+        "The waiver enabled state and text are persisted on the job record (via updateJob or a dedicated backend field).",
+        "When navigating to the Invoice/Estimate preview from a job with waiver enabled, the waiver text appears prominently before the signature pad."
       ]
     },
     {
-      "id": "REQ-89",
-      "text": "In ClientDetailPage.tsx, guard the createClient mutation call so it only fires when the actor is confirmed non-null. If the actor is not yet available when the Create button is pressed, show an inline loading indicator on the button rather than propagating an error. Wire the useCreateClient mutation from useQueries.ts so it receives the actor reference correctly and does not fall back to a no-op when the actor is undefined.",
+      "id": "REQ-97",
+      "text": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), once a customer signs and saves the signature, the saved signature image must render inline in the 'Customer Signature' area and persist so it is included in all export and share actions. The signed invoice must be shareable via four channels: (1) PDF download using html2canvas + jsPDF — the existing 'Download PDF' button must capture the full invoice including the rendered signature image; (2) HTML file share — generate a self-contained HTML string of the invoice (including the signature as a base64 data URL image) and trigger a file download as an .html file; (3) Email share — open a mailto: link pre-populated with a subject line 'Your Estimate from Reliable Home Appliance Repair LLC' and a plain-text body summarizing job details (client name, date, total, and a note that the signed estimate is attached); (4) SMS/phone share — open an sms: link pre-populated with a short message: 'Your estimate from Reliable Home Appliance Repair LLC is ready. Total: $[amount]. Please reply to confirm.' All four share actions must be rendered as clearly labeled buttons on the Invoice/Estimate preview page. For HTML and PDF shares the saved signature data URL must be embedded in the exported content.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-1"
+          "msg-3"
         ],
         "quotes": [
-          "Actor not available error on creating client now during testing."
+          "signatures on estimates once signed flow to invoices to be shared to the client via pdf, HTML, email, or phone number"
         ]
       },
       "acceptanceCriteria": [
-        "The Create button in new-client mode is never disabled due to actor unavailability after the user is authenticated.",
-        "Pressing Create when the actor is not yet ready shows a loading spinner on the button and retries once the actor is available, or displays a clear 'Please wait, connecting…' message.",
-        "When the actor is ready and the form has valid values, pressing Create calls actor.createClient with the correct argument shape and navigates to /clients on success.",
-        "Any error returned by the backend is surfaced as a visible error message in the form."
+        "After the customer saves their signature on the invoice preview, the signature image renders inline in the 'Customer Signature' section.",
+        "A 'Download PDF' button exports the full invoice (including the inline signature image) as a PDF via html2canvas + jsPDF.",
+        "A 'Download HTML' button generates a self-contained .html file of the invoice with the signature embedded as a base64 data URL and triggers a file download.",
+        "A 'Share via Email' button opens a mailto: link with subject 'Your Estimate from Reliable Home Appliance Repair LLC' and a pre-filled plain-text body containing client name, job date, post-tax total, and a message that the signed estimate is attached.",
+        "A 'Share via SMS' button opens an sms: link with the pre-populated message: 'Your estimate from Reliable Home Appliance Repair LLC is ready. Total: $[amount]. Please reply to confirm.' where [amount] is the post-tax total.",
+        "All four share buttons are clearly labeled and visible on the Invoice/Estimate preview page.",
+        "The PDF and HTML exports both include the saved signature image."
       ]
     }
   ],
   "constraints": [
-    "Do not modify files listed under frontend.immutablePaths (useInternetIdentity.ts, useActor.ts, main.tsx, frontend/src/components/ui).",
-    "Do not change the backend schema or add new backend endpoints.",
-    "The fix must not regress any previously working mutation (updateClient, deleteClient, createJob, etc.)."
+    "Do not remove or regress the existing signature pad canvas, useSignaturePad hook wiring, or touch drawing functionality on InvoicePreviewPage.tsx.",
+    "Do not remove or regress the Stripe payment section (Charge via Stripe button and Paid/Unpaid badge) on JobDetailPage.tsx.",
+    "Do not modify any files listed in frontend.immutablePaths.",
+    "The owner principal hardcoded check ('q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe') must not be altered."
   ],
   "nonGoals": [
-    "Adding new client fields or changing the client data model.",
-    "Changing backend role-based access control logic.",
-    "Modifying the invoice, calendar, or any other page not related to this bug."
+    "Real-time email delivery via SMTP or SendGrid — email share uses mailto: only.",
+    "Real-time SMS delivery via Twilio — SMS share uses sms: deep link only.",
+    "Storing the signed invoice HTML or PDF on the backend.",
+    "Adding the damage waiver to any screen other than JobDetailPage.tsx (as a job option) and InvoicePreviewPage.tsx (when waiver is enabled for the job).",
+    "Changing any existing Stripe backend logic beyond removing the instructional UI copy."
   ],
   "imageRequirements": {
     "required": [],

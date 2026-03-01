@@ -1,444 +1,319 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useActor } from '../hooks/useActor';
-import { useInternetIdentity } from '../hooks/useInternetIdentity';
-import { Job, JobStatus, LaborLineItem, RateType, ExternalBlob, ShoppingItem } from '../backend';
+import { useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Plus, Trash2, Camera, X, Calendar, Clock, ChevronDown, ChevronUp, CreditCard, FileText, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Plus, Trash2, Camera, FileText, CreditCard, Loader2, X, Image } from 'lucide-react';
+import { useGetJob, useCreateJob, useUpdateJob, useListClients, useListParts, useListLaborRates, useUpdateJobPayment, useUpdateDamageWaiver } from '@/hooks/useQueries';
+import { useActor } from '@/hooks/useActor';
+import { useInternetIdentity } from '@/hooks/useInternetIdentity';
+import { ExternalBlob, JobStatus, RateType, type Job, type LaborLineItem } from '@/backend';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+const DEFAULT_WAIVER_TEXT =
+  'I acknowledge that pre-existing damage, cosmetic issues, or conditions not caused by the repair technician are not the responsibility of Reliable Home Appliance Repair LLC. By signing below, I agree to these terms.';
 
-function centsToDisplay(cents: bigint): string {
-  return `$${(Number(cents) / 100).toFixed(2)}`;
-}
-
-// ─── Local hooks ────────────────────────────────────────────────────────────
-
-function useGetJob(jobId: bigint | null) {
-  const { actor, isFetching } = useActor();
-  return useQuery({
-    queryKey: ['job', jobId?.toString()],
-    queryFn: async () => {
-      if (!actor || jobId === null) return null;
-      return actor.getJob(jobId);
-    },
-    enabled: !!actor && !isFetching && jobId !== null,
-  });
-}
-
-function useListClients() {
-  const { actor, isFetching } = useActor();
-  return useQuery({
-    queryKey: ['clients'],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.listClients();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-function useListParts() {
-  const { actor, isFetching } = useActor();
-  return useQuery({
-    queryKey: ['parts'],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.listParts();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-function useListJobs() {
-  const { actor, isFetching } = useActor();
-  return useQuery({
-    queryKey: ['jobs'],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.listJobs();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-function useGetCallerProfile() {
-  const { actor, isFetching } = useActor();
-  return useQuery({
-    queryKey: ['callerProfile'],
-    queryFn: async () => {
-      if (!actor) return null;
-      return actor.getCallerUserProfile();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-// ─── Main Component ──────────────────────────────────────────────────────────
+const TIME_WINDOWS = [
+  { label: '8 AM – 10 AM', start: 8, end: 10 },
+  { label: '10 AM – 12 PM', start: 10, end: 12 },
+  { label: '12 PM – 2 PM', start: 12, end: 14 },
+  { label: '2 PM – 4 PM', start: 14, end: 16 },
+  { label: '4 PM – 6 PM', start: 16, end: 18 },
+  { label: '6 PM – 8 PM', start: 18, end: 20 },
+];
 
 export default function JobDetailPage() {
+  const { jobId } = useParams({ strict: false }) as { jobId?: string };
   const navigate = useNavigate();
-  // Support both /jobs/new (no param) and /jobs/$jobId (with param)
-  const params = useParams({ strict: false }) as { jobId?: string };
-  // isNew when there's no jobId param at all (route: /jobs/new)
-  const isNew = !params.jobId;
-  const jobId = !isNew ? BigInt(params.jobId!) : null;
-
+  const queryClient = useQueryClient();
   const { actor } = useActor();
   const { identity } = useInternetIdentity();
-  const queryClient = useQueryClient();
+  const isNew = !jobId || jobId === 'new';
 
-  const { data: job, isLoading: jobLoading } = useGetJob(jobId);
+  const { data: job, isLoading: jobLoading } = useGetJob(isNew ? null : Number(jobId));
   const { data: clients = [] } = useListClients();
-  const { data: allParts = [] } = useListParts();
-  const { data: allJobs = [] } = useListJobs();
-  const { data: callerProfile } = useGetCallerProfile();
+  const { data: parts = [] } = useListParts();
+  const { data: laborRates = [] } = useListLaborRates();
+  const createJob = useCreateJob();
+  const updateJob = useUpdateJob();
+  const updateJobPayment = useUpdateJobPayment();
+  const updateDamageWaiverMutation = useUpdateDamageWaiver();
 
-  // ── Form state ──
-  const [clientId, setClientId] = useState<string>('');
+  const [clientId, setClientId] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [status, setStatus] = useState<JobStatus>(JobStatus.open);
   const [notes, setNotes] = useState('');
-  const [taxRate, setTaxRate] = useState<number>(8.875);
+  const [laborItems, setLaborItems] = useState<LaborLineItem[]>([]);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
-  // ── Labor form state ──
-  const [laborName, setLaborName] = useState('');
-  const [laborType, setLaborType] = useState<'hourly' | 'flat'>('flat');
-  const [laborHours, setLaborHours] = useState('');
-  const [laborRate, setLaborRate] = useState('');
-  const [laborDesc, setLaborDesc] = useState('');
-  const [addingLabor, setAddingLabor] = useState(false);
-  const [removingLaborIdx, setRemovingLaborIdx] = useState<number | null>(null);
+  // Calendar scheduling
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [selectedWindow, setSelectedWindow] = useState('');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [showCalendar, setShowCalendar] = useState(false);
 
-  // ── Parts state ──
-  const [selectedPartId, setSelectedPartId] = useState<string>('');
-  const [partQty, setPartQty] = useState('1');
-  const [addingPart, setAddingPart] = useState(false);
-
-  // ── Photos state ──
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [removingPhotoIdx, setRemovingPhotoIdx] = useState<number | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-
-  // ── Stripe state ──
+  // Stripe
   const [stripeLoading, setStripeLoading] = useState(false);
-  const [stripeError, setStripeError] = useState<string | null>(null);
+  const [stripeError, setStripeError] = useState('');
 
-  // ── Populate form when job loads ──
+  // Damage waiver
+  const [waiverEnabled, setWaiverEnabled] = useState(false);
+  const [waiverText, setWaiverText] = useState(DEFAULT_WAIVER_TEXT);
+  const [waiverSaving, setWaiverSaving] = useState(false);
+
   useEffect(() => {
     if (job) {
-      setClientId(job.clientId.toString());
+      setClientId(String(job.clientId));
+      setDate(new Date(Number(job.date) / 1_000_000).toISOString().split('T')[0]);
       setStatus(job.status);
       setNotes(job.notes);
+      setLaborItems(job.laborLineItems || []);
+      if (job.damageWaiver) {
+        setWaiverEnabled(job.damageWaiver.enabled);
+        setWaiverText(job.damageWaiver.waiverText || DEFAULT_WAIVER_TEXT);
+      }
+      if (job.scheduledStart) {
+        const d = new Date(Number(job.scheduledStart) / 1_000_000);
+        setScheduledDate(d.toISOString().split('T')[0]);
+      }
     }
   }, [job]);
 
-  // ── Derived values ──
-  const jobParts = allParts.filter(
-    p => p.jobId !== undefined && p.jobId !== null && job && p.jobId === job.id
-  );
-  const partsSubtotal = jobParts.reduce((sum, p) => sum + Number(p.unitCost), 0);
-  const laborItems = job?.laborLineItems || [];
-  const laborSubtotal = laborItems.reduce((sum, l) => sum + Number(l.totalAmount), 0);
-  const subtotal = partsSubtotal + laborSubtotal;
-  const taxAmount = subtotal * (taxRate / 100);
-  const totalAmount = subtotal + taxAmount;
+  const getJobParts = () => parts.filter(p => p.jobId === BigInt(jobId || 0));
 
-  const selectedClient = clients.find(c => c.id.toString() === clientId);
-  const availableParts = allParts.filter(p => Number(p.quantityOnHand) > 0 && !p.jobId);
+  const calcLaborTotal = () =>
+    laborItems.reduce((sum, item) => sum + Number(item.totalAmount), 0);
 
-  // ── Save job ──
-  const handleSave = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const calcPartsTotal = () =>
+    getJobParts().reduce((sum, p) => sum + Number(p.unitCost), 0);
+
+  const calcSubtotal = () => calcLaborTotal() + calcPartsTotal();
+  const calcTax = () => Math.round(calcSubtotal() * 0.08875);
+  const calcTotal = () => calcSubtotal() + calcTax();
+
+  const addLaborItem = () => {
+    const rate = laborRates[0];
+    const newItem: LaborLineItem = {
+      name: rate ? rate.name : 'Labor',
+      rateType: rate ? rate.rateType : RateType.hourly,
+      hours: 1,
+      rateAmount: rate ? rate.amount : BigInt(0),
+      description: '',
+      totalAmount: rate ? rate.amount : BigInt(0),
+    };
+    setLaborItems([...laborItems, newItem]);
+  };
+
+  const updateLaborItem = (index: number, field: keyof LaborLineItem, value: unknown) => {
+    const updated = [...laborItems];
+    updated[index] = { ...updated[index], [field]: value };
+    // Recalculate total
+    const item = updated[index];
+    if (item.rateType === RateType.hourly) {
+      updated[index].totalAmount = BigInt(Math.round(item.hours * Number(item.rateAmount)));
+    } else {
+      updated[index].totalAmount = item.rateAmount;
+    }
+    setLaborItems(updated);
+  };
+
+  const removeLaborItem = (index: number) => {
+    setLaborItems(laborItems.filter((_, i) => i !== index));
+  };
+
+  const handleSave = async () => {
     if (!actor || !identity) return;
-    if (!clientId) { setSaveError('Please select a client'); return; }
+    if (!clientId) { setError('Please select a client'); return; }
+    setError('');
     setSaving(true);
-    setSaveError(null);
     try {
-      // Use BigInt-safe max ID calculation to avoid Math.max(-Infinity) on empty arrays
-      let newId: bigint;
-      if (isNew) {
-        if (allJobs.length > 0) {
-          const maxId = allJobs.reduce((max, j) => (j.id > max ? j.id : max), allJobs[0].id);
-          newId = maxId + BigInt(1);
-        } else {
-          newId = BigInt(Date.now());
+      const dateMs = new Date(date).getTime();
+      const dateNs = BigInt(dateMs) * BigInt(1_000_000);
+
+      let scheduledStartNs: bigint | null = null;
+      let scheduledEndNs: bigint | null = null;
+
+      if (scheduledDate) {
+        const baseDate = new Date(scheduledDate);
+        if (selectedWindow && selectedWindow !== 'custom') {
+          const win = TIME_WINDOWS.find(w => w.label === selectedWindow);
+          if (win) {
+            const start = new Date(baseDate);
+            start.setHours(win.start, 0, 0, 0);
+            const end = new Date(baseDate);
+            end.setHours(win.end, 0, 0, 0);
+            scheduledStartNs = BigInt(start.getTime()) * BigInt(1_000_000);
+            scheduledEndNs = BigInt(end.getTime()) * BigInt(1_000_000);
+          }
+        } else if (selectedWindow === 'custom' && customStart && customEnd) {
+          const [sh, sm] = customStart.split(':').map(Number);
+          const [eh, em] = customEnd.split(':').map(Number);
+          const start = new Date(baseDate);
+          start.setHours(sh, sm, 0, 0);
+          const end = new Date(baseDate);
+          end.setHours(eh, em, 0, 0);
+          scheduledStartNs = BigInt(start.getTime()) * BigInt(1_000_000);
+          scheduledEndNs = BigInt(end.getTime()) * BigInt(1_000_000);
         }
-      } else {
-        newId = jobId!;
       }
 
       const jobData: Job = {
-        id: newId,
+        id: isNew ? BigInt(Date.now()) : BigInt(jobId!),
         clientId: BigInt(clientId),
         tech: identity.getPrincipal(),
-        date: isNew
-          ? BigInt(Date.now()) * BigInt(1_000_000)
-          : (job?.date ?? BigInt(Date.now()) * BigInt(1_000_000)),
+        date: dateNs,
         status,
         notes,
         photos: job?.photos || [],
         estimate: job?.estimate,
         waiverType: job?.waiverType,
-        laborLineItems: job?.laborLineItems || [],
+        laborLineItems: laborItems,
         stripePaymentId: job?.stripePaymentId,
+        scheduledStart: scheduledStartNs ?? undefined,
+        scheduledEnd: scheduledEndNs ?? undefined,
+        damageWaiver: { enabled: waiverEnabled, waiverText },
       };
 
       if (isNew) {
-        await actor.createJob(jobData);
+        await createJob.mutateAsync(jobData);
       } else {
-        await actor.updateJob(jobData);
+        await updateJob.mutateAsync(jobData);
       }
-      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      await queryClient.invalidateQueries({ queryKey: ['job', newId.toString()] });
-      if (isNew) {
-        navigate({ to: '/jobs/$jobId', params: { jobId: newId.toString() } });
-      }
-    } catch (e: any) {
-      setSaveError(e?.message || 'Failed to save job');
+      navigate({ to: '/jobs' });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save job');
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Add labor ──
-  const handleAddLabor = async () => {
-    if (!actor || !jobId || !laborName.trim() || !laborRate.trim()) return;
-    setAddingLabor(true);
-    try {
-      const rateAmountCents = Math.round(parseFloat(laborRate) * 100);
-      const hours = laborType === 'hourly' ? parseFloat(laborHours) || 0 : 0;
-      const totalCents =
-        laborType === 'hourly'
-          ? Math.round(hours * rateAmountCents)
-          : rateAmountCents;
-
-      const item: LaborLineItem = {
-        name: laborName.trim(),
-        rateType: laborType === 'hourly' ? RateType.hourly : RateType.flat,
-        hours,
-        rateAmount: BigInt(rateAmountCents),
-        description: laborDesc.trim(),
-        totalAmount: BigInt(totalCents),
-      };
-      await actor.addLaborLineItem(jobId, item);
-      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
-      setLaborName('');
-      setLaborType('flat');
-      setLaborHours('');
-      setLaborRate('');
-      setLaborDesc('');
-    } catch (e: any) {
-      console.error('Failed to add labor:', e);
-    } finally {
-      setAddingLabor(false);
-    }
-  };
-
-  // ── Remove labor ──
-  const handleRemoveLabor = async (index: number) => {
-    if (!actor || !jobId) return;
-    setRemovingLaborIdx(index);
-    try {
-      await actor.removeLaborLineItem(jobId, BigInt(index));
-      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
-    } catch (e: any) {
-      console.error('Failed to remove labor:', e);
-    } finally {
-      setRemovingLaborIdx(null);
-    }
-  };
-
-  // ── Add part to job ──
-  const handleAddPart = async () => {
-    if (!actor || !jobId || !selectedPartId) return;
-    setAddingPart(true);
-    try {
-      await actor.usePartOnJob(BigInt(selectedPartId), jobId, BigInt(parseInt(partQty) || 1));
-      await queryClient.invalidateQueries({ queryKey: ['parts'] });
-      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
-      setSelectedPartId('');
-      setPartQty('1');
-    } catch (e: any) {
-      console.error('Failed to add part:', e);
-    } finally {
-      setAddingPart(false);
-    }
-  };
-
-  // ── Upload photo ──
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!actor || !jobId || !e.target.files?.[0]) return;
-    const file = e.target.files[0];
-    setUploadingPhoto(true);
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      const blob = ExternalBlob.fromBytes(bytes);
-      await actor.addJobPhoto(jobId, blob);
-      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
-    } catch (e: any) {
-      console.error('Failed to upload photo:', e);
-    } finally {
-      setUploadingPhoto(false);
-      if (photoInputRef.current) photoInputRef.current.value = '';
-    }
-  };
-
-  // ── Remove photo ──
-  const handleRemovePhoto = async (index: number) => {
-    if (!actor || !jobId) return;
-    setRemovingPhotoIdx(index);
-    try {
-      await actor.removeJobPhoto(jobId, BigInt(index));
-      await queryClient.invalidateQueries({ queryKey: ['job', jobId.toString()] });
-    } catch (e: any) {
-      console.error('Failed to remove photo:', e);
-    } finally {
-      setRemovingPhotoIdx(null);
-    }
-  };
-
-  // ── Delete job ──
-  const handleDelete = async () => {
-    if (!actor || !jobId) return;
-    try {
-      await actor.deleteJob(jobId);
-      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      navigate({ to: '/jobs' });
-    } catch (e: any) {
-      setSaveError(e?.message || 'Failed to delete job');
-    }
-  };
-
-  // ── Stripe checkout ──
-  const handleStripeCheckout = async () => {
-    if (!actor || !jobId) return;
+  const handleStripeCharge = async () => {
+    if (!actor || !job) return;
     setStripeLoading(true);
-    setStripeError(null);
+    setStripeError('');
     try {
-      const items: ShoppingItem[] = [];
-
-      if (laborSubtotal > 0) {
-        items.push({
-          productName: 'Labor',
-          productDescription: 'Labor charges',
-          currency: 'usd',
-          quantity: BigInt(1),
-          priceInCents: BigInt(Math.round(laborSubtotal)),
-        });
+      const amountCents = BigInt(Math.round(calcTotal()));
+      const result = await actor.createPaymentIntent(job.id, amountCents);
+      const parsed = JSON.parse(result);
+      if (parsed?.id) {
+        await updateJobPayment.mutateAsync({ jobId: Number(job.id), paymentIntentId: parsed.id });
+        queryClient.invalidateQueries({ queryKey: ['job', Number(jobId)] });
       }
-
-      if (partsSubtotal > 0) {
-        items.push({
-          productName: 'Parts',
-          productDescription: 'Parts and materials',
-          currency: 'usd',
-          quantity: BigInt(1),
-          priceInCents: BigInt(Math.round(partsSubtotal)),
-        });
-      }
-
-      if (taxAmount > 0) {
-        items.push({
-          productName: 'Tax',
-          productDescription: `Tax (${taxRate}%)`,
-          currency: 'usd',
-          quantity: BigInt(1),
-          priceInCents: BigInt(Math.round(taxAmount)),
-        });
-      }
-
-      if (items.length === 0) {
-        setStripeError('No items to charge');
-        return;
-      }
-
-      const baseUrl = `${window.location.protocol}//${window.location.host}`;
-      const result = await actor.createCheckoutSession(
-        items,
-        `${baseUrl}/payment-success`,
-        `${baseUrl}/payment-failure`
-      );
-      const session = JSON.parse(result) as { id: string; url: string };
-      if (!session?.url) throw new Error('Stripe session missing url');
-      window.location.href = session.url;
-    } catch (e: any) {
-      setStripeError(e?.message || 'Failed to create checkout session');
+    } catch (e: unknown) {
+      setStripeError(e instanceof Error ? e.message : 'Payment failed');
     } finally {
       setStripeLoading(false);
+    }
+  };
+
+  const handleWaiverToggle = async (enabled: boolean) => {
+    setWaiverEnabled(enabled);
+    if (!isNew && jobId && actor) {
+      setWaiverSaving(true);
+      try {
+        await updateDamageWaiverMutation.mutateAsync({
+          jobId: Number(jobId),
+          waiver: { enabled, waiverText },
+        });
+      } catch {
+        // silently fail, will be saved on main save
+      } finally {
+        setWaiverSaving(false);
+      }
+    }
+  };
+
+  const handleWaiverTextChange = async (text: string) => {
+    setWaiverText(text);
+  };
+
+  const handleWaiverTextBlur = async () => {
+    if (!isNew && jobId && actor) {
+      setWaiverSaving(true);
+      try {
+        await updateDamageWaiverMutation.mutateAsync({
+          jobId: Number(jobId),
+          waiver: { enabled: waiverEnabled, waiverText },
+        });
+      } catch {
+        // silently fail
+      } finally {
+        setWaiverSaving(false);
+      }
     }
   };
 
   if (!isNew && jobLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
 
+  const isPaid = !!job?.stripePaymentId;
+  const jobPartsForDisplay = getJobParts();
+
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/jobs' })}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Jobs
+      <div className="sticky top-0 z-10 bg-background border-b border-border px-4 py-3 flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={() => navigate({ to: '/jobs' })}>
+          <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="font-semibold text-foreground">
-          {isNew ? 'New Job' : 'Edit Job'}
+        <h1 className="text-lg font-semibold font-rajdhani">
+          {isNew ? 'New Job' : `Job #${jobId}`}
         </h1>
-        <Button size="sm" onClick={() => handleSave()} disabled={saving}>
-          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-          {isNew ? 'Create' : 'Save'}
-        </Button>
+        {!isNew && (
+          <Badge variant={isPaid ? 'default' : 'outline'} className="ml-auto">
+            {isPaid ? 'Paid' : 'Unpaid'}
+          </Badge>
+        )}
       </div>
 
-      <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
-        {saveError && (
+      <div className="px-4 py-4 space-y-5 max-w-2xl mx-auto">
+        {error && (
           <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-4 py-3">
-            {saveError}
+            {error}
           </div>
         )}
 
-        {/* Basic Info */}
+        {/* Client & Date */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="text-base">Job Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Client */}
-            <div className="space-y-1">
-              <Label>Client *</Label>
+            <div>
+              <Label>Client</Label>
               <Select value={clientId} onValueChange={setClientId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a client..." />
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select client…" />
                 </SelectTrigger>
                 <SelectContent>
                   {clients.map(c => (
-                    <SelectItem key={c.id.toString()} value={c.id.toString()}>
+                    <SelectItem key={String(c.id)} value={String(c.id)}>
                       {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Status */}
-            <div className="space-y-1">
+            <div>
+              <Label>Date</Label>
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="mt-1" />
+            </div>
+            <div>
               <Label>Status</Label>
               <Select value={status} onValueChange={v => setStatus(v as JobStatus)}>
-                <SelectTrigger>
+                <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -448,345 +323,307 @@ export default function JobDetailPage() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Notes */}
-            <div className="space-y-1">
+            <div>
               <Label>Notes</Label>
               <Textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="Job description, appliance details, issues found..."
+                placeholder="Job notes…"
+                className="mt-1"
                 rows={3}
-              />
-            </div>
-
-            {/* Tax Rate */}
-            <div className="space-y-1">
-              <Label>Tax Rate (%)</Label>
-              <Input
-                type="number"
-                min="0"
-                max="100"
-                step="0.001"
-                value={taxRate}
-                onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
-                placeholder="8.875"
               />
             </div>
           </CardContent>
         </Card>
 
-        {/* Labor Line Items — only available after job is saved */}
-        {!isNew && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Labor</CardTitle>
-            </CardHeader>
+        {/* Calendar Scheduling */}
+        <Card>
+          <CardHeader className="pb-3">
+            <button
+              className="flex items-center justify-between w-full text-left"
+              onClick={() => setShowCalendar(!showCalendar)}
+            >
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Schedule Appointment
+              </CardTitle>
+              {showCalendar ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </CardHeader>
+          {showCalendar && (
             <CardContent className="space-y-4">
-              {/* Existing labor items */}
-              {laborItems.length > 0 && (
-                <div className="space-y-2">
-                  {laborItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.rateType === RateType.hourly
-                            ? `${item.hours}h × ${centsToDisplay(item.rateAmount)}/hr`
-                            : `Flat: ${centsToDisplay(item.rateAmount)}`}
-                          {item.description ? ` · ${item.description}` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-sm font-semibold text-foreground">
-                          {centsToDisplay(item.totalAmount)}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-destructive hover:text-destructive"
-                          onClick={() => handleRemoveLabor(idx)}
-                          disabled={removingLaborIdx === idx}
-                        >
-                          {removingLaborIdx === idx
-                            ? <Loader2 size={12} className="animate-spin" />
-                            : <X size={12} />}
-                        </Button>
-                      </div>
-                    </div>
+              <div>
+                <Label>Appointment Date</Label>
+                <Input
+                  type="date"
+                  value={scheduledDate}
+                  onChange={e => setScheduledDate(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Time Window</Label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  {TIME_WINDOWS.map(w => (
+                    <button
+                      key={w.label}
+                      onClick={() => setSelectedWindow(w.label)}
+                      className={`px-3 py-2 rounded-lg text-sm border transition-colors ${
+                        selectedWindow === w.label
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border hover:bg-muted'
+                      }`}
+                    >
+                      <Clock className="h-3 w-3 inline mr-1" />
+                      {w.label}
+                    </button>
                   ))}
+                  <button
+                    onClick={() => setSelectedWindow('custom')}
+                    className={`px-3 py-2 rounded-lg text-sm border transition-colors col-span-2 ${
+                      selectedWindow === 'custom'
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    Custom Time
+                  </button>
+                </div>
+              </div>
+              {selectedWindow === 'custom' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Start Time</Label>
+                    <Input type="time" value={customStart} onChange={e => setCustomStart(e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>End Time</Label>
+                    <Input type="time" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="mt-1" />
+                  </div>
                 </div>
               )}
+            </CardContent>
+          )}
+        </Card>
 
-              {/* Add labor form */}
-              <div className="space-y-3 pt-2 border-t border-border">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Labor</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Name</Label>
-                    <Input
-                      value={laborName}
-                      onChange={e => setLaborName(e.target.value)}
-                      placeholder="e.g. Diagnostic Fee"
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1">
+        {/* Labor Line Items */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Labor</CardTitle>
+              <Button variant="outline" size="sm" onClick={addLaborItem}>
+                <Plus className="h-4 w-4 mr-1" /> Add
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {laborItems.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-2">No labor items yet</p>
+            )}
+            {laborItems.map((item, idx) => (
+              <div key={idx} className="border border-border rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Input
+                    value={item.name}
+                    onChange={e => updateLaborItem(idx, 'name', e.target.value)}
+                    placeholder="Labor name"
+                    className="text-sm h-8 flex-1 mr-2"
+                  />
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeLaborItem(idx)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
                     <Label className="text-xs">Type</Label>
-                    <Select value={laborType} onValueChange={v => setLaborType(v as 'hourly' | 'flat')}>
-                      <SelectTrigger className="h-8 text-sm">
+                    <Select
+                      value={item.rateType}
+                      onValueChange={v => updateLaborItem(idx, 'rateType', v as RateType)}
+                    >
+                      <SelectTrigger className="h-8 text-xs mt-0.5">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="flat">Flat Rate</SelectItem>
-                        <SelectItem value="hourly">Hourly</SelectItem>
+                        <SelectItem value={RateType.hourly}>Hourly</SelectItem>
+                        <SelectItem value={RateType.flat}>Flat</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Rate ($)</Label>
-                    <Input
-                      value={laborRate}
-                      onChange={e => setLaborRate(e.target.value)}
-                      placeholder="0.00"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  {laborType === 'hourly' && (
-                    <div className="space-y-1">
+                  {item.rateType === RateType.hourly && (
+                    <div>
                       <Label className="text-xs">Hours</Label>
                       <Input
-                        value={laborHours}
-                        onChange={e => setLaborHours(e.target.value)}
-                        placeholder="0"
                         type="number"
+                        value={item.hours}
+                        onChange={e => updateLaborItem(idx, 'hours', parseFloat(e.target.value) || 0)}
+                        className="h-8 text-xs mt-0.5"
+                        step="0.5"
                         min="0"
-                        step="0.25"
-                        className="h-8 text-sm"
                       />
                     </div>
                   )}
-                  <div className={`space-y-1 ${laborType === 'hourly' ? '' : 'col-span-2'}`}>
-                    <Label className="text-xs">Description</Label>
+                  <div>
+                    <Label className="text-xs">Rate ($)</Label>
                     <Input
-                      value={laborDesc}
-                      onChange={e => setLaborDesc(e.target.value)}
-                      placeholder="Optional description"
-                      className="h-8 text-sm"
+                      type="number"
+                      value={Number(item.rateAmount)}
+                      onChange={e => updateLaborItem(idx, 'rateAmount', BigInt(Math.round(parseFloat(e.target.value) || 0)))}
+                      className="h-8 text-xs mt-0.5"
+                      min="0"
                     />
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={handleAddLabor}
-                  disabled={addingLabor || !laborName.trim() || !laborRate.trim()}
-                  className="w-full"
-                >
-                  {addingLabor ? <Loader2 size={14} className="animate-spin mr-1" /> : <Plus size={14} className="mr-1" />}
-                  Add Labor Item
-                </Button>
+                <div className="text-right text-sm font-medium text-primary">
+                  Total: ${Number(item.totalAmount).toFixed(2)}
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            ))}
+          </CardContent>
+        </Card>
 
-        {/* Parts — only available after job is saved */}
-        {!isNew && (
+        {/* Parts */}
+        {!isNew && jobPartsForDisplay.length > 0 && (
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="text-base">Parts Used</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {jobParts.length > 0 && (
-                <div className="space-y-2">
-                  {jobParts.map(part => (
-                    <div key={part.id.toString()} className="flex items-center justify-between gap-2 p-2 bg-muted/50 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{part.name}</p>
-                        <p className="text-xs text-muted-foreground">#{part.partNumber}</p>
-                      </div>
-                      <span className="text-sm font-semibold text-foreground shrink-0">
-                        {centsToDisplay(part.unitCost)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {availableParts.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-border">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Part</p>
-                  <div className="flex gap-2">
-                    <Select value={selectedPartId} onValueChange={setSelectedPartId}>
-                      <SelectTrigger className="flex-1 h-8 text-sm">
-                        <SelectValue placeholder="Select part..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableParts.map(p => (
-                          <SelectItem key={p.id.toString()} value={p.id.toString()}>
-                            {p.name} (qty: {p.quantityOnHand.toString()})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      value={partQty}
-                      onChange={e => setPartQty(e.target.value)}
-                      type="number"
-                      min="1"
-                      className="w-16 h-8 text-sm"
-                      placeholder="Qty"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={handleAddPart}
-                      disabled={addingPart || !selectedPartId}
-                      className="h-8"
-                    >
-                      {addingPart ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                    </Button>
+            <CardContent>
+              <div className="space-y-2">
+                {jobPartsForDisplay.map(p => (
+                  <div key={String(p.id)} className="flex justify-between text-sm">
+                    <span>{p.name}</span>
+                    <span className="font-medium">${Number(p.unitCost).toFixed(2)}</span>
                   </div>
-                </div>
-              )}
-
-              {jobParts.length === 0 && availableParts.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-2">
-                  No parts available. Add parts in Inventory first.
-                </p>
-              )}
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Photos — only available after job is saved */}
-        {!isNew && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Photos</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {job?.photos && job.photos.length > 0 && (
-                <div className="grid grid-cols-2 gap-2">
-                  {job.photos.map((photo, idx) => (
-                    <div key={idx} className="relative group rounded-lg overflow-hidden bg-muted aspect-square">
-                      <img
-                        src={photo.getDirectURL()}
-                        alt={`Job photo ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        onClick={() => handleRemovePhoto(idx)}
-                        disabled={removingPhotoIdx === idx}
-                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        {removingPhotoIdx === idx
-                          ? <Loader2 size={12} className="animate-spin" />
-                          : <X size={12} />}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+        {/* Totals */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Totals</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Labor</span>
+              <span>${calcLaborTotal().toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Parts</span>
+              <span>${calcPartsTotal().toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tax (8.875%)</span>
+              <span>${(calcTax() / 100).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-base border-t border-border pt-2 mt-2">
+              <span>Total</span>
+              <span>${(calcTotal() / 100).toFixed(2)}</span>
+            </div>
+          </CardContent>
+        </Card>
 
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={handlePhotoUpload}
+        {/* Damage Waiver — Job-level option */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Damage Waiver
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                {waiverSaving && <span className="text-xs text-muted-foreground">Saving…</span>}
+                <Switch
+                  checked={waiverEnabled}
+                  onCheckedChange={handleWaiverToggle}
+                />
+              </div>
+            </div>
+          </CardHeader>
+          {waiverEnabled && (
+            <CardContent>
+              <Label className="text-xs text-muted-foreground mb-1 block">
+                Waiver text (editable — will appear on estimate for client signature)
+              </Label>
+              <Textarea
+                value={waiverText}
+                onChange={e => handleWaiverTextChange(e.target.value)}
+                onBlur={handleWaiverTextBlur}
+                rows={4}
+                className="text-sm"
               />
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => photoInputRef.current?.click()}
-                disabled={uploadingPhoto}
-              >
-                {uploadingPhoto
-                  ? <Loader2 size={16} className="animate-spin mr-2" />
-                  : <Camera size={16} className="mr-2" />}
-                {uploadingPhoto ? 'Uploading...' : 'Add Photo'}
-              </Button>
             </CardContent>
-          </Card>
-        )}
+          )}
+        </Card>
 
-        {/* Totals — only available after job is saved */}
+        {/* Stripe Payment */}
         {!isNew && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Summary</CardTitle>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                Payment
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Labor</span>
-                <span>${(laborSubtotal / 100).toFixed(2)}</span>
+              <div className="flex items-center gap-3">
+                <Badge variant={isPaid ? 'default' : 'outline'}>
+                  {isPaid ? 'Paid' : 'Unpaid'}
+                </Badge>
+                {isPaid && (
+                  <span className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">
+                    {job?.stripePaymentId}
+                  </span>
+                )}
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Parts</span>
-                <span>${(partsSubtotal / 100).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Tax ({taxRate}%)</span>
-                <span>${(taxAmount / 100).toFixed(2)}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between font-semibold">
-                <span>Total</span>
-                <span>${(totalAmount / 100).toFixed(2)}</span>
-              </div>
-
-              {stripeError && (
-                <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-3 py-2">
-                  {stripeError}
-                </div>
+              {!isPaid && (
+                <Button
+                  onClick={handleStripeCharge}
+                  disabled={stripeLoading}
+                  className="w-full"
+                >
+                  {stripeLoading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      Processing…
+                    </span>
+                  ) : (
+                    'Charge via Stripe'
+                  )}
+                </Button>
               )}
-
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate({ to: '/invoice/$jobId', params: { jobId: jobId!.toString() } })}
-                >
-                  <FileText size={14} className="mr-1" />
-                  Invoice
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleStripeCheckout}
-                  disabled={stripeLoading || totalAmount === 0}
-                >
-                  {stripeLoading
-                    ? <Loader2 size={14} className="animate-spin mr-1" />
-                    : <CreditCard size={14} className="mr-1" />}
-                  Charge
-                </Button>
-              </div>
+              {stripeError && (
+                <p className="text-xs text-destructive">{stripeError}</p>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {/* Delete — only available after job is saved */}
+        {/* Generate Estimate */}
         {!isNew && (
           <Button
-            variant="destructive"
+            variant="outline"
             className="w-full"
-            onClick={handleDelete}
+            onClick={() => navigate({ to: `/jobs/${jobId}/invoice` })}
           >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete Job
+            <FileText className="h-4 w-4 mr-2" />
+            Generate Estimate / Invoice
           </Button>
         )}
 
-        {/* Hint for new jobs */}
-        {isNew && (
-          <p className="text-xs text-muted-foreground text-center">
-            Save the job first, then you can add labor, parts, and photos.
-          </p>
-        )}
+        {/* Save */}
+        <Button onClick={handleSave} disabled={saving} className="w-full">
+          {saving ? (
+            <span className="flex items-center gap-2">
+              <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+              Saving…
+            </span>
+          ) : (
+            isNew ? 'Create Job' : 'Save Changes'
+          )}
+        </Button>
       </div>
     </div>
   );

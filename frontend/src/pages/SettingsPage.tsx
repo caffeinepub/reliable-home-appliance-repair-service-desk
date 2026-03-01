@@ -1,9 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Plus, Trash2, Edit2, Check, X, Shield, CreditCard, Eye, EyeOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import {
   useListLaborRates,
   useCreateLaborRate,
@@ -11,369 +7,328 @@ import {
   useDeleteLaborRate,
   useIsStripeConfigured,
   useSetStripeConfiguration,
+  useGetCallerUserProfile,
+  useAssignUserRole,
 } from '../hooks/useQueries';
-import { useInternetIdentity } from '../hooks/useInternetIdentity';
-import { useQueryClient } from '@tanstack/react-query';
-import { RateType } from '../backend';
-import type { LaborRate } from '../backend';
+import { RateType, UserRole } from '../backend';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Plus, Trash2, Settings, CreditCard, DollarSign, Users, UserPlus, X } from 'lucide-react';
+import { Principal } from '@dfinity/principal';
 
-// IMPORTANT: This is the stable owner principal. Do NOT change this value.
-// Owner: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe
 const OWNER_PRINCIPAL = 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe';
 
 export default function SettingsPage() {
-  const { identity, clear } = useInternetIdentity();
-  const queryClient = useQueryClient();
+  const { identity } = useInternetIdentity();
   const isOwner = identity?.getPrincipal().toString() === OWNER_PRINCIPAL;
 
+  const { data: userProfile } = useGetCallerUserProfile();
   const { data: laborRates = [], isLoading: ratesLoading } = useListLaborRates();
   const { data: stripeConfigured } = useIsStripeConfigured();
-  const createLaborRate = useCreateLaborRate();
-  const updateLaborRate = useUpdateLaborRate();
-  const deleteLaborRate = useDeleteLaborRate();
-  const setStripeConfiguration = useSetStripeConfiguration();
+
+  const createRate = useCreateLaborRate();
+  const updateRate = useUpdateLaborRate();
+  const deleteRate = useDeleteLaborRate();
+  const setStripeConfig = useSetStripeConfiguration();
+  const assignRole = useAssignUserRole();
 
   // Labor rate form
-  const [showAddRate, setShowAddRate] = useState(false);
   const [newRateName, setNewRateName] = useState('');
   const [newRateType, setNewRateType] = useState<RateType>(RateType.hourly);
   const [newRateAmount, setNewRateAmount] = useState('');
-  const [editingRateId, setEditingRateId] = useState<string | null>(null);
-  const [editRateName, setEditRateName] = useState('');
-  const [editRateType, setEditRateType] = useState<RateType>(RateType.hourly);
-  const [editRateAmount, setEditRateAmount] = useState('');
+  const [rateError, setRateError] = useState('');
 
   // Stripe form
   const [stripeKey, setStripeKey] = useState('');
-  const [stripeCountries, setStripeCountries] = useState('US');
-  const [showStripeKey, setShowStripeKey] = useState(false);
-  const [stripeSaved, setStripeSaved] = useState(false);
   const [stripeError, setStripeError] = useState('');
+  const [stripeSaved, setStripeSaved] = useState(false);
 
-  const handleLogout = async () => {
-    await clear();
-    queryClient.clear();
-  };
+  // Authorized users
+  const [newPrincipal, setNewPrincipal] = useState('');
+  const [authorizedUsers, setAuthorizedUsers] = useState<string[]>([]);
+  const [userError, setUserError] = useState('');
+  const [addingUser, setAddingUser] = useState(false);
 
-  const handleAddRate = async () => {
-    if (!newRateName || !newRateAmount) return;
-    const amountCents = Math.round(parseFloat(newRateAmount) * 100);
-    await createLaborRate.mutateAsync({
-      id: BigInt(Date.now()),
-      name: newRateName,
-      rateType: newRateType,
-      amount: BigInt(amountCents),
-    });
-    setNewRateName('');
-    setNewRateAmount('');
-    setShowAddRate(false);
-  };
-
-  const handleEditRate = (rate: LaborRate) => {
-    setEditingRateId(rate.id.toString());
-    setEditRateName(rate.name);
-    setEditRateType(rate.rateType);
-    setEditRateAmount((Number(rate.amount) / 100).toFixed(2));
-  };
-
-  const handleSaveEdit = async (rate: LaborRate) => {
-    const amountCents = Math.round(parseFloat(editRateAmount) * 100);
-    await updateLaborRate.mutateAsync({
-      ...rate,
-      name: editRateName,
-      rateType: editRateType,
-      amount: BigInt(amountCents),
-    });
-    setEditingRateId(null);
-  };
-
-  const handleDeleteRate = async (rateId: bigint) => {
-    await deleteLaborRate.mutateAsync(rateId);
-  };
-
-  const handleSaveStripe = async () => {
-    setStripeError('');
-    if (!stripeKey.trim()) {
-      setStripeError('Please enter a Stripe secret key.');
-      return;
-    }
-    const countries = stripeCountries
-      .split(',')
-      .map(c => c.trim().toUpperCase())
-      .filter(Boolean);
-    if (countries.length === 0) {
-      setStripeError('Please enter at least one allowed country code.');
-      return;
-    }
+  const handleAddRate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRateName || !newRateAmount) { setRateError('Name and amount are required'); return; }
+    setRateError('');
     try {
-      await setStripeConfiguration.mutateAsync({
-        secretKey: stripeKey,
-        allowedCountries: countries,
+      const maxId = laborRates.reduce((max, r) => (r.id > max ? r.id : max), BigInt(0));
+      const newId = maxId + BigInt(1);
+      await createRate.mutateAsync({
+        id: newId,
+        name: newRateName,
+        rateType: newRateType,
+        amount: BigInt(Math.round(parseFloat(newRateAmount) * 100)),
       });
+      setNewRateName('');
+      setNewRateAmount('');
+    } catch (e: unknown) {
+      setRateError(e instanceof Error ? e.message : 'Failed to add rate');
+    }
+  };
+
+  const handleDeleteRate = async (id: bigint) => {
+    try {
+      await deleteRate.mutateAsync(id);
+    } catch (e: unknown) {
+      setRateError(e instanceof Error ? e.message : 'Failed to delete rate');
+    }
+  };
+
+  const handleSaveStripe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripeKey) { setStripeError('Stripe secret key is required'); return; }
+    setStripeError('');
+    try {
+      await setStripeConfig.mutateAsync({ secretKey: stripeKey, allowedCountries: ['US'] });
       setStripeSaved(true);
       setStripeKey('');
       setTimeout(() => setStripeSaved(false), 3000);
-    } catch (err: any) {
-      setStripeError(err.message || 'Failed to save Stripe configuration.');
+    } catch (e: unknown) {
+      setStripeError(e instanceof Error ? e.message : 'Failed to save Stripe configuration');
     }
   };
 
-  const principal = identity?.getPrincipal().toString() ?? '';
-  const maskedPrincipal = principal.length > 12
-    ? `${principal.slice(0, 6)}...${principal.slice(-6)}`
-    : principal;
+  const handleAddUser = async () => {
+    if (!newPrincipal.trim()) { setUserError('Please enter a principal ID'); return; }
+    setUserError('');
+    setAddingUser(true);
+    try {
+      const user = Principal.fromText(newPrincipal.trim());
+      await assignRole.mutateAsync({ user, role: UserRole.user });
+      setAuthorizedUsers((prev) => [...prev, newPrincipal.trim()]);
+      setNewPrincipal('');
+    } catch (e: unknown) {
+      setUserError(e instanceof Error ? e.message : 'Failed to add user. Make sure the principal ID is valid.');
+    } finally {
+      setAddingUser(false);
+    }
+  };
+
+  const handleRemoveUser = async (principalStr: string) => {
+    try {
+      const user = Principal.fromText(principalStr);
+      await assignRole.mutateAsync({ user, role: UserRole.guest });
+      setAuthorizedUsers((prev) => prev.filter((p) => p !== principalStr));
+    } catch (e: unknown) {
+      setUserError(e instanceof Error ? e.message : 'Failed to remove user');
+    }
+  };
+
+  // suppress unused warning for updateRate
+  void updateRate;
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center gap-3">
-        <Settings className="h-5 w-5 text-primary" />
-        <h1 className="font-semibold text-foreground">Settings</h1>
+      <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3">
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          <Settings className="h-5 w-5" />
+          Settings
+        </h1>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Profile */}
-        <div className="bg-card rounded-xl border border-border p-4 space-y-3">
-          <h2 className="font-semibold text-foreground">Profile</h2>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Principal ID</p>
-              <p className="text-xs font-mono text-foreground">{maskedPrincipal}</p>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Profile</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <span className="text-primary font-bold text-sm">
+                  {userProfile?.name?.charAt(0)?.toUpperCase() ?? '?'}
+                </span>
+              </div>
+              <div>
+                <p className="font-medium">{userProfile?.name ?? 'Unknown'}</p>
+                <p className="text-xs text-muted-foreground font-mono">
+                  {identity?.getPrincipal().toString().slice(0, 20)}…
+                </p>
+              </div>
+              {isOwner && <Badge variant="default" className="ml-auto bg-primary">Owner</Badge>}
             </div>
-            {isOwner && (
-              <Badge className="bg-primary/10 text-primary border-primary/20">
-                <Shield className="h-3 w-3 mr-1" />
-                Owner
-              </Badge>
-            )}
-          </div>
-          <Button variant="outline" className="w-full" onClick={handleLogout}>
-            Logout
-          </Button>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Labor Rates (Owner only) */}
+        {/* Labor Rates — owner only */}
         {isOwner && (
-          <div className="bg-card rounded-xl border border-border p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-foreground">Labor Rates</h2>
-              <Button size="sm" variant="outline" onClick={() => setShowAddRate(!showAddRate)}>
-                <Plus className="h-4 w-4 mr-1" />
-                Add Rate
-              </Button>
-            </div>
-
-            {showAddRate && (
-              <div className="space-y-2 p-3 bg-muted/30 rounded-lg border border-border">
-                <Input
-                  placeholder="Rate name"
-                  value={newRateName}
-                  onChange={e => setNewRateName(e.target.value)}
-                  className="h-8 text-sm"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <Select value={newRateType} onValueChange={(v) => setNewRateType(v as RateType)}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={RateType.hourly}>Hourly</SelectItem>
-                      <SelectItem value={RateType.flat}>Flat</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="Amount ($)"
-                    value={newRateAmount}
-                    onChange={e => setNewRateAmount(e.target.value)}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className="h-8 text-sm"
-                  />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Labor Rates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {ratesLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={handleAddRate} disabled={createLaborRate.isPending} className="flex-1">
-                    {createLaborRate.isPending ? 'Saving...' : 'Save'}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowAddRate(false)} className="flex-1">
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {ratesLoading ? (
-              <div className="flex justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-              </div>
-            ) : laborRates.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No labor rates configured.</p>
-            ) : (
-              <div className="space-y-2">
-                {laborRates.map(rate => (
-                  <div key={rate.id.toString()} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                    {editingRateId === rate.id.toString() ? (
-                      <div className="flex-1 space-y-2 mr-2">
-                        <Input
-                          value={editRateName}
-                          onChange={e => setEditRateName(e.target.value)}
-                          className="h-7 text-sm"
-                        />
-                        <div className="grid grid-cols-2 gap-2">
-                          <Select value={editRateType} onValueChange={(v) => setEditRateType(v as RateType)}>
-                            <SelectTrigger className="h-7 text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={RateType.hourly}>Hourly</SelectItem>
-                              <SelectItem value={RateType.flat}>Flat</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            value={editRateAmount}
-                            onChange={e => setEditRateAmount(e.target.value)}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            className="h-7 text-sm"
-                          />
-                        </div>
-                      </div>
-                    ) : (
+              ) : laborRates.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-2">No labor rates configured</p>
+              ) : (
+                <div className="space-y-2">
+                  {laborRates.map((rate) => (
+                    <div key={rate.id.toString()} className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
                       <div>
-                        <p className="text-sm font-medium text-foreground">{rate.name}</p>
+                        <p className="font-medium text-sm">{rate.name}</p>
                         <p className="text-xs text-muted-foreground">
                           ${(Number(rate.amount) / 100).toFixed(2)} / {rate.rateType === RateType.hourly ? 'hr' : 'flat'}
                         </p>
                       </div>
-                    )}
-                    <div className="flex gap-1">
-                      {editingRateId === rate.id.toString() ? (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-green-600"
-                            onClick={() => handleSaveEdit(rate)}
-                            disabled={updateLaborRate.isPending}
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => setEditingRateId(null)}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => handleEditRate(rate)}
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive"
-                            onClick={() => handleDeleteRate(rate.id)}
-                            disabled={deleteLaborRate.isPending}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </>
-                      )}
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteRate(rate.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+              <Separator />
+              <form onSubmit={handleAddRate} className="space-y-3">
+                <p className="text-sm font-medium">Add Labor Rate</p>
+                {rateError && <p className="text-xs text-destructive">{rateError}</p>}
+                <Input placeholder="Rate name (e.g. Standard Hourly)" value={newRateName} onChange={(e) => setNewRateName(e.target.value)} />
+                <div className="grid grid-cols-2 gap-2">
+                  <Select value={newRateType} onValueChange={(v) => setNewRateType(v as RateType)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={RateType.hourly}>Hourly</SelectItem>
+                      <SelectItem value={RateType.flat}>Flat Rate</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input placeholder="Amount ($)" type="number" step="0.01" value={newRateAmount} onChange={(e) => setNewRateAmount(e.target.value)} />
+                </div>
+                <Button type="submit" size="sm" className="w-full" disabled={createRate.isPending}>
+                  {createRate.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                  Add Rate
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Stripe Configuration (Owner only) */}
+        {/* Stripe Configuration — owner only */}
         {isOwner && (
-          <div className="bg-card rounded-xl border border-border p-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold text-foreground">Stripe Configuration</h2>
-              {stripeConfigured ? (
-                <Badge className="bg-green-100 text-green-700 border-green-200 ml-auto">Configured</Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground ml-auto">Not Configured</Badge>
-              )}
-            </div>
-
-            {stripeConfigured && (
-              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                <p className="text-sm text-green-700 dark:text-green-400">
-                  ✓ Stripe is configured. You can update the configuration below.
-                </p>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                Stripe Configuration
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">Status:</span>
+                <Badge variant={stripeConfigured ? 'default' : 'outline'} className={stripeConfigured ? 'bg-green-600 text-white' : ''}>
+                  {stripeConfigured ? 'Configured' : 'Not Configured'}
+                </Badge>
               </div>
-            )}
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-1 block">
-                  Stripe Secret Key
-                </label>
-                <div className="relative">
+              <form onSubmit={handleSaveStripe} className="space-y-3">
+                {stripeError && <p className="text-xs text-destructive">{stripeError}</p>}
+                <div>
+                  <Label>Stripe Secret Key</Label>
                   <Input
-                    type={showStripeKey ? 'text' : 'password'}
+                    className="mt-1"
+                    type="password"
                     placeholder="sk_live_... or sk_test_..."
                     value={stripeKey}
-                    onChange={e => setStripeKey(e.target.value)}
-                    className="pr-10"
+                    onChange={(e) => setStripeKey(e.target.value)}
                   />
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowStripeKey(!showStripeKey)}
-                  >
-                    {showStripeKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
                 </div>
-              </div>
+                <Button type="submit" size="sm" className="w-full" disabled={setStripeConfig.isPending}>
+                  {setStripeConfig.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  {stripeSaved ? '✓ Saved!' : stripeConfigured ? 'Update Stripe Key' : 'Save Stripe Key'}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-1 block">
-                  Allowed Countries (comma-separated)
-                </label>
-                <Input
-                  placeholder="US, CA, GB"
-                  value={stripeCountries}
-                  onChange={e => setStripeCountries(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Enter ISO country codes separated by commas (e.g., US, CA, GB)
+        {/* Authorized Users — owner only */}
+        {isOwner && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Authorized Users
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-muted/50 rounded-lg px-3 py-2">
+                <p className="text-xs text-muted-foreground">
+                  Add a user's Internet Identity principal here to grant them full access to the app (create/edit/view clients, jobs, and inventory). To find Ryan's principal, have him log in and share his principal ID from the profile section.
                 </p>
               </div>
 
-              {stripeError && (
-                <p className="text-sm text-destructive">{stripeError}</p>
+              {userError && <p className="text-xs text-destructive">{userError}</p>}
+
+              {authorizedUsers.length > 0 && (
+                <div className="space-y-2">
+                  {authorizedUsers.map((p) => (
+                    <div key={p} className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                      <p className="text-xs font-mono truncate flex-1 mr-2">{p}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveUser(p)}
+                        className="shrink-0"
+                      >
+                        <X className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               )}
 
-              {stripeSaved && (
-                <p className="text-sm text-green-600">✓ Stripe configuration saved successfully!</p>
-              )}
+              <div className="space-y-2">
+                <Label>Principal ID</Label>
+                <Input
+                  placeholder="Paste Internet Identity principal (e.g. xxxxx-xxxxx-...)"
+                  value={newPrincipal}
+                  onChange={(e) => setNewPrincipal(e.target.value)}
+                  className="font-mono text-xs"
+                />
+                <Button
+                  onClick={handleAddUser}
+                  disabled={addingUser || !newPrincipal.trim()}
+                  className="w-full"
+                  size="sm"
+                >
+                  {addingUser ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <UserPlus className="h-4 w-4 mr-1" />}
+                  Add Authorized User
+                </Button>
+              </div>
 
-              <Button
-                className="w-full"
-                onClick={handleSaveStripe}
-                disabled={setStripeConfiguration.isPending}
-              >
-                <CreditCard className="h-4 w-4 mr-2" />
-                {setStripeConfiguration.isPending ? 'Saving...' : stripeConfigured ? 'Update Stripe Configuration' : 'Save Stripe Configuration'}
-              </Button>
-            </div>
-          </div>
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  <strong>For Ryan:</strong> Have Ryan log in with his Internet Identity, then go to Settings and copy his principal ID. Paste it above to grant him full CRUD access to clients, jobs, and inventory.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         )}
+
+        {/* Footer */}
+        <div className="text-center text-xs text-muted-foreground py-4">
+          <p>© {new Date().getFullYear()} Reliable Home Appliance Repair LLC</p>
+          <p className="mt-1">
+            Built with ❤️ using{' '}
+            <a
+              href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground"
+            >
+              caffeine.ai
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

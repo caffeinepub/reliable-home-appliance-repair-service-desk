@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 43,
+  "projectStateVersion": 47,
   "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal). Ryan is the authorized user with CRUD abilities. Owner has full access confirmed. Building incrementally: core job/client management, role-based access control, labor rates/inventory on jobs, on-screen signature blob storage, and job photo capture (open camera). Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
   "architectural_notes": [
     "Single canister ICP app: Motoko backend + responsive mobile-first frontend",
@@ -544,6 +544,70 @@
         "REQ-89"
       ],
       "version": 1
+    },
+    {
+      "id": "feature-completely-rewrite-the-usesignaturepad-hook-frontend-src-hooks-usesignaturepad-ts-from-scratch-so-that-fingertip-touch-drawing-works-reliably-on-mobile-the-hook-must-1-accept-a-react-refobject-htmlcanvaselement-2-register-mousedown-mousemove-mouseup-and-mouseleave-listeners-for-desktop-3-register-touchstart-touchmove-and-touchend-listeners-via-addeventlistener-with-passive-false-so-preventdefault-is-called-on-every-touch-event-to-suppress-page-scrolling-4-map-touch-coordinates-to-canvas-relative-pixel-coordinates-using-getboundingclientrect-and-devicepixelratio-identical-to-mouse-coordinate-mapping-5-expose-clear-getsignaturebytes-returning-uint8array-of-the-png-blob-and-an-isempty-boolean-all-listeners-must-be-attached-in-a-useeffect-that-runs-when-canvasref-current-becomes-non-null-and-removed-on-cleanup-after-this-fix-a-user-must-be-able-to-draw-a-visible-stroke-on-any-canvas-signature-pad-using-a-fingertip-on-a-mobile-touchscreen",
+      "title": "Completely rewrite the useSignaturePad hook (frontend/src/hooks/useSignaturePad.ts) from scratch so that fingertip/touch drawing works reliably on mobile. The hook must: (1) accept a React RefObject<HTMLCanvasElement>; (2) register mousedown, mousemove, mouseup, and mouseleave listeners for desktop; (3) register touchstart, touchmove, and touchend listeners via addEventListener with { passive: false } so preventDefault() is called on every touch event to suppress page scrolling; (4) map touch coordinates to canvas-relative pixel coordinates using getBoundingClientRect() and devicePixelRatio, identical to mouse coordinate mapping; (5) expose clear(), getSignatureBytes() returning Uint8Array of the PNG blob, and an isEmpty boolean. All listeners must be attached in a useEffect that runs when canvasRef.current becomes non-null, and removed on cleanup. After this fix a user must be able to draw a visible stroke on any canvas signature pad using a fingertip on a mobile touchscreen.",
+      "reqIds": [
+        "REQ-90"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-job-detail-page-jobdetailpage-tsx-add-an-add-to-calendar-scheduling-section-that-allows-the-user-to-assign-the-job-a-scheduled-date-and-a-time-window-the-time-window-selector-must-offer-these-predefined-options-8-am-11-am-10-am-1-pm-11-am-2-pm-1-pm-4-pm-2-pm-5-pm-3-pm-6-pm-and-custom-when-custom-is-selected-display-two-datetime-picker-inputs-for-a-custom-start-time-and-end-time-selecting-a-predefined-window-and-a-date-must-compute-the-scheduledstart-and-scheduledend-timestamps-and-save-them-via-the-existing-updatejobschedule-backend-endpoint-display-the-currently-scheduled-window-on-the-job-detail-page-if-set",
+      "title": "On the Job Detail page (JobDetailPage.tsx), add an 'Add to Calendar' scheduling section that allows the user to assign the job a scheduled date and a time window. The time window selector must offer these predefined options: '8 AM – 11 AM', '10 AM – 1 PM', '11 AM – 2 PM', '1 PM – 4 PM', '2 PM – 5 PM', '3 PM – 6 PM', and 'Custom'. When 'Custom' is selected, display two datetime-picker inputs for a custom start time and end time. Selecting a predefined window and a date must compute the scheduledStart and scheduledEnd timestamps and save them via the existing updateJobSchedule backend endpoint. Display the currently scheduled window on the job detail page if set.",
+      "reqIds": [
+        "REQ-91"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-the-settings-screen-settingspage-tsx-add-a-section-for-managing-authorized-users-display-the-current-list-of-authorized-principals-include-an-input-field-where-the-owner-can-paste-a-new-principal-string-and-assign-it-the-authorized-role-via-the-existing-addauthorizedprincipal-backend-endpoint-include-a-remove-button-per-entry-that-calls-removeauthorizedprincipal-document-in-the-ui-that-ryan-s-internet-identity-principal-must-be-added-here-to-grant-ryan-crud-access-the-owner-check-gate-hardcoded-principal-q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe-must-continue-to-function-as-is",
+      "title": "In the Settings screen (SettingsPage.tsx), add a section for managing authorized users. Display the current list of authorized principals. Include an input field where the owner can paste a new principal string and assign it the #authorized role via the existing addAuthorizedPrincipal backend endpoint. Include a remove button per entry that calls removeAuthorizedPrincipal. Document in the UI that Ryan's Internet Identity principal must be added here to grant Ryan CRUD access. The owner-check gate (hardcoded principal 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe') must continue to function as-is.",
+      "reqIds": [
+        "REQ-92"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-clarify-and-update-the-stripe-charge-via-stripe-button-behavior-on-the-job-detail-page-jobdetailpage-tsx-the-button-must-call-the-createpaymentintent-backend-endpoint-with-the-job-s-post-tax-total-parts-labor-tax-in-cents-the-backend-createpaymentintent-endpoint-must-use-the-stored-stripe-secret-key-to-create-a-paymentintent-via-the-stripe-api-https-api-stripe-com-v1-payment-intents-and-return-the-client-secret-on-the-frontend-after-receiving-the-client-secret-display-a-clear-message-explaining-that-stripe-requires-a-payment-method-from-the-customer-the-system-cannot-charge-a-card-that-has-not-been-provided-show-a-copyable-payment-link-or-the-client-secret-so-the-operator-can-complete-the-charge-through-the-stripe-dashboard-or-share-a-payment-link-store-the-returned-payment-intent-id-on-the-job-via-updatejobpayment-and-show-the-paid-unpaid-badge-add-an-inline-ui-note-near-the-button-a-stripe-payment-intent-will-be-created-share-the-payment-link-with-your-customer-to-collect-payment",
+      "title": "Clarify and update the Stripe 'Charge via Stripe' button behavior on the Job Detail page (JobDetailPage.tsx). The button must call the createPaymentIntent backend endpoint with the job's post-tax total (parts + labor + tax in cents). The backend createPaymentIntent endpoint must use the stored Stripe secret key to create a PaymentIntent via the Stripe API (https://api.stripe.com/v1/payment_intents) and return the client_secret. On the frontend, after receiving the client_secret, display a clear message explaining that Stripe requires a payment method from the customer (the system cannot charge a card that has not been provided). Show a copyable payment link or the client_secret so the operator can complete the charge through the Stripe dashboard or share a payment link. Store the returned payment intent ID on the job via updateJobPayment and show the 'Paid' / 'Unpaid' badge. Add an inline UI note near the button: 'A Stripe payment intent will be created. Share the payment link with your customer to collect payment.'",
+      "reqIds": [
+        "REQ-93"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-transform-the-job-into-a-customer-facing-estimate-document-by-adding-the-following-to-the-job-detail-page-and-invoice-estimate-preview-page-1-a-damage-waiver-section-on-the-invoice-estimate-preview-that-displays-configurable-waiver-text-default-text-i-acknowledge-that-pre-existing-damage-cosmetic-issues-or-conditions-not-caused-by-the-repair-technician-are-not-the-responsibility-of-reliable-home-appliance-repair-llc-by-signing-below-i-agree-to-these-terms-the-waiver-text-must-be-displayed-prominently-on-the-invoice-estimate-preview-before-the-signature-section-2-a-canvas-based-customer-signature-pad-on-the-invoice-estimate-preview-page-invoicepreviewpage-tsx-that-uses-the-rewritten-usesignaturepad-hook-req-90-allowing-the-customer-to-sign-directly-on-the-estimate-the-signature-must-render-inline-in-the-customer-signature-area-below-the-waiver-text-and-be-included-in-the-downloaded-pdf-export-3-a-generate-estimate-button-on-the-job-detail-page-that-navigates-to-the-invoice-estimate-preview-with-all-job-details-parts-labor-tax-and-the-waiver-section-populated-the-signed-estimate-pdf-serves-as-the-customer-s-signed-work-order-and-damage-waiver",
+      "title": "Transform the job into a customer-facing estimate document by adding the following to the Job Detail page and Invoice/Estimate preview page: (1) A damage waiver section on the invoice/estimate preview that displays configurable waiver text (default text: 'I acknowledge that pre-existing damage, cosmetic issues, or conditions not caused by the repair technician are not the responsibility of Reliable Home Appliance Repair LLC. By signing below, I agree to these terms.'). The waiver text must be displayed prominently on the invoice/estimate preview before the signature section. (2) A canvas-based customer signature pad on the invoice/estimate preview page (InvoicePreviewPage.tsx) that uses the rewritten useSignaturePad hook (REQ-90), allowing the customer to sign directly on the estimate. The signature must render inline in the 'Customer Signature' area below the waiver text and be included in the downloaded PDF export. (3) A 'Generate Estimate' button on the Job Detail page that navigates to the invoice/estimate preview with all job details, parts, labor, tax, and the waiver section populated. The signed estimate PDF serves as the customer's signed work order and damage waiver.",
+      "reqIds": [
+        "REQ-94"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-remove-the-verbose-stripe-explanation-text-and-instructional-copy-from-the-job-detail-page-jobdetailpage-tsx-stripe-payment-section-the-section-must-only-display-the-charge-via-stripe-button-and-the-paid-unpaid-payment-status-badge-do-not-remove-the-button-or-badge-functionality-only-strip-the-explanatory-prose-and-ui-note-copy",
+      "title": "Remove the verbose Stripe explanation text and instructional copy from the Job Detail page (JobDetailPage.tsx) Stripe payment section. The section must only display the 'Charge via Stripe' button and the 'Paid' / 'Unpaid' payment status badge. Do not remove the button or badge functionality — only strip the explanatory prose and UI note copy.",
+      "reqIds": [
+        "REQ-95"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-move-the-damage-waiver-section-so-it-appears-exclusively-on-the-job-detail-page-jobdetailpage-tsx-as-an-optional-toggleable-field-not-on-the-invoice-estimate-preview-page-header-or-as-a-globally-visible-element-on-the-job-detail-page-add-a-damage-waiver-toggle-or-checkbox-that-when-enabled-stores-the-waiver-acceptance-on-the-job-record-the-default-waiver-text-is-i-acknowledge-that-pre-existing-damage-cosmetic-issues-or-conditions-not-caused-by-the-repair-technician-are-not-the-responsibility-of-reliable-home-appliance-repair-llc-by-signing-below-i-agree-to-these-terms-the-waiver-text-must-be-configurable-editable-inline-on-the-job-form-when-the-waiver-is-enabled-on-a-job-the-waiver-text-must-be-passed-through-to-the-invoice-estimate-preview-page-and-displayed-prominently-before-the-signature-section-on-the-estimate-invoice",
+      "title": "Move the damage waiver section so it appears exclusively on the Job Detail page (JobDetailPage.tsx) as an optional, toggleable field — not on the Invoice/Estimate preview page header or as a globally visible element. On the Job Detail page, add a 'Damage Waiver' toggle or checkbox that, when enabled, stores the waiver acceptance on the job record. The default waiver text is: 'I acknowledge that pre-existing damage, cosmetic issues, or conditions not caused by the repair technician are not the responsibility of Reliable Home Appliance Repair LLC. By signing below, I agree to these terms.' The waiver text must be configurable/editable inline on the job form. When the waiver is enabled on a job, the waiver text must be passed through to the Invoice/Estimate preview page and displayed prominently before the signature section on the estimate/invoice.",
+      "reqIds": [
+        "REQ-96"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-invoice-estimate-preview-page-invoicepreviewpage-tsx-once-a-customer-signs-and-saves-the-signature-the-saved-signature-image-must-render-inline-in-the-customer-signature-area-and-persist-so-it-is-included-in-all-export-and-share-actions-the-signed-invoice-must-be-shareable-via-four-channels-1-pdf-download-using-html2canvas-jspdf-the-existing-download-pdf-button-must-capture-the-full-invoice-including-the-rendered-signature-image-2-html-file-share-generate-a-self-contained-html-string-of-the-invoice-including-the-signature-as-a-base64-data-url-image-and-trigger-a-file-download-as-an-html-file-3-email-share-open-a-mailto-link-pre-populated-with-a-subject-line-your-estimate-from-reliable-home-appliance-repair-llc-and-a-plain-text-body-summarizing-job-details-client-name-date-total-and-a-note-that-the-signed-estimate-is-attached-4-sms-phone-share-open-an-sms-link-pre-populated-with-a-short-message-your-estimate-from-reliable-home-appliance-repair-llc-is-ready-total-amount-please-reply-to-confirm-all-four-share-actions-must-be-rendered-as-clearly-labeled-buttons-on-the-invoice-estimate-preview-page-for-html-and-pdf-shares-the-saved-signature-data-url-must-be-embedded-in-the-exported-content",
+      "title": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), once a customer signs and saves the signature, the saved signature image must render inline in the 'Customer Signature' area and persist so it is included in all export and share actions. The signed invoice must be shareable via four channels: (1) PDF download using html2canvas + jsPDF — the existing 'Download PDF' button must capture the full invoice including the rendered signature image; (2) HTML file share — generate a self-contained HTML string of the invoice (including the signature as a base64 data URL image) and trigger a file download as an .html file; (3) Email share — open a mailto: link pre-populated with a subject line 'Your Estimate from Reliable Home Appliance Repair LLC' and a plain-text body summarizing job details (client name, date, total, and a note that the signed estimate is attached); (4) SMS/phone share — open an sms: link pre-populated with a short message: 'Your estimate from Reliable Home Appliance Repair LLC is ready. Total: $[amount]. Please reply to confirm.' All four share actions must be rendered as clearly labeled buttons on the Invoice/Estimate preview page. For HTML and PDF shares the saved signature data URL must be embedded in the exported content.",
+      "reqIds": [
+        "REQ-97"
+      ],
+      "version": 1
     }
   ],
   "new_feature_requests": [
@@ -953,6 +1017,54 @@
       "reqIds": [
         "REQ-88"
       ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-72",
+      "summary": "Fix fingertip signature drawing on mobile — touch events must register strokes on the canvas signature pad on the invoice/estimate preview page.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-73",
+      "summary": "On the job creation/detail page, add a 'Add to Calendar' option with predefined time windows (8-11, 10-1, 11-2, 1-4, 2-5, 3-6) and a custom time window option to schedule the job.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-74",
+      "summary": "Add Ryan's principal as an #authorized role user so Ryan can log in and access CRUD operations. Provide a way to configure Ryan's principal from the Settings screen.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-75",
+      "summary": "Clarify and implement Stripe 'Charge Customer' button behavior: when clicked, it should create a Stripe payment intent and automatically charge the customer (not just store an ID). Confirm whether Stripe Elements or a redirect flow is needed.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-76",
+      "summary": "Transform the job record into a customer-facing estimate document. The estimate must include: all job/parts/labor details, a damage waiver section (with waiver text the customer must acknowledge), and a canvas-based customer signature field. The customer signs the estimate/waiver directly on screen. The signed estimate with waiver must be included in the PDF export.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-77",
+      "summary": "Remove the verbose Stripe explanation text from the Job Detail page UI — just show the Charge via Stripe button and Paid/Unpaid badge without extra instructional copy.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-78",
+      "summary": "Move the damage waiver section so it only appears as an option on the Job Detail page (not surfaced elsewhere). The waiver is a job-level toggle/field, not a global or always-visible element.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-79",
+      "summary": "Once a customer signs an estimate on the invoice/estimate preview page, the saved signature must flow through to the final invoice. The signed invoice must be shareable with the client via: PDF download, HTML file share, email, and phone number (SMS/MMS). Implement all four share options on the invoice preview page.",
+      "reqIds": [],
       "status": "pending"
     }
   ],

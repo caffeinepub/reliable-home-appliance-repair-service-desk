@@ -1,56 +1,64 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Fix 'Actor not available' error on client creation",
+  "title": "Damage waiver as job-only option, signed estimate flows to shareable invoice",
   "requirements": [
     {
-      "id": "REQ-87",
-      "summary": "Diagnose and fix the 'Actor not available' error on the New Client page by ensuring the actor is initialized before mutations and showing a loading state instead of an error banner when the actor is not yet ready",
+      "id": "REQ-95",
+      "summary": "Remove verbose Stripe explanation text and instructional copy from JobDetailPage payment section, retaining only the button and badge",
       "acceptanceCriteria": [
-        "When a fully authenticated user navigates to /clients/new, no 'Actor not available' error banner is displayed.",
-        "The Create button is not disabled while the actor is initializing — the page shows a spinner or loading indicator instead.",
-        "Once the actor is ready, pressing Create with valid field values calls createClient on the backend actor and navigates back to /clients on success.",
-        "If the actor genuinely fails to initialize, a user-friendly error message is shown (not a raw 'Actor not available' string)."
+        "No instructional text, inline notes, or explanatory copy appears near the Stripe button on the Job Detail page.",
+        "The 'Charge via Stripe' button remains visible and functional.",
+        "The 'Paid' / 'Unpaid' badge remains visible and reflects stripePaymentId presence."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/pages/ClientDetailPage.tsx",
+          "path": "frontend/src/pages/JobDetailPage.tsx",
           "operation": "modify",
-          "description": "Guard the createClient mutation call so it only fires when the actor is confirmed non-null. Replace the current error banner that shows 'Actor not available' with a loading indicator when the actor is initializing. Use the isFetching or isLoading state from useActor to determine when the actor is still being created, and show a spinner or 'Connecting...' message in place of the error banner. Once the actor is ready, allow the Create button to trigger the mutation. If the actor fails to initialize (error state), display a user-friendly error message such as 'Unable to connect. Please try again.' instead of the raw 'Actor not available' text. Ensure the createClient mutation receives the actor reference correctly and does not fall back to a no-op when the actor is undefined."
+          "description": "Remove all explanatory prose, instructional text, and UI notes from the Stripe payment section while preserving the 'Charge via Stripe' button and the 'Paid'/'Unpaid' payment status badge functionality."
         }
       ]
     },
     {
-      "id": "REQ-88",
-      "summary": "Ensure useActor creates the actor as soon as an authenticated identity is available, caches it via React Query, and returns a loading state (not an error) during initialization",
+      "id": "REQ-96",
+      "summary": "Move damage waiver to job-level toggle on JobDetailPage with editable text, pass enabled waiver to InvoicePreviewPage for display before signature",
       "acceptanceCriteria": [
-        "useActor returns a stable actor reference for the same identity without reinitialization on each render.",
-        "While the actor is being created, useActor returns { isLoading: true, actor: undefined } — no error is thrown.",
-        "After the actor is ready, isLoading is false and actor is the authenticated backend actor instance.",
-        "The actor instance is invalidated and recreated only when the identity changes (login/logout)."
+        "The damage waiver does not appear on any page other than JobDetailPage.tsx as a job-level option and on InvoicePreviewPage.tsx when the waiver is enabled for that job.",
+        "JobDetailPage.tsx has a damage waiver toggle/checkbox that is off by default.",
+        "When the waiver is toggled on, the editable waiver text field is revealed with the default text pre-populated.",
+        "The waiver enabled state and text are persisted on the job record (via updateJob or a dedicated backend field).",
+        "When navigating to the Invoice/Estimate preview from a job with waiver enabled, the waiver text appears prominently before the signature pad."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/hooks/useQueries.ts",
+          "path": "frontend/src/pages/JobDetailPage.tsx",
           "operation": "modify",
-          "description": "Review and adjust all mutation hooks (useCreateClient, useUpdateClient, useDeleteClient, useCreateJob, etc.) to ensure they do not throw 'Actor not available' errors when the actor is undefined. Instead, each mutation hook should check if the actor is available before calling mutationFn. If the actor is not ready, the mutation should either wait (by deferring the call) or gracefully handle the absence by returning a pending state. Ensure that mutations are wired to receive the actor reference from useActor and that they do not fall back to a no-op or throw an error when the actor is undefined during initialization. Verify that the enabled or retry logic does not cause premature error states."
+          "description": "Add a 'Damage Waiver' toggle/checkbox in the job form that is off by default. When toggled on, reveal an editable text area pre-populated with the default waiver text: 'I acknowledge that pre-existing damage, cosmetic issues, or conditions not caused by the repair technician are not the responsibility of Reliable Home Appliance Repair LLC. By signing below, I agree to these terms.' Store the waiver enabled state and custom text in the job's damageWaiver field using updateDamageWaiver backend method. Verify the backend interface usage instructions before implementing."
+        },
+        {
+          "path": "frontend/src/pages/InvoicePreviewPage.tsx",
+          "operation": "modify",
+          "description": "Query the damage waiver from the job record using getDamageWaiver backend method. If the waiver is enabled for the current job, display the waiver text prominently in a dedicated section positioned before the signature pad area. Verify the backend interface usage instructions before implementing."
         }
       ]
     },
     {
-      "id": "REQ-89",
-      "summary": "Guard the createClient mutation in ClientDetailPage so it only fires when the actor is confirmed non-null, and show a loading indicator on the button instead of propagating an error",
+      "id": "REQ-97",
+      "summary": "Enable signed invoice sharing via PDF download, HTML file export, email mailto link, and SMS deep link from InvoicePreviewPage",
       "acceptanceCriteria": [
-        "The Create button in new-client mode is never disabled due to actor unavailability after the user is authenticated.",
-        "Pressing Create when the actor is not yet ready shows a loading spinner on the button and retries once the actor is available, or displays a clear 'Please wait, connecting…' message.",
-        "When the actor is ready and the form has valid values, pressing Create calls actor.createClient with the correct argument shape and navigates to /clients on success.",
-        "Any error returned by the backend is surfaced as a visible error message in the form."
+        "After the customer saves their signature on the invoice preview, the signature image renders inline in the 'Customer Signature' section.",
+        "A 'Download PDF' button exports the full invoice (including the inline signature image) as a PDF via html2canvas + jsPDF.",
+        "A 'Download HTML' button generates a self-contained .html file of the invoice with the signature embedded as a base64 data URL and triggers a file download.",
+        "A 'Share via Email' button opens a mailto: link with subject 'Your Estimate from Reliable Home Appliance Repair LLC' and a pre-filled plain-text body containing client name, job date, post-tax total, and a message that the signed estimate is attached.",
+        "A 'Share via SMS' button opens an sms: link with the pre-populated message: 'Your estimate from Reliable Home Appliance Repair LLC is ready. Total: $[amount]. Please reply to confirm.' where [amount] is the post-tax total.",
+        "All four share buttons are clearly labeled and visible on the Invoice/Estimate preview page.",
+        "The PDF and HTML exports both include the saved signature image."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/pages/ClientDetailPage.tsx",
+          "path": "frontend/src/pages/InvoicePreviewPage.tsx",
           "operation": "modify",
-          "description": "Add logic to disable or show a loading spinner on the Create button when the actor is not yet available. Use the isFetching or isLoading state from useActor to determine if the actor is still initializing. While the actor is loading, display a spinner on the button and/or a 'Please wait, connecting…' message instead of allowing the user to press Create and encounter an error. Once the actor is ready, enable the button and allow the mutation to proceed. Ensure that the createClient mutation is only called when actor is non-null. If the mutation fails due to a backend error, display the error message inline in the form (e.g., in a toast or error banner below the Create button)."
+          "description": "After the customer saves their signature via the existing useStoreUserSignature hook, render the saved signature image inline in the 'Customer Signature' section using the signature data URL. Add four clearly labeled share action buttons: (1) 'Download PDF' — use html2canvas to capture the full invoice container including the rendered signature image, then convert to PDF with jsPDF and trigger download; (2) 'Download HTML' — generate a self-contained HTML string of the invoice with all styles inlined and the signature embedded as a base64 data URL image, then trigger a Blob-based file download as invoice.html; (3) 'Share via Email' — construct and navigate to a mailto: link with subject 'Your Estimate from Reliable Home Appliance Repair LLC' and body text containing client name, job date, post-tax total, and a note that the signed estimate is attached; (4) 'Share via SMS' — construct and navigate to an sms: link with the message 'Your estimate from Reliable Home Appliance Repair LLC is ready. Total: $[amount]. Please reply to confirm.' where [amount] is the formatted post-tax total. Ensure all four buttons are only enabled after the signature has been saved. Install html2canvas and jspdf packages if not already present."
         }
       ]
     }

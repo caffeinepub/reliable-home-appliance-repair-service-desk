@@ -126,9 +126,8 @@ export default function InventoryPage() {
     setEditError(null);
   };
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent, part: Part) => {
     e.preventDefault();
-    if (editingId === null) return;
     setEditError(null);
 
     if (!editForm.name.trim()) {
@@ -137,18 +136,15 @@ export default function InventoryPage() {
     }
 
     try {
-      const original = parts.find((p) => p.id === editingId);
-      const updatedPart: Part = {
-        id: editingId,
+      const updated: Part = {
+        ...part,
         name: editForm.name.trim(),
         partNumber: editForm.partNumber.trim(),
         description: editForm.description.trim(),
         quantityOnHand: BigInt(parseInt(editForm.quantityOnHand, 10) || 0),
         unitCost: BigInt(parseInt(editForm.unitCost, 10) || 0),
-        jobId: original?.jobId,
       };
-
-      await updatePart.mutateAsync(updatedPart);
+      await updatePart.mutateAsync(updated);
       setEditingId(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to update part.';
@@ -172,35 +168,22 @@ export default function InventoryPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const formatCurrency = (cents: bigint) =>
-    `$${(Number(cents) / 100).toFixed(2)}`;
-
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Package className="h-5 w-5 text-primary" />
-          <h1 className="text-lg font-semibold font-display">Inventory</h1>
-        </div>
+      <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          Inventory
+        </h1>
         {isOwner && (
-          <Button
-            size="sm"
-            onClick={() => {
-              setShowAddForm(true);
-              setAddForm(emptyForm());
-              setAddError(null);
-            }}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Add Part
+          <Button size="sm" onClick={() => { setShowAddForm(true); setAddError(null); setAddForm(emptyForm()); }}>
+            <Plus className="h-4 w-4 mr-1" /> Add Part
           </Button>
         )}
-      </header>
+      </div>
 
-      <main className="max-w-4xl mx-auto p-4 pb-24 space-y-4">
-        {/* Delete error */}
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
         {deleteError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -208,175 +191,147 @@ export default function InventoryPage() {
           </Alert>
         )}
 
-        {/* Add Part Form */}
+        {/* Add Form */}
         {showAddForm && isOwner && (
-          <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
-            <h2 className="font-semibold mb-3 text-foreground">New Part</h2>
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <h2 className="font-semibold text-sm">New Part</h2>
             {addError && (
-              <Alert variant="destructive" className="mb-3">
+              <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{addError}</AlertDescription>
               </Alert>
             )}
             <form onSubmit={handleAddSubmit} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="add-name">
-                    Name <span className="text-destructive">*</span>
-                  </Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Name *</Label>
                   <Input
-                    id="add-name"
+                    className="mt-1"
                     value={addForm.name}
                     onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
                     placeholder="Part name"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="add-partNumber">Part Number</Label>
+                <div>
+                  <Label>Part #</Label>
                   <Input
-                    id="add-partNumber"
+                    className="mt-1"
                     value={addForm.partNumber}
                     onChange={(e) => setAddForm({ ...addForm, partNumber: e.target.value })}
-                    placeholder="SKU / Part #"
+                    placeholder="SKU / Part number"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="add-qty">Quantity on Hand</Label>
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Input
+                  className="mt-1"
+                  value={addForm.description}
+                  onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
+                  placeholder="Optional description"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Qty on Hand</Label>
                   <Input
-                    id="add-qty"
+                    className="mt-1"
                     type="number"
                     min="0"
                     value={addForm.quantityOnHand}
                     onChange={(e) => setAddForm({ ...addForm, quantityOnHand: e.target.value })}
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="add-cost">Unit Cost (cents)</Label>
+                <div>
+                  <Label>Unit Cost (¢)</Label>
                   <Input
-                    id="add-cost"
+                    className="mt-1"
                     type="number"
                     min="0"
                     value={addForm.unitCost}
                     onChange={(e) => setAddForm({ ...addForm, unitCost: e.target.value })}
-                    placeholder="e.g. 1999 = $19.99"
+                    placeholder="In cents"
                   />
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="add-desc">Description</Label>
-                <Input
-                  id="add-desc"
-                  value={addForm.description}
-                  onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
-                  placeholder="Optional description"
-                />
-              </div>
-              <div className="flex gap-2 justify-end pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setShowAddForm(false);
-                    setAddError(null);
-                  }}
-                >
-                  Cancel
+              <div className="flex gap-2">
+                <Button type="submit" size="sm" disabled={createPart.isPending} className="flex-1">
+                  {createPart.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                  Save
                 </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={createPart.isPending}
-                  className="gap-2"
-                >
-                  {createPart.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
-                  Save Part
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowAddForm(false)} className="flex-1">
+                  <X className="h-4 w-4 mr-1" /> Cancel
                 </Button>
               </div>
             </form>
           </div>
         )}
 
-        {/* Loading */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {/* Parts List */}
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        )}
-
-        {/* Empty state */}
-        {!isLoading && parts.length === 0 && !showAddForm && (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-            <Package className="h-12 w-12 opacity-30" />
-            <p className="text-sm">No parts in inventory yet.</p>
-            {isOwner && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAddForm(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add your first part
-              </Button>
-            )}
+        ) : parts.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p className="font-medium">No parts in inventory</p>
+            {isOwner && <p className="text-sm mt-1">Click "Add Part" to get started</p>}
           </div>
-        )}
-
-        {/* Parts list */}
-        {!isLoading && parts.length > 0 && (
+        ) : (
           <div className="space-y-3">
             {parts.map((part) =>
               editingId === part.id ? (
-                // ── Inline edit row ──────────────────────────────────────
-                <div
-                  key={part.id.toString()}
-                  className="bg-card border border-primary/40 rounded-lg p-4 shadow-sm"
-                >
-                  <h3 className="font-medium mb-3 text-foreground">Edit Part</h3>
+                <div key={part.id.toString()} className="bg-card border border-primary/40 rounded-xl p-4 space-y-3">
+                  <h2 className="font-semibold text-sm">Edit Part</h2>
                   {editError && (
-                    <Alert variant="destructive" className="mb-3">
+                    <Alert variant="destructive">
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>{editError}</AlertDescription>
                     </Alert>
                   )}
-                  <form onSubmit={handleEditSubmit} className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label htmlFor={`edit-name-${part.id}`}>
-                          Name <span className="text-destructive">*</span>
-                        </Label>
+                  <form onSubmit={(e) => handleEditSubmit(e, part)} className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Name *</Label>
                         <Input
-                          id={`edit-name-${part.id}`}
+                          className="mt-1"
                           value={editForm.name}
                           onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                         />
                       </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`edit-pn-${part.id}`}>Part Number</Label>
+                      <div>
+                        <Label>Part #</Label>
                         <Input
-                          id={`edit-pn-${part.id}`}
+                          className="mt-1"
                           value={editForm.partNumber}
                           onChange={(e) => setEditForm({ ...editForm, partNumber: e.target.value })}
                         />
                       </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`edit-qty-${part.id}`}>Quantity on Hand</Label>
+                    </div>
+                    <div>
+                      <Label>Description</Label>
+                      <Input
+                        className="mt-1"
+                        value={editForm.description}
+                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Qty on Hand</Label>
                         <Input
-                          id={`edit-qty-${part.id}`}
+                          className="mt-1"
                           type="number"
                           min="0"
                           value={editForm.quantityOnHand}
                           onChange={(e) => setEditForm({ ...editForm, quantityOnHand: e.target.value })}
                         />
                       </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`edit-cost-${part.id}`}>Unit Cost (cents)</Label>
+                      <div>
+                        <Label>Unit Cost (¢)</Label>
                         <Input
-                          id={`edit-cost-${part.id}`}
+                          className="mt-1"
                           type="number"
                           min="0"
                           value={editForm.unitCost}
@@ -384,95 +339,57 @@ export default function InventoryPage() {
                         />
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`edit-desc-${part.id}`}>Description</Label>
-                      <Input
-                        id={`edit-desc-${part.id}`}
-                        value={editForm.description}
-                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                      />
-                    </div>
-                    <div className="flex gap-2 justify-end pt-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={cancelEdit}
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Cancel
-                      </Button>
-                      <Button
-                        type="submit"
-                        size="sm"
-                        disabled={updatePart.isPending}
-                        className="gap-2"
-                      >
-                        {updatePart.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Check className="h-4 w-4" />
-                        )}
+                    <div className="flex gap-2">
+                      <Button type="submit" size="sm" disabled={updatePart.isPending} className="flex-1">
+                        {updatePart.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
                         Save
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={cancelEdit} className="flex-1">
+                        <X className="h-4 w-4 mr-1" /> Cancel
                       </Button>
                     </div>
                   </form>
                 </div>
               ) : (
-                // ── Display row ──────────────────────────────────────────
-                <div
-                  key={part.id.toString()}
-                  className="bg-card border border-border rounded-lg p-4 shadow-sm flex items-start justify-between gap-3"
-                >
+                <div key={part.id.toString()} className="bg-card border border-border rounded-xl px-4 py-3 flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-foreground">{part.name}</span>
+                      <p className="font-medium text-sm">{part.name}</p>
                       {part.partNumber && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs font-mono">
                           {part.partNumber}
                         </Badge>
                       )}
-                      {Number(part.quantityOnHand) === 0 && (
-                        <Badge variant="destructive" className="text-xs">
-                          Out of Stock
-                        </Badge>
-                      )}
-                      {Number(part.quantityOnHand) > 0 && Number(part.quantityOnHand) <= 3 && (
+                      {part.jobId !== undefined && (
                         <Badge variant="secondary" className="text-xs">
-                          Low Stock
+                          On Job #{part.jobId.toString()}
                         </Badge>
                       )}
                     </div>
                     {part.description && (
-                      <p className="text-sm text-muted-foreground mt-1 truncate">
-                        {part.description}
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{part.description}</p>
                     )}
-                    <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-                      <span>Qty: <strong className="text-foreground">{part.quantityOnHand.toString()}</strong></span>
-                      <span>Cost: <strong className="text-foreground">{formatCurrency(part.unitCost)}</strong></span>
+                    <div className="flex gap-4 mt-1">
+                      <span className="text-xs text-muted-foreground">
+                        Qty: <span className="font-medium text-foreground">{part.quantityOnHand.toString()}</span>
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Cost: <span className="font-medium text-foreground">${(Number(part.unitCost) / 100).toFixed(2)}</span>
+                      </span>
                     </div>
                   </div>
                   {isOwner && (
                     <div className="flex gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => startEdit(part)}
-                        className="h-8 w-8"
-                      >
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(part)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => {
-                          setDeleteTarget(part);
-                          setDeleteError(null);
-                        }}
-                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        className="h-8 w-8"
+                        onClick={() => { setDeleteTarget(part); setDeleteError(null); }}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   )}
@@ -481,36 +398,24 @@ export default function InventoryPage() {
             )}
           </div>
         )}
-      </main>
+      </div>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Part</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete{' '}
-              <strong>{deleteTarget?.name}</strong>? This action cannot be undone.
+              Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {deleteError && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{deleteError}</AlertDescription>
-            </Alert>
-          )}
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
-              disabled={deletePart.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deletePart.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
+              {deletePart.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

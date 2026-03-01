@@ -2,10 +2,10 @@
   "kind": "feature_evidence_report",
   "features": [
     {
-      "featureId": "feature-in-usequeries-ts-and-useactor-ts-diagnose-and-fix-the-root-cause-of-the-actor-not-available-error-that-surfaces-on-the-new-client-page-clientdetailpage-in-create-mode-when-the-user-is-authenticated-via-internet-identity-the-actor-must-be-initialized-and-ready-before-any-mutation-createclient-is-attempted-if-the-actor-is-not-yet-ready-the-page-must-show-a-loading-state-rather-than-an-error-banner-once-the-actor-is-available-the-createclient-mutation-must-fire-successfully-when-the-create-button-is-pressed",
-      "featureTitle": "In useQueries.ts and useActor.ts, diagnose and fix the root cause of the 'Actor not available' error that surfaces on the New Client page (ClientDetailPage in create mode) when the user is authenticated via Internet Identity. The actor must be initialized and ready before any mutation (createClient) is attempted. If the actor is not yet ready, the page must show a loading state rather than an error banner. Once the actor is available, the createClient mutation must fire successfully when the Create button is pressed.",
+      "featureId": "feature-remove-the-verbose-stripe-explanation-text-and-instructional-copy-from-the-job-detail-page-jobdetailpage-tsx-stripe-payment-section-the-section-must-only-display-the-charge-via-stripe-button-and-the-paid-unpaid-payment-status-badge-do-not-remove-the-button-or-badge-functionality-only-strip-the-explanatory-prose-and-ui-note-copy",
+      "featureTitle": "Remove the verbose Stripe explanation text and instructional copy from the Job Detail page (JobDetailPage.tsx) Stripe payment section. The section must only display the 'Charge via Stripe' button and the 'Paid' / 'Unpaid' payment status badge. Do not remove the button or badge functionality — only strip the explanatory prose and UI note copy.",
       "files": [
-        "frontend/src/pages/ClientDetailPage.tsx"
+        "frontend/src/pages/JobDetailPage.tsx"
       ],
       "components": [
         "authorization@4.0.0",
@@ -20,15 +20,16 @@
         "http-outcalls@3.0.0"
       ],
       "testIds": [
-        "REQ-87"
+        "REQ-95"
       ],
       "confidence": "high"
     },
     {
-      "featureId": "feature-in-clientdetailpage-tsx-guard-the-createclient-mutation-call-so-it-only-fires-when-the-actor-is-confirmed-non-null-if-the-actor-is-not-yet-available-when-the-create-button-is-pressed-show-an-inline-loading-indicator-on-the-button-rather-than-propagating-an-error-wire-the-usecreateclient-mutation-from-usequeries-ts-so-it-receives-the-actor-reference-correctly-and-does-not-fall-back-to-a-no-op-when-the-actor-is-undefined",
-      "featureTitle": "In ClientDetailPage.tsx, guard the createClient mutation call so it only fires when the actor is confirmed non-null. If the actor is not yet available when the Create button is pressed, show an inline loading indicator on the button rather than propagating an error. Wire the useCreateClient mutation from useQueries.ts so it receives the actor reference correctly and does not fall back to a no-op when the actor is undefined.",
+      "featureId": "feature-move-the-damage-waiver-section-so-it-appears-exclusively-on-the-job-detail-page-jobdetailpage-tsx-as-an-optional-toggleable-field-not-on-the-invoice-estimate-preview-page-header-or-as-a-globally-visible-element-on-the-job-detail-page-add-a-damage-waiver-toggle-or-checkbox-that-when-enabled-stores-the-waiver-acceptance-on-the-job-record-the-default-waiver-text-is-i-acknowledge-that-pre-existing-damage-cosmetic-issues-or-conditions-not-caused-by-the-repair-technician-are-not-the-responsibility-of-reliable-home-appliance-repair-llc-by-signing-below-i-agree-to-these-terms-the-waiver-text-must-be-configurable-editable-inline-on-the-job-form-when-the-waiver-is-enabled-on-a-job-the-waiver-text-must-be-passed-through-to-the-invoice-estimate-preview-page-and-displayed-prominently-before-the-signature-section-on-the-estimate-invoice",
+      "featureTitle": "Move the damage waiver section so it appears exclusively on the Job Detail page (JobDetailPage.tsx) as an optional, toggleable field — not on the Invoice/Estimate preview page header or as a globally visible element. On the Job Detail page, add a 'Damage Waiver' toggle or checkbox that, when enabled, stores the waiver acceptance on the job record. The default waiver text is: 'I acknowledge that pre-existing damage, cosmetic issues, or conditions not caused by the repair technician are not the responsibility of Reliable Home Appliance Repair LLC. By signing below, I agree to these terms.' The waiver text must be configurable/editable inline on the job form. When the waiver is enabled on a job, the waiver text must be passed through to the Invoice/Estimate preview page and displayed prominently before the signature section on the estimate/invoice.",
       "files": [
-        "frontend/src/pages/ClientDetailPage.tsx"
+        "frontend/src/pages/InvoicePreviewPage.tsx",
+        "frontend/src/pages/JobDetailPage.tsx"
       ],
       "components": [
         "authorization@4.0.0",
@@ -43,7 +44,30 @@
         "http-outcalls@3.0.0"
       ],
       "testIds": [
-        "REQ-89"
+        "REQ-96"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-on-the-invoice-estimate-preview-page-invoicepreviewpage-tsx-once-a-customer-signs-and-saves-the-signature-the-saved-signature-image-must-render-inline-in-the-customer-signature-area-and-persist-so-it-is-included-in-all-export-and-share-actions-the-signed-invoice-must-be-shareable-via-four-channels-1-pdf-download-using-html2canvas-jspdf-the-existing-download-pdf-button-must-capture-the-full-invoice-including-the-rendered-signature-image-2-html-file-share-generate-a-self-contained-html-string-of-the-invoice-including-the-signature-as-a-base64-data-url-image-and-trigger-a-file-download-as-an-html-file-3-email-share-open-a-mailto-link-pre-populated-with-a-subject-line-your-estimate-from-reliable-home-appliance-repair-llc-and-a-plain-text-body-summarizing-job-details-client-name-date-total-and-a-note-that-the-signed-estimate-is-attached-4-sms-phone-share-open-an-sms-link-pre-populated-with-a-short-message-your-estimate-from-reliable-home-appliance-repair-llc-is-ready-total-amount-please-reply-to-confirm-all-four-share-actions-must-be-rendered-as-clearly-labeled-buttons-on-the-invoice-estimate-preview-page-for-html-and-pdf-shares-the-saved-signature-data-url-must-be-embedded-in-the-exported-content",
+      "featureTitle": "On the Invoice/Estimate preview page (InvoicePreviewPage.tsx), once a customer signs and saves the signature, the saved signature image must render inline in the 'Customer Signature' area and persist so it is included in all export and share actions. The signed invoice must be shareable via four channels: (1) PDF download using html2canvas + jsPDF — the existing 'Download PDF' button must capture the full invoice including the rendered signature image; (2) HTML file share — generate a self-contained HTML string of the invoice (including the signature as a base64 data URL image) and trigger a file download as an .html file; (3) Email share — open a mailto: link pre-populated with a subject line 'Your Estimate from Reliable Home Appliance Repair LLC' and a plain-text body summarizing job details (client name, date, total, and a note that the signed estimate is attached); (4) SMS/phone share — open an sms: link pre-populated with a short message: 'Your estimate from Reliable Home Appliance Repair LLC is ready. Total: $[amount]. Please reply to confirm.' All four share actions must be rendered as clearly labeled buttons on the Invoice/Estimate preview page. For HTML and PDF shares the saved signature data URL must be embedded in the exported content.",
+      "files": [
+        "frontend/src/pages/InvoicePreviewPage.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0",
+        "blob-storage@4.0.0",
+        "camera@1.0.0",
+        "stripe@3.0.0",
+        "http-outcalls@3.0.0"
+      ],
+      "testIds": [
+        "REQ-97"
       ],
       "confidence": "high"
     }
