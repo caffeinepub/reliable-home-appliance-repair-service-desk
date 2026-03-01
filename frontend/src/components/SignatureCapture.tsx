@@ -35,13 +35,20 @@ export default function SignatureCapture({ onComplete, onSkip }: SignatureCaptur
         </p>
       </div>
 
-      <div className="relative rounded-xl border-2 border-dashed border-border bg-background overflow-hidden">
+      {/* Canvas wrapper — explicit height so the canvas is never zero-sized */}
+      <div
+        className="relative rounded-xl border-2 border-dashed border-border bg-background overflow-hidden"
+        style={{ height: '160px' }}
+      >
         <canvas
           ref={canvasRef}
-          width={600}
-          height={200}
-          className="w-full touch-none cursor-crosshair"
-          style={{ display: 'block', height: '160px' }}
+          style={{
+            display: 'block',
+            width: '100%',
+            height: '100%',
+            touchAction: 'none',
+            cursor: 'crosshair',
+          }}
         />
         {isEmpty && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

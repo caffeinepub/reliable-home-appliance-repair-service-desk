@@ -1,37 +1,39 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-03-01T00:38:12.829Z",
-  "summary": "The diff addresses all five requirements. REQ-73 (ClientDetailPage create flow), REQ-74/75 (InventoryPage add/edit/delete flows), and REQ-77 (useQueries.ts mutation hooks) are clearly implemented in the frontend files. REQ-76 (backend blob storage) is addressed in backend/main.mo with stable storage and endpoint implementations. However, there are some gaps worth noting, particularly around the Part schema mismatch — REQ-74 specifies SKU/quantity/lowStockThreshold fields but the implementation uses partNumber/quantityOnHand with no lowStockThreshold. The blob storage implementation details are truncated so full verification is not possible.",
+  "generatedAt": "2026-03-01T03:11:56.583Z",
+  "summary": "The diff modifies ClientDetailPage.tsx to guard createClient mutations, show loading/connecting states, and map raw errors to friendly messages. The file-diff summaries reference useQueries.ts and useActor.ts changes, but only ClientDetailPage.tsx is shown in full detail. REQ-88 requirements around useActor.ts caching and stable references cannot be fully verified. REQ-87 and REQ-89 are largely addressed in ClientDetailPage.tsx, though some AC items have gaps.",
   "missing_requirements": [
     {
-      "id": "REQ-74",
-      "requirement": "The add-part form must call createPart with all entered values including name, SKU, quantity, lowStockThreshold, and unitCost.",
-      "reason": "The InventoryPage.tsx and Part type use 'partNumber' instead of 'SKU' and 'quantityOnHand' instead of 'quantity', and there is no 'lowStockThreshold' field anywhere in the diff. The backend Part type also lacks 'lowStockThreshold'. The AC explicitly requires lowStockThreshold to be submitted.",
+      "id": "REQ-88",
+      "requirement": "In useActor.ts, ensure the actor is created as soon as an authenticated identity is available and that React Query caches it so subsequent hook calls on the same page receive the same actor instance without re-triggering initialization. The actor query must not return undefined or null once the identity is confirmed; if initialization is in progress it must return a loading state, not an error state.",
+      "reason": "useActor.ts is listed as an immutable file and no changes to it appear in the diff. The AC items for REQ-88 (stable actor reference, loading state instead of error, invalidation only on identity change) cannot be confirmed as implemented from the diff.",
       "evidence": [
-        "frontend/src/pages/InventoryPage.tsx",
-        "backend/main.mo"
+        "frontend/src/hooks/useActor.ts"
+      ]
+    },
+    {
+      "id": "REQ-89",
+      "requirement": "Pressing Create when the actor is not yet ready shows a loading spinner on the button and retries once the actor is available.",
+      "reason": "In ClientDetailPage.tsx handleSave, when actorReady is false, the code sets an error message and returns early rather than showing a spinner on the button or automatically retrying once the actor becomes available.",
+      "evidence": [
+        "frontend/src/pages/ClientDetailPage.tsx"
       ]
     }
   ],
   "hallucinated_features": [
     {
-      "description": "A migration module (backend/migration.mo) was added as a no-op migration runner.",
-      "reason": "The build request does not mention adding a migration module or migration infrastructure. This is an extra file not requested by any requirement.",
+      "description": "Client-side BigInt ID generation using a reduce over existing clients with a Date.now() fallback for the first client.",
+      "reason": "The build request does not specify client-side ID generation logic. This is an implementation detail added beyond the stated requirements.",
       "evidence": [
-        "backend/migration.mo"
+        "frontend/src/pages/ClientDetailPage.tsx"
       ]
     }
   ],
   "confidence": 0.72,
   "changed_files": [
-    "backend/main.mo",
-    "backend/migration.mo",
     "frontend-file-summaries.txt",
-    "frontend/src/hooks/useQueries.ts",
     "frontend/src/pages/ClientDetailPage.tsx",
-    "frontend/src/pages/InventoryPage.tsx",
-    "frontend/src/pages/InvoicePreviewPage.tsx",
     "project_state.json"
   ]
 }

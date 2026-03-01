@@ -2,8 +2,8 @@
   "kind": "feature_evidence_report",
   "features": [
     {
-      "featureId": "feature-perform-a-root-cause-audit-of-clientdetailpage-tsx-in-create-mode-trace-the-full-call-chain-from-the-save-create-button-click-through-the-form-submission-handler-through-the-mutation-function-returned-by-usequeries-all-the-way-to-the-backend-actor-s-createclient-call-identify-and-fix-every-broken-link-in-that-chain-including-missing-event-preventdefault-incorrect-argument-shapes-disabled-button-states-actor-not-initialized-or-mutation-callbacks-not-firing-after-the-fix-submitting-the-new-client-form-must-call-createclient-on-the-backend-actor-with-all-entered-field-values-and-navigate-back-to-clients-on-success",
-      "featureTitle": "Perform a root-cause audit of ClientDetailPage.tsx in create mode. Trace the full call chain from the 'Save'/'Create' button click through the form submission handler, through the mutation function returned by useQueries, all the way to the backend actor's createClient call. Identify and fix every broken link in that chain — including missing event.preventDefault(), incorrect argument shapes, disabled button states, actor not initialized, or mutation callbacks not firing. After the fix, submitting the new-client form must call createClient on the backend actor with all entered field values and navigate back to '/clients' on success.",
+      "featureId": "feature-in-usequeries-ts-and-useactor-ts-diagnose-and-fix-the-root-cause-of-the-actor-not-available-error-that-surfaces-on-the-new-client-page-clientdetailpage-in-create-mode-when-the-user-is-authenticated-via-internet-identity-the-actor-must-be-initialized-and-ready-before-any-mutation-createclient-is-attempted-if-the-actor-is-not-yet-ready-the-page-must-show-a-loading-state-rather-than-an-error-banner-once-the-actor-is-available-the-createclient-mutation-must-fire-successfully-when-the-create-button-is-pressed",
+      "featureTitle": "In useQueries.ts and useActor.ts, diagnose and fix the root cause of the 'Actor not available' error that surfaces on the New Client page (ClientDetailPage in create mode) when the user is authenticated via Internet Identity. The actor must be initialized and ready before any mutation (createClient) is attempted. If the actor is not yet ready, the page must show a loading state rather than an error banner. Once the actor is available, the createClient mutation must fire successfully when the Create button is pressed.",
       "files": [
         "frontend/src/pages/ClientDetailPage.tsx"
       ],
@@ -20,15 +20,15 @@
         "http-outcalls@3.0.0"
       ],
       "testIds": [
-        "REQ-73"
+        "REQ-87"
       ],
       "confidence": "high"
     },
     {
-      "featureId": "feature-perform-a-root-cause-audit-of-inventorypage-tsx-for-the-add-part-create-flow-trace-the-full-call-chain-from-the-add-part-button-through-the-inline-form-submission-through-the-mutation-function-returned-by-usequeries-all-the-way-to-the-backend-actor-s-createpart-call-identify-and-fix-every-broken-link-including-missing-submit-handlers-wrong-argument-shapes-actor-not-ready-or-mutation-not-wired-after-the-fix-submitting-the-add-part-form-must-call-createpart-on-the-backend-actor-with-all-entered-values-name-sku-quantity-lowstockthreshold-unitcost-and-update-the-parts-list-on-success",
-      "featureTitle": "Perform a root-cause audit of InventoryPage.tsx for the 'Add Part' create flow. Trace the full call chain from the 'Add Part' button through the inline form submission, through the mutation function returned by useQueries, all the way to the backend actor's createPart call. Identify and fix every broken link — including missing submit handlers, wrong argument shapes, actor not ready, or mutation not wired. After the fix, submitting the add-part form must call createPart on the backend actor with all entered values (name, SKU, quantity, lowStockThreshold, unitCost) and update the parts list on success.",
+      "featureId": "feature-in-clientdetailpage-tsx-guard-the-createclient-mutation-call-so-it-only-fires-when-the-actor-is-confirmed-non-null-if-the-actor-is-not-yet-available-when-the-create-button-is-pressed-show-an-inline-loading-indicator-on-the-button-rather-than-propagating-an-error-wire-the-usecreateclient-mutation-from-usequeries-ts-so-it-receives-the-actor-reference-correctly-and-does-not-fall-back-to-a-no-op-when-the-actor-is-undefined",
+      "featureTitle": "In ClientDetailPage.tsx, guard the createClient mutation call so it only fires when the actor is confirmed non-null. If the actor is not yet available when the Create button is pressed, show an inline loading indicator on the button rather than propagating an error. Wire the useCreateClient mutation from useQueries.ts so it receives the actor reference correctly and does not fall back to a no-op when the actor is undefined.",
       "files": [
-        "frontend/src/pages/InventoryPage.tsx"
+        "frontend/src/pages/ClientDetailPage.tsx"
       ],
       "components": [
         "authorization@4.0.0",
@@ -43,53 +43,7 @@
         "http-outcalls@3.0.0"
       ],
       "testIds": [
-        "REQ-74"
-      ],
-      "confidence": "high"
-    },
-    {
-      "featureId": "feature-audit-and-fix-the-inventorypage-tsx-edit-part-flow-when-the-user-taps-an-existing-part-and-opens-the-edit-detail-view-the-save-action-must-call-updatepart-with-the-correct-part-id-and-updated-field-values-the-delete-action-must-call-deletepart-with-the-correct-part-id-ensure-both-mutation-calls-are-correctly-wired-to-the-backend-actor-via-the-usequeries-hooks-and-that-success-error-callbacks-update-the-ui-accordingly",
-      "featureTitle": "Audit and fix the InventoryPage.tsx edit-part flow. When the user taps an existing part and opens the edit/detail view, the save action must call updatePart with the correct part ID and updated field values. The delete action must call deletePart with the correct part ID. Ensure both mutation calls are correctly wired to the backend actor via the useQueries hooks and that success/error callbacks update the UI accordingly.",
-      "files": [
-        "frontend/src/pages/InventoryPage.tsx"
-      ],
-      "components": [
-        "authorization@4.0.0",
-        "core-infrastructure@1.0.2",
-        "shadcn-ui@1.0.0",
-        "build-template-react@1.0.0",
-        "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0",
-        "blob-storage@4.0.0",
-        "camera@1.0.0",
-        "stripe@3.0.0",
-        "http-outcalls@3.0.0"
-      ],
-      "testIds": [
-        "REQ-75"
-      ],
-      "confidence": "high"
-    },
-    {
-      "featureId": "feature-audit-the-usequeries-ts-hook-file-to-verify-that-the-mutation-hooks-for-createclient-createpart-updatepart-deletepart-addjobphoto-removejobphoto-and-storeusersignature-are-correctly-constructed-the-actor-reference-is-obtained-before-the-mutation-function-fires-the-correct-method-is-called-on-the-actor-and-the-argument-shape-exactly-matches-the-backend-endpoint-signature-fix-any-hook-that-returns-a-no-op-mutation-or-calls-the-wrong-method",
-      "featureTitle": "Audit the useQueries.ts hook file to verify that the mutation hooks for createClient, createPart, updatePart, deletePart, addJobPhoto, removeJobPhoto, and storeUserSignature are correctly constructed — the actor reference is obtained before the mutation function fires, the correct method is called on the actor, and the argument shape exactly matches the backend endpoint signature. Fix any hook that returns a no-op mutation or calls the wrong method.",
-      "files": [
-        "frontend/src/hooks/useQueries.ts"
-      ],
-      "components": [
-        "authorization@4.0.0",
-        "core-infrastructure@1.0.2",
-        "shadcn-ui@1.0.0",
-        "build-template-react@1.0.0",
-        "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0",
-        "blob-storage@4.0.0",
-        "camera@1.0.0",
-        "stripe@3.0.0",
-        "http-outcalls@3.0.0"
-      ],
-      "testIds": [
-        "REQ-77"
+        "REQ-89"
       ],
       "confidence": "high"
     }

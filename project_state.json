@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 33,
+  "projectStateVersion": 43,
   "summary": "Enterprise service desk mobile app for Reliable Home Appliance Repair LLC. Single canister ICP app with Motoko backend and responsive mobile-first frontend. Owner principal: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe (app-derived principal). Ryan is the authorized user with CRUD abilities. Owner has full access confirmed. Building incrementally: core job/client management, role-based access control, labor rates/inventory on jobs, on-screen signature blob storage, and job photo capture (open camera). Professional Green & silver theme. Labor Rates and Inventory accessible under Dashboard. Owner has exclusive access to change labor rates and view metrics.",
   "architectural_notes": [
     "Single canister ICP app: Motoko backend + responsive mobile-first frontend",
@@ -456,6 +456,94 @@
         "REQ-77"
       ],
       "version": 1
+    },
+    {
+      "id": "feature-redesign-the-invoicepreviewpage-tsx-layout-for-mobile-devices-the-invoice-header-must-be-restructured-so-the-business-name-logo-invoice-title-invoice-number-and-date-do-not-overlap-use-a-stacked-single-column-layout-for-the-header-on-mobile-logo-and-business-name-on-one-row-then-invoice-title-number-date-below-it-as-a-clearly-separated-block-all-header-text-must-be-fully-visible-without-clipping-or-collision-apply-proper-padding-minimum-16px-horizontal-center-the-invoice-card-within-the-viewport-and-ensure-the-card-does-not-overflow-the-screen-width-all-sections-bill-to-job-details-parts-labor-totals-signature-must-be-full-width-within-the-card-and-stack-vertically-on-small-screens-table-columns-part-qty-amount-and-description-rate-hrs-amount-must-either-use-proportional-widths-that-fit-within-the-mobile-card-width-or-reflow-into-a-compact-stacked-row-layout-to-prevent-text-overflow-the-invoice-card-background-must-remain-white-with-a-visible-border-shadow-for-separation-from-the-page-background",
+      "title": "Redesign the InvoicePreviewPage.tsx layout for mobile devices. The invoice header must be restructured so the business name, logo, 'INVOICE' title, invoice number, and date do not overlap. Use a stacked single-column layout for the header on mobile: logo and business name on one row, then 'INVOICE' title + number + date below it as a clearly separated block. All header text must be fully visible without clipping or collision. Apply proper padding (minimum 16px horizontal), center the invoice card within the viewport, and ensure the card does not overflow the screen width. All sections (Bill To, Job Details, Parts, Labor, Totals, Signature) must be full-width within the card and stack vertically on small screens. Table columns (Part, QTY, Amount and Description, Rate, Hrs, Amount) must either use proportional widths that fit within the mobile card width or reflow into a compact stacked row layout to prevent text overflow. The invoice card background must remain white with a visible border/shadow for separation from the page background.",
+      "reqIds": [
+        "REQ-78"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-invoicepreviewpage-tsx-estimates-invoice-screen-ensure-the-canvas-based-on-screen-signature-pad-is-fully-functional-for-client-signatures-on-estimates-the-signature-section-must-1-render-a-clearly-visible-canvas-element-that-responds-to-both-mouse-and-touch-finger-input-for-drawing-2-display-clear-and-save-signature-buttons-below-the-canvas-3-on-save-signature-read-the-canvas-content-as-a-blob-via-toblob-or-todataurl-store-it-using-the-existing-storeusersignature-backend-endpoint-via-the-usestoreusersignature-mutation-from-usequeries-ts-and-display-a-confirmation-message-signature-saved-4-render-the-saved-signature-image-inline-in-the-invoice-preview-in-a-dedicated-customer-signature-section-below-the-totals-5-include-the-saved-signature-image-in-the-downloaded-pdf-export-captured-by-html2canvas-the-canvas-must-be-sized-to-fill-the-full-card-width-on-mobile-100-width-minimum-120px-height-and-have-a-visible-border-so-the-user-knows-where-to-sign-wire-in-the-usesignaturepad-hook-and-or-signaturecapture-component-if-not-already-used-on-this-page",
+      "title": "On the InvoicePreviewPage.tsx (estimates/invoice screen), ensure the canvas-based on-screen signature pad is fully functional for client signatures on estimates. The signature section must: (1) render a clearly visible canvas element that responds to both mouse and touch/finger input for drawing; (2) display 'Clear' and 'Save Signature' buttons below the canvas; (3) on 'Save Signature', read the canvas content as a Blob via toBlob() or toDataURL(), store it using the existing storeUserSignature backend endpoint (via the useStoreUserSignature mutation from useQueries.ts), and display a confirmation message 'Signature saved'; (4) render the saved signature image inline in the invoice preview in a dedicated 'Customer Signature' section below the totals; (5) include the saved signature image in the downloaded PDF export (captured by html2canvas). The canvas must be sized to fill the full card width on mobile (100% width, minimum 120px height) and have a visible border so the user knows where to sign. Wire in the useSignaturePad hook and/or SignatureCapture component if not already used on this page.",
+      "reqIds": [
+        "REQ-79"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-fix-the-signature-pad-canvas-in-invoicepreviewpage-tsx-so-that-touch-finger-input-works-correctly-on-mobile-devices-the-canvas-must-respond-to-touchstart-touchmove-and-touchend-events-in-addition-to-mouse-events-with-preventdefault-called-on-touch-events-to-suppress-scrolling-while-drawing-the-usesignaturepad-hook-frontend-src-hooks-usesignaturepad-ts-must-attach-touch-event-listeners-to-the-canvas-ref-using-the-correct-passive-false-option-so-that-preventdefault-is-not-blocked-after-the-fix-a-user-must-be-able-to-draw-their-signature-with-a-finger-on-a-mobile-touchscreen-and-have-the-stroke-rendered-on-the-canvas",
+      "title": "Fix the signature pad canvas in InvoicePreviewPage.tsx so that touch/finger input works correctly on mobile devices. The canvas must respond to touchstart, touchmove, and touchend events in addition to mouse events, with preventDefault() called on touch events to suppress scrolling while drawing. The useSignaturePad hook (frontend/src/hooks/useSignaturePad.ts) must attach touch event listeners to the canvas ref using the correct passive: false option so that preventDefault() is not blocked. After the fix, a user must be able to draw their signature with a finger on a mobile touchscreen and have the stroke rendered on the canvas.",
+      "reqIds": [
+        "REQ-80"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-audit-and-fix-the-usesignaturepad-hook-frontend-src-hooks-usesignaturepad-ts-to-ensure-all-touch-event-listeners-touchstart-touchmove-touchend-are-registered-on-the-canvas-element-with-passive-false-so-preventdefault-can-be-called-map-touch-coordinates-to-canvas-relative-coordinates-using-getboundingclientrect-the-same-way-mouse-coordinates-are-mapped-the-hook-must-expose-clear-and-getsignaturebytes-utilities-that-work-regardless-of-whether-the-drawing-was-done-by-mouse-or-touch",
+      "title": "Audit and fix the useSignaturePad hook (frontend/src/hooks/useSignaturePad.ts) to ensure all touch event listeners (touchstart, touchmove, touchend) are registered on the canvas element with { passive: false } so preventDefault() can be called. Map touch coordinates to canvas-relative coordinates using getBoundingClientRect() the same way mouse coordinates are mapped. The hook must expose clear and getSignatureBytes utilities that work regardless of whether the drawing was done by mouse or touch.",
+      "reqIds": [
+        "REQ-81"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-the-usesignaturepad-hook-frontend-src-hooks-usesignaturepad-ts-ensure-all-three-touch-event-listeners-touchstart-touchmove-and-touchend-are-registered-on-the-canvas-element-with-passive-false-so-that-preventdefault-can-be-called-to-suppress-page-scrolling-while-the-user-draws-map-touch-coordinates-to-canvas-relative-coordinates-using-getboundingclientrect-exactly-as-mouse-coordinates-are-mapped-the-hook-must-expose-clear-and-getsignaturebytes-utilities-that-work-identically-whether-drawing-was-done-by-mouse-or-by-touch-after-this-fix-a-user-must-be-able-to-draw-a-visible-stroke-on-the-canvas-using-a-fingertip-on-a-mobile-touchscreen",
+      "title": "In the useSignaturePad hook (frontend/src/hooks/useSignaturePad.ts), ensure all three touch event listeners — touchstart, touchmove, and touchend — are registered on the canvas element with { passive: false } so that preventDefault() can be called to suppress page scrolling while the user draws. Map touch coordinates to canvas-relative coordinates using getBoundingClientRect() exactly as mouse coordinates are mapped. The hook must expose clear and getSignatureBytes utilities that work identically whether drawing was done by mouse or by touch. After this fix, a user must be able to draw a visible stroke on the canvas using a fingertip on a mobile touchscreen.",
+      "reqIds": [
+        "REQ-82"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-invoicepreviewpage-tsx-verify-that-the-signature-pad-canvas-element-is-correctly-wired-to-the-usesignaturepad-hook-or-signaturecapture-component-and-that-the-canvas-has-100-width-and-a-minimum-height-of-120px-with-a-visible-border-so-that-the-touch-drawable-area-fills-the-full-card-width-on-mobile-screens-confirm-the-canvas-ref-is-attached-before-touch-mouse-listeners-are-registered-no-null-ref-on-mount-after-the-fix-a-client-must-be-able-to-draw-a-signature-with-a-finger-on-the-invoice-screen-save-it-and-see-the-saved-signature-rendered-inline-in-the-customer-signature-area-below-the-totals",
+      "title": "In InvoicePreviewPage.tsx, verify that the signature pad canvas element is correctly wired to the useSignaturePad hook (or SignatureCapture component) and that the canvas has 100% width and a minimum height of 120px with a visible border, so that the touch-drawable area fills the full card width on mobile screens. Confirm the canvas ref is attached before touch/mouse listeners are registered (no null ref on mount). After the fix, a client must be able to draw a signature with a finger on the invoice screen, save it, and see the saved signature rendered inline in the 'Customer Signature' area below the totals.",
+      "reqIds": [
+        "REQ-83"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-completely-rewrite-the-usesignaturepad-hook-frontend-src-hooks-usesignaturepad-ts-from-scratch-the-hook-must-1-accept-a-react-refobject-htmlcanvaselement-2-register-mousedown-mousemove-mouseup-and-mouseleave-listeners-for-desktop-drawing-3-register-touchstart-touchmove-and-touchend-listeners-using-addeventlistener-with-passive-false-so-that-preventdefault-can-be-called-on-every-touch-event-to-suppress-page-scrolling-while-drawing-4-map-touch-coordinates-to-canvas-relative-pixel-coordinates-using-getboundingclientrect-and-the-devicepixelratio-dpr-identical-to-how-mouse-coordinates-are-mapped-5-expose-a-clear-function-that-wipes-the-canvas-6-expose-a-getsignaturebytes-function-that-returns-a-uint8array-of-the-canvas-png-blob-7-expose-an-isempty-boolean-that-is-true-when-no-strokes-have-been-drawn-the-hook-must-attach-all-event-listeners-after-the-canvas-ref-is-confirmed-non-null-use-a-useeffect-with-canvasref-current-as-a-dependency-all-touch-and-mouse-listeners-must-be-removed-on-cleanup",
+      "title": "Completely rewrite the useSignaturePad hook (frontend/src/hooks/useSignaturePad.ts) from scratch. The hook must: (1) accept a React RefObject<HTMLCanvasElement>; (2) register mousedown, mousemove, mouseup, and mouseleave listeners for desktop drawing; (3) register touchstart, touchmove, and touchend listeners using addEventListener with { passive: false } so that preventDefault() can be called on every touch event to suppress page scrolling while drawing; (4) map touch coordinates to canvas-relative pixel coordinates using getBoundingClientRect() and the devicePixelRatio (DPR), identical to how mouse coordinates are mapped; (5) expose a clear() function that wipes the canvas; (6) expose a getSignatureBytes() function that returns a Uint8Array of the canvas PNG blob; (7) expose an isEmpty boolean that is true when no strokes have been drawn. The hook must attach all event listeners after the canvas ref is confirmed non-null (use a useEffect with canvasRef.current as a dependency). All touch and mouse listeners must be removed on cleanup.",
+      "reqIds": [
+        "REQ-84"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-rewrite-invoicepreviewpage-tsx-to-directly-implement-the-signature-pad-section-without-relying-on-the-signaturecapture-component-use-the-usesignaturepad-hook-directly-the-signature-section-must-1-render-a-canvas-element-with-ref-wired-to-usesignaturepad-styled-with-width-100-minheight-120-border-1-5px-solid-4b7c59-borderradius-6-display-block-cursor-crosshair-touchaction-none-2-render-clear-and-save-signature-buttons-below-the-canvas-3-on-save-signature-call-getsignaturebytes-from-the-hook-convert-to-a-blob-call-the-usestoreusersignature-mutation-from-usequeries-ts-set-a-local-savedsignaturedataurl-state-from-the-canvas-todataurl-and-display-a-green-confirmation-message-signature-saved-4-render-the-saved-signature-as-an-img-tag-below-the-totals-in-a-customer-signature-section-when-savedsignaturedataurl-is-set-5-ensure-the-canvas-and-signature-image-are-both-captured-in-the-html2canvas-pdf-export-by-placing-them-inside-the-printable-invoice-div-the-canvas-must-not-have-a-null-ref-on-mount-initialize-the-ref-and-call-usesignaturepad-inside-the-component-body-not-inside-a-conditional",
+      "title": "Rewrite InvoicePreviewPage.tsx to directly implement the signature pad section without relying on the SignatureCapture component — use the useSignaturePad hook directly. The signature section must: (1) render a <canvas> element with ref wired to useSignaturePad, styled with width: '100%', minHeight: 120, border: '1.5px solid #4b7c59', borderRadius: 6, display: 'block', cursor: 'crosshair', touchAction: 'none'; (2) render 'Clear' and 'Save Signature' buttons below the canvas; (3) on 'Save Signature', call getSignatureBytes() from the hook, convert to a Blob, call the useStoreUserSignature mutation from useQueries.ts, set a local savedSignatureDataUrl state from the canvas toDataURL(), and display a green confirmation message 'Signature saved'; (4) render the saved signature as an <img> tag below the totals in a 'Customer Signature' section when savedSignatureDataUrl is set; (5) ensure the canvas and signature image are both captured in the html2canvas PDF export by placing them inside the printable invoice div. The canvas must not have a null ref on mount — initialize the ref and call useSignaturePad inside the component body, not inside a conditional.",
+      "reqIds": [
+        "REQ-85"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-audit-profilesetuppage-tsx-and-loginpage-tsx-to-verify-the-signature-capture-step-uses-the-rewritten-usesignaturepad-hook-req-84-ensure-the-canvas-element-in-those-pages-also-has-touchaction-none-applied-inline-and-that-the-canvas-ref-is-non-null-before-hook-listeners-are-attached-if-either-page-uses-the-signaturecapture-component-verify-the-component-passes-the-canvas-ref-correctly-to-usesignaturepad-and-that-touch-event-listeners-are-registered-with-passive-false-after-this-fix-a-user-must-be-able-to-draw-a-signature-with-a-finger-on-the-profile-setup-page-on-a-mobile-device",
+      "title": "Audit ProfileSetupPage.tsx and LoginPage.tsx to verify the signature capture step uses the rewritten useSignaturePad hook (REQ-84). Ensure the canvas element in those pages also has touchAction: 'none' applied inline and that the canvas ref is non-null before hook listeners are attached. If either page uses the SignatureCapture component, verify the component passes the canvas ref correctly to useSignaturePad and that touch event listeners are registered with { passive: false }. After this fix, a user must be able to draw a signature with a finger on the profile setup page on a mobile device.",
+      "reqIds": [
+        "REQ-86"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-usequeries-ts-and-useactor-ts-diagnose-and-fix-the-root-cause-of-the-actor-not-available-error-that-surfaces-on-the-new-client-page-clientdetailpage-in-create-mode-when-the-user-is-authenticated-via-internet-identity-the-actor-must-be-initialized-and-ready-before-any-mutation-createclient-is-attempted-if-the-actor-is-not-yet-ready-the-page-must-show-a-loading-state-rather-than-an-error-banner-once-the-actor-is-available-the-createclient-mutation-must-fire-successfully-when-the-create-button-is-pressed",
+      "title": "In useQueries.ts and useActor.ts, diagnose and fix the root cause of the 'Actor not available' error that surfaces on the New Client page (ClientDetailPage in create mode) when the user is authenticated via Internet Identity. The actor must be initialized and ready before any mutation (createClient) is attempted. If the actor is not yet ready, the page must show a loading state rather than an error banner. Once the actor is available, the createClient mutation must fire successfully when the Create button is pressed.",
+      "reqIds": [
+        "REQ-87"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-clientdetailpage-tsx-guard-the-createclient-mutation-call-so-it-only-fires-when-the-actor-is-confirmed-non-null-if-the-actor-is-not-yet-available-when-the-create-button-is-pressed-show-an-inline-loading-indicator-on-the-button-rather-than-propagating-an-error-wire-the-usecreateclient-mutation-from-usequeries-ts-so-it-receives-the-actor-reference-correctly-and-does-not-fall-back-to-a-no-op-when-the-actor-is-undefined",
+      "title": "In ClientDetailPage.tsx, guard the createClient mutation call so it only fires when the actor is confirmed non-null. If the actor is not yet available when the Create button is pressed, show an inline loading indicator on the button rather than propagating an error. Wire the useCreateClient mutation from useQueries.ts so it receives the actor reference correctly and does not fall back to a no-op when the actor is undefined.",
+      "reqIds": [
+        "REQ-89"
+      ],
+      "version": 1
     }
   ],
   "new_feature_requests": [
@@ -850,6 +938,20 @@
       "summary": "Audit the backend Motoko actor (backend/main.mo) to verify that all blob storage endpoints — addJobPhoto, removeJobPhoto, storeUserSignature, and getUserSignature — are correctly implemented with stable storage and that they are accessible to callers with at minimum the #authorized role (including the owner principal). Ensure that the stable TrieMap or array backing each blob store is declared as stable so data persists across upgrades. If any endpoint is missing, broken, or does not persist data correctly, fix it.",
       "reqIds": [
         "REQ-76"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-69",
+      "summary": "Improve invoice/estimate preview page layout for mobile: center content, improve spacing and readability on small screens.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-71",
+      "summary": "In useActor.ts, ensure the actor is created as soon as an authenticated identity is available and that React Query caches it so subsequent hook calls on the same page receive the same actor instance without re-triggering initialization. The actor query must not return undefined or null once the identity is confirmed; if initialization is in progress it must return a loading state, not an error state.",
+      "reqIds": [
+        "REQ-88"
       ],
       "status": "pending"
     }

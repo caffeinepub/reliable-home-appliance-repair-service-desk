@@ -1,13 +1,12 @@
 # Specification
 
 ## Summary
-**Goal:** Fix all broken create/save flows for clients and inventory parts, and repair blob storage endpoints so that data is correctly persisted.
+**Goal:** Fix the "Actor not available" error that appears on the New Client page when an authenticated user attempts to create a client.
 
 **Planned changes:**
-- Audit and fix `ClientDetailPage.tsx` create mode: ensure the Save/Create button calls `createClient` on the backend actor with correct arguments, handles `event.preventDefault()`, and navigates to `/clients` on success.
-- Audit and fix `InventoryPage.tsx` Add Part flow: ensure the submit button calls `createPart` with all entered fields (name, SKU, quantity, lowStockThreshold, unitCost) and refreshes the parts list on success.
-- Audit and fix `InventoryPage.tsx` edit-part flow: ensure saving calls `updatePart` with correct ID and fields, and deleting calls `deletePart` with the correct ID.
-- Audit and fix `useQueries.ts` mutation hooks for `createClient`, `createPart`, `updatePart`, `deletePart`, `addJobPhoto`, `removeJobPhoto`, and `storeUserSignature` to ensure each calls the correct actor method with the correct argument shape and a resolved actor reference.
-- Audit and fix the backend Motoko actor (`backend/main.mo`) to verify `addJobPhoto`, `removeJobPhoto`, `storeUserSignature`, and `getUserSignature` use stable storage and are accessible to authorized callers.
+- Fix `useActor.ts` to initialize the actor as soon as an authenticated identity is available, returning a loading state instead of an error while initialization is in progress, and caching the actor instance via React Query so it remains stable across renders
+- Fix `useQueries.ts` so the `useCreateClient` mutation correctly receives and uses the actor reference, with no fallback to a no-op when the actor is undefined
+- Update `ClientDetailPage.tsx` to guard the `createClient` mutation call so it only fires when the actor is confirmed non-null; show a loading spinner or "Please wait, connecting…" message on the Create button while the actor is initializing instead of displaying an error banner
+- Replace the raw "Actor not available" error banner with a user-friendly message if the actor genuinely fails to initialize
 
-**User-visible outcome:** Users can create new clients, add new inventory parts, edit and delete existing parts, and have all photo/signature blobs correctly saved and persisted across canister upgrades.
+**User-visible outcome:** An authenticated user can navigate to the New Client page without seeing an "Actor not available" error. The page shows a loading indicator while the actor initializes, and pressing Create with valid fields successfully creates the client and navigates back to the Clients list.

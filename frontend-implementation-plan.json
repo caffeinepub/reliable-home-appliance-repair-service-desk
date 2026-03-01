@@ -1,72 +1,56 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Fix Client Create Save and Inventory Create/Edit — Full CRUD & Blob Storage Repair",
+  "title": "Fix 'Actor not available' error on client creation",
   "requirements": [
     {
-      "id": "REQ-73",
-      "summary": "Fix ClientDetailPage.tsx create mode to properly call createClient and navigate on success",
+      "id": "REQ-87",
+      "summary": "Diagnose and fix the 'Actor not available' error on the New Client page by ensuring the actor is initialized before mutations and showing a loading state instead of an error banner when the actor is not yet ready",
       "acceptanceCriteria": [
-        "Clicking 'Save'/'Create' on a new client form calls the backend createClient endpoint with the correct arguments.",
-        "On successful createClient call, the user is navigated back to '/clients'.",
-        "Error states are surfaced to the user if createClient fails.",
-        "The Save button is never in a permanently disabled state in create mode.",
-        "event.preventDefault() is called to prevent unintended page reloads."
+        "When a fully authenticated user navigates to /clients/new, no 'Actor not available' error banner is displayed.",
+        "The Create button is not disabled while the actor is initializing — the page shows a spinner or loading indicator instead.",
+        "Once the actor is ready, pressing Create with valid field values calls createClient on the backend actor and navigates back to /clients on success.",
+        "If the actor genuinely fails to initialize, a user-friendly error message is shown (not a raw 'Actor not available' string)."
       ],
       "file_operations": [
         {
           "path": "frontend/src/pages/ClientDetailPage.tsx",
           "operation": "modify",
-          "description": "Audit and fix the form submission handler for create mode. Ensure event.preventDefault() is called at the top of the handler. Verify the createClient mutation from useQueries is correctly invoked with all form field values (name, email, phone, address, notes, googleReviewUrl). Confirm the mutation's onSuccess callback navigates to '/clients' using the router. Remove any logic that permanently disables the Save button in create mode. Add visible error feedback if createClient fails. Verify the create client mutation hook in useQueries.ts is properly calling actor.createClient() before implementing."
+          "description": "Guard the createClient mutation call so it only fires when the actor is confirmed non-null. Replace the current error banner that shows 'Actor not available' with a loading indicator when the actor is initializing. Use the isFetching or isLoading state from useActor to determine when the actor is still being created, and show a spinner or 'Connecting...' message in place of the error banner. Once the actor is ready, allow the Create button to trigger the mutation. If the actor fails to initialize (error state), display a user-friendly error message such as 'Unable to connect. Please try again.' instead of the raw 'Actor not available' text. Ensure the createClient mutation receives the actor reference correctly and does not fall back to a no-op when the actor is undefined."
         }
       ]
     },
     {
-      "id": "REQ-74",
-      "summary": "Fix InventoryPage.tsx 'Add Part' inline form to properly call createPart and refresh the list",
+      "id": "REQ-88",
+      "summary": "Ensure useActor creates the actor as soon as an authenticated identity is available, caches it via React Query, and returns a loading state (not an error) during initialization",
       "acceptanceCriteria": [
-        "Clicking the submit/save button on the Add Part inline form calls the backend createPart endpoint with all entered field values.",
-        "The parts list refreshes/updates after a successful createPart call.",
-        "Error states are surfaced if createPart fails.",
-        "The submit button is not disabled or a no-op in add mode."
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/pages/InventoryPage.tsx",
-          "operation": "modify",
-          "description": "Audit and fix the Add Part inline form submission handler. Ensure the form's onSubmit or button's onClick properly prevents default behavior and calls the createPart mutation from useQueries with all entered fields (name, partNumber, description, quantityOnHand, unitCost, lowStockThreshold if present). Confirm the mutation's onSuccess callback triggers a query invalidation or refetch to update the parts list. Add visible error feedback if createPart fails. Ensure the submit button is enabled and functional in add mode. Verify the create part mutation hook in useQueries.ts is properly calling actor.createPart() before implementing."
-        }
-      ]
-    },
-    {
-      "id": "REQ-75",
-      "summary": "Fix InventoryPage.tsx edit and delete flows to properly call updatePart and deletePart",
-      "acceptanceCriteria": [
-        "Saving an edited part calls updatePart with the correct id and updated fields.",
-        "Deleting a part calls deletePart with the correct id and removes it from the list.",
-        "Success and error states are visibly communicated to the user."
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/pages/InventoryPage.tsx",
-          "operation": "modify",
-          "description": "Audit and fix the edit-part save handler. Ensure the updatePart mutation from useQueries is called with the correct part id and all updated field values. Confirm the mutation's onSuccess callback updates the UI (invalidates queries or closes the edit dialog). Audit and fix the delete-part handler to call the deletePart mutation with the correct part id. Ensure both mutations provide visible success/error feedback to the user. Verify the update and delete part mutation hooks in useQueries.ts are properly calling actor.updatePart() and actor.deletePart() before implementing."
-        }
-      ]
-    },
-    {
-      "id": "REQ-77",
-      "summary": "Audit and fix useQueries.ts mutation hooks for createClient, createPart, updatePart, deletePart, addJobPhoto, removeJobPhoto, and storeUserSignature",
-      "acceptanceCriteria": [
-        "Each mutation hook in useQueries.ts calls the correct actor method with the correct argument shape.",
-        "The actor reference is resolved (not null/undefined) before the mutation body executes.",
-        "Mutations for createClient, createPart, updatePart, deletePart, addJobPhoto, removeJobPhoto, and storeUserSignature are all functional and non-no-op."
+        "useActor returns a stable actor reference for the same identity without reinitialization on each render.",
+        "While the actor is being created, useActor returns { isLoading: true, actor: undefined } — no error is thrown.",
+        "After the actor is ready, isLoading is false and actor is the authenticated backend actor instance.",
+        "The actor instance is invalidated and recreated only when the identity changes (login/logout)."
       ],
       "file_operations": [
         {
           "path": "frontend/src/hooks/useQueries.ts",
           "operation": "modify",
-          "description": "Audit each mutation hook (useCreateClient, useCreatePart, useUpdatePart, useDeletePart, useAddJobPhoto, useRemoveJobPhoto, useStoreUserSignature). For each mutation, verify: 1) the actor reference is checked and throws an error if not available before calling any actor method; 2) the correct actor method is invoked (e.g., actor.createClient, actor.createPart, etc.); 3) the argument shape exactly matches the backend interface signature (refer to backend.d.ts types). Fix any mutation that is a no-op, calls the wrong method, or passes incorrect arguments. Ensure all mutations return the expected result or void as appropriate."
+          "description": "Review and adjust all mutation hooks (useCreateClient, useUpdateClient, useDeleteClient, useCreateJob, etc.) to ensure they do not throw 'Actor not available' errors when the actor is undefined. Instead, each mutation hook should check if the actor is available before calling mutationFn. If the actor is not ready, the mutation should either wait (by deferring the call) or gracefully handle the absence by returning a pending state. Ensure that mutations are wired to receive the actor reference from useActor and that they do not fall back to a no-op or throw an error when the actor is undefined during initialization. Verify that the enabled or retry logic does not cause premature error states."
+        }
+      ]
+    },
+    {
+      "id": "REQ-89",
+      "summary": "Guard the createClient mutation in ClientDetailPage so it only fires when the actor is confirmed non-null, and show a loading indicator on the button instead of propagating an error",
+      "acceptanceCriteria": [
+        "The Create button in new-client mode is never disabled due to actor unavailability after the user is authenticated.",
+        "Pressing Create when the actor is not yet ready shows a loading spinner on the button and retries once the actor is available, or displays a clear 'Please wait, connecting…' message.",
+        "When the actor is ready and the form has valid values, pressing Create calls actor.createClient with the correct argument shape and navigates to /clients on success.",
+        "Any error returned by the backend is surfaced as a visible error message in the form."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/pages/ClientDetailPage.tsx",
+          "operation": "modify",
+          "description": "Add logic to disable or show a loading spinner on the Create button when the actor is not yet available. Use the isFetching or isLoading state from useActor to determine if the actor is still initializing. While the actor is loading, display a spinner on the button and/or a 'Please wait, connecting…' message instead of allowing the user to press Create and encounter an error. Once the actor is ready, enable the button and allow the mutation to proceed. Ensure that the createClient mutation is only called when actor is non-null. If the mutation fails due to a backend error, display the error message inline in the form (e.g., in a toast or error banner below the Create button)."
         }
       ]
     }

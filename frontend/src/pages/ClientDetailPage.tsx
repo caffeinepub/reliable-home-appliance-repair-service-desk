@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { ArrowLeft, Save, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, AlertCircle, Wifi } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,11 +11,15 @@ import {
   useCreateClient,
   useUpdateClient,
 } from '../hooks/useQueries';
+import { useActor } from '../hooks/useActor';
 
 export default function ClientDetailPage() {
   const { clientId } = useParams({ strict: false }) as { clientId?: string };
   const navigate = useNavigate();
   const isNew = !clientId || clientId === 'new';
+
+  const { actor, isFetching: actorFetching } = useActor();
+  const actorReady = !!actor && !actorFetching;
 
   const { data: clients = [], isLoading: clientsLoading } = useListClients();
   const createClient = useCreateClient();
@@ -50,6 +54,13 @@ export default function ClientDetailPage() {
     }
   }, [isNew, clientId, clients, clientsLoading, initialized]);
 
+  // Clear actor-not-available error once actor becomes ready
+  useEffect(() => {
+    if (actorReady && error === 'Unable to connect. Please try again.') {
+      setError(null);
+    }
+  }, [actorReady, error]);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -59,9 +70,13 @@ export default function ClientDetailPage() {
       return;
     }
 
+    if (!actorReady) {
+      setError('Please wait, connecting to the network…');
+      return;
+    }
+
     try {
       if (isNew) {
-        // Generate a new ID based on existing clients
         const newId =
           clients.length === 0
             ? BigInt(Date.now())
@@ -91,12 +106,17 @@ export default function ClientDetailPage() {
         navigate({ to: '/clients' });
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save client.';
+      const rawMsg = err instanceof Error ? err.message : 'Failed to save client.';
+      // Surface a friendly message instead of the raw actor error
+      const msg = rawMsg.toLowerCase().includes('actor not available')
+        ? 'Unable to connect. Please try again.'
+        : rawMsg;
       setError(msg);
     }
   };
 
   const isSaving = createClient.isPending || updateClient.isPending;
+  const buttonLoading = isSaving || actorFetching;
 
   if (!isNew && clientsLoading) {
     return (
@@ -127,18 +147,29 @@ export default function ClientDetailPage() {
           size="sm"
           className="gap-2"
         >
-          {isSaving ? (
+          {buttonLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Save className="h-4 w-4" />
           )}
-          {isNew ? 'Create' : 'Save'}
+          {actorFetching && !isSaving ? 'Connecting…' : isNew ? 'Create' : 'Save'}
         </Button>
       </header>
 
       {/* Form */}
       <main className="max-w-2xl mx-auto p-4 pb-24">
-        {error && (
+        {/* Actor connecting banner — shown only while actor is initializing */}
+        {actorFetching && (
+          <Alert className="mb-4 border-border bg-muted">
+            <Wifi className="h-4 w-4 text-muted-foreground" />
+            <AlertDescription className="text-muted-foreground">
+              Connecting to the network, please wait…
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Error banner — only shown for real errors, not actor-loading state */}
+        {error && !actorFetching && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
