@@ -1,29 +1,18 @@
-import { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import React, { useState } from 'react';
 import {
-  useIsOwner,
-  useListParts,
-  useCreatePart,
-  useUpdatePart,
-  useDeletePart,
-} from '../hooks/useQueries';
-import type { Part } from '../backend';
-import {
-  Package,
   Plus,
-  Search,
-  AlertTriangle,
   Pencil,
   Trash2,
-  X,
+  Package,
   Loader2,
+  AlertCircle,
   Check,
+  X,
 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,8 +22,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import {
+  useListParts,
+  useCreatePart,
+  useUpdatePart,
+  useDeletePart,
+  useIsOwner,
+} from '../hooks/useQueries';
+import type { Part } from '../backend';
 
 interface PartFormState {
   name: string;
@@ -44,463 +41,481 @@ interface PartFormState {
   unitCost: string;
 }
 
-const emptyPartForm: PartFormState = {
+const emptyForm = (): PartFormState => ({
   name: '',
   partNumber: '',
   description: '',
   quantityOnHand: '0',
   unitCost: '0',
-};
+});
 
-const LOW_STOCK_THRESHOLD = 3;
+function partToForm(part: Part): PartFormState {
+  return {
+    name: part.name,
+    partNumber: part.partNumber,
+    description: part.description,
+    quantityOnHand: part.quantityOnHand.toString(),
+    unitCost: part.unitCost.toString(),
+  };
+}
 
 export default function InventoryPage() {
   const isOwner = useIsOwner();
-  const { data: parts, isLoading: partsLoading } = useListParts();
+  const { data: parts = [], isLoading } = useListParts();
   const createPart = useCreatePart();
   const updatePart = useUpdatePart();
   const deletePart = useDeletePart();
 
-  const [search, setSearch] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState<PartFormState>(emptyPartForm);
+  const [addForm, setAddForm] = useState<PartFormState>(emptyForm());
+  const [addError, setAddError] = useState<string | null>(null);
+
   const [editingId, setEditingId] = useState<bigint | null>(null);
-  const [editForm, setEditForm] = useState<PartFormState>(emptyPartForm);
+  const [editForm, setEditForm] = useState<PartFormState>(emptyForm());
+  const [editError, setEditError] = useState<string | null>(null);
 
-  const getNextId = (): bigint => {
-    if (!parts || parts.length === 0) return BigInt(1);
-    const maxId = parts.reduce((max, p) => (p.id > max ? p.id : max), BigInt(0));
-    return maxId + BigInt(1);
-  };
+  const [deleteTarget, setDeleteTarget] = useState<Part | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const handleAdd = async (e: React.FormEvent) => {
+  // ── Add Part ──────────────────────────────────────────────────────────────
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addForm.name.trim()) return;
-    const newPart: Part = {
-      id: getNextId(),
-      name: addForm.name.trim(),
-      partNumber: addForm.partNumber.trim(),
-      description: addForm.description.trim(),
-      quantityOnHand: BigInt(Math.max(0, parseInt(addForm.quantityOnHand) || 0)),
-      unitCost: BigInt(Math.round(parseFloat(addForm.unitCost || '0') * 100)),
-      jobId: undefined,
-    };
+    setAddError(null);
+
+    if (!addForm.name.trim()) {
+      setAddError('Part name is required.');
+      return;
+    }
+
     try {
+      const newId =
+        parts.length === 0
+          ? BigInt(Date.now())
+          : parts.reduce((max, p) => (p.id > max ? p.id : max), parts[0].id) + 1n;
+
+      const newPart: Part = {
+        id: newId,
+        name: addForm.name.trim(),
+        partNumber: addForm.partNumber.trim(),
+        description: addForm.description.trim(),
+        quantityOnHand: BigInt(parseInt(addForm.quantityOnHand, 10) || 0),
+        unitCost: BigInt(parseInt(addForm.unitCost, 10) || 0),
+        jobId: undefined,
+      };
+
       await createPart.mutateAsync(newPart);
-      setAddForm(emptyPartForm);
+      setAddForm(emptyForm());
       setShowAddForm(false);
-    } catch (err) {
-      console.error('Failed to create part:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create part.';
+      setAddError(msg);
     }
   };
 
-  const handleEditStart = (part: Part) => {
+  // ── Edit Part ─────────────────────────────────────────────────────────────
+
+  const startEdit = (part: Part) => {
     setEditingId(part.id);
-    setEditForm({
-      name: part.name,
-      partNumber: part.partNumber,
-      description: part.description,
-      quantityOnHand: part.quantityOnHand.toString(),
-      unitCost: (Number(part.unitCost) / 100).toFixed(2),
-    });
+    setEditForm(partToForm(part));
+    setEditError(null);
   };
 
-  const handleEditSave = async (part: Part) => {
-    if (!editForm.name.trim()) return;
-    const updated: Part = {
-      id: part.id,
-      name: editForm.name.trim(),
-      partNumber: editForm.partNumber.trim(),
-      description: editForm.description.trim(),
-      quantityOnHand: BigInt(Math.max(0, parseInt(editForm.quantityOnHand) || 0)),
-      unitCost: BigInt(Math.round(parseFloat(editForm.unitCost || '0') * 100)),
-      jobId: part.jobId,
-    };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingId === null) return;
+    setEditError(null);
+
+    if (!editForm.name.trim()) {
+      setEditError('Part name is required.');
+      return;
+    }
+
     try {
-      await updatePart.mutateAsync(updated);
+      const original = parts.find((p) => p.id === editingId);
+      const updatedPart: Part = {
+        id: editingId,
+        name: editForm.name.trim(),
+        partNumber: editForm.partNumber.trim(),
+        description: editForm.description.trim(),
+        quantityOnHand: BigInt(parseInt(editForm.quantityOnHand, 10) || 0),
+        unitCost: BigInt(parseInt(editForm.unitCost, 10) || 0),
+        jobId: original?.jobId,
+      };
+
+      await updatePart.mutateAsync(updatedPart);
       setEditingId(null);
-    } catch (err) {
-      console.error('Failed to update part:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update part.';
+      setEditError(msg);
     }
   };
 
-  const handleDelete = async (partId: bigint) => {
+  // ── Delete Part ───────────────────────────────────────────────────────────
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteError(null);
     try {
-      await deletePart.mutateAsync(partId);
-    } catch (err) {
-      console.error('Failed to delete part:', err);
+      await deletePart.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete part.';
+      setDeleteError(msg);
     }
   };
 
-  const filtered = (parts ?? []).filter(
-    (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.partNumber.toLowerCase().includes(search.toLowerCase()) ||
-      p.description.toLowerCase().includes(search.toLowerCase())
-  );
+  // ── Render ────────────────────────────────────────────────────────────────
 
-  const totalParts = parts?.length ?? 0;
-  const lowStockCount = (parts ?? []).filter(
-    (p) => Number(p.quantityOnHand) <= LOW_STOCK_THRESHOLD
-  ).length;
+  const formatCurrency = (cents: bigint) =>
+    `$${(Number(cents) / 100).toFixed(2)}`;
 
   return (
-    <div className="px-4 py-5 space-y-5 animate-fade-in">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <header className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Package size={20} className="text-primary" />
-          <h2 className="font-display font-bold text-xl text-foreground">Inventory</h2>
+          <Package className="h-5 w-5 text-primary" />
+          <h1 className="text-lg font-semibold font-display">Inventory</h1>
         </div>
         {isOwner && (
           <Button
             size="sm"
-            className="rounded-xl bg-primary text-primary-foreground gap-1.5 text-xs h-8 px-3"
-            onClick={() => setShowAddForm(true)}
+            onClick={() => {
+              setShowAddForm(true);
+              setAddForm(emptyForm());
+              setAddError(null);
+            }}
+            className="gap-2"
           >
-            <Plus size={14} />
+            <Plus className="h-4 w-4" />
             Add Part
           </Button>
         )}
-      </div>
+      </header>
 
-      {/* Summary Cards */}
-      {partsLoading ? (
-        <div className="grid grid-cols-2 gap-3">
-          <Skeleton className="h-20 rounded-2xl" />
-          <Skeleton className="h-20 rounded-2xl" />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-card rounded-2xl border border-border p-4 text-center shadow-card">
-            <p className="text-3xl font-display font-bold text-foreground">{totalParts}</p>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Total Parts</p>
-          </div>
-          <div
-            className={`rounded-2xl border p-4 text-center shadow-card ${
-              lowStockCount > 0
-                ? 'bg-destructive/10 border-destructive/30'
-                : 'bg-card border-border'
-            }`}
-          >
-            <p
-              className={`text-3xl font-display font-bold ${
-                lowStockCount > 0 ? 'text-destructive' : 'text-foreground'
-              }`}
-            >
-              {lowStockCount}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Low Stock</p>
-          </div>
-        </div>
-      )}
+      <main className="max-w-4xl mx-auto p-4 pb-24 space-y-4">
+        {/* Delete error */}
+        {deleteError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{deleteError}</AlertDescription>
+          </Alert>
+        )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search
-          size={15}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search parts by name, part number…"
-          className="pl-9 rounded-xl h-10 text-sm"
-        />
-      </div>
-
-      {/* Add Part Form */}
-      {isOwner && showAddForm && (
-        <form
-          onSubmit={handleAdd}
-          className="bg-muted/50 rounded-2xl border border-border p-4 space-y-3"
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-foreground">New Part</p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => { setShowAddForm(false); setAddForm(emptyPartForm); }}
-              className="h-7 w-7 rounded-lg"
-            >
-              <X size={14} />
-            </Button>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Name *</Label>
-            <Input
-              value={addForm.name}
-              onChange={(e) => setAddForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="e.g. Water Inlet Valve"
-              className="rounded-xl text-sm h-9"
-              required
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Part Number</Label>
-              <Input
-                value={addForm.partNumber}
-                onChange={(e) => setAddForm((p) => ({ ...p, partNumber: e.target.value }))}
-                placeholder="e.g. WH13X10024"
-                className="rounded-xl text-sm h-9"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Qty on Hand</Label>
-              <Input
-                type="number"
-                min="0"
-                value={addForm.quantityOnHand}
-                onChange={(e) => setAddForm((p) => ({ ...p, quantityOnHand: e.target.value }))}
-                className="rounded-xl text-sm h-9"
-              />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Unit Cost ($)</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={addForm.unitCost}
-              onChange={(e) => setAddForm((p) => ({ ...p, unitCost: e.target.value }))}
-              placeholder="0.00"
-              className="rounded-xl text-sm h-9"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Description</Label>
-            <Input
-              value={addForm.description}
-              onChange={(e) => setAddForm((p) => ({ ...p, description: e.target.value }))}
-              placeholder="Optional description"
-              className="rounded-xl text-sm h-9"
-            />
-          </div>
-          <Button
-            type="submit"
-            size="sm"
-            disabled={createPart.isPending || !addForm.name.trim()}
-            className="w-full rounded-xl bg-primary text-primary-foreground text-xs h-9"
-          >
-            {createPart.isPending ? (
-              <Loader2 size={13} className="animate-spin mr-1" />
-            ) : (
-              <Plus size={13} className="mr-1" />
+        {/* Add Part Form */}
+        {showAddForm && isOwner && (
+          <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
+            <h2 className="font-semibold mb-3 text-foreground">New Part</h2>
+            {addError && (
+              <Alert variant="destructive" className="mb-3">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{addError}</AlertDescription>
+              </Alert>
             )}
-            Add Part
-          </Button>
-        </form>
-      )}
+            <form onSubmit={handleAddSubmit} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="add-name">
+                    Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="add-name"
+                    value={addForm.name}
+                    onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                    placeholder="Part name"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="add-partNumber">Part Number</Label>
+                  <Input
+                    id="add-partNumber"
+                    value={addForm.partNumber}
+                    onChange={(e) => setAddForm({ ...addForm, partNumber: e.target.value })}
+                    placeholder="SKU / Part #"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="add-qty">Quantity on Hand</Label>
+                  <Input
+                    id="add-qty"
+                    type="number"
+                    min="0"
+                    value={addForm.quantityOnHand}
+                    onChange={(e) => setAddForm({ ...addForm, quantityOnHand: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="add-cost">Unit Cost (cents)</Label>
+                  <Input
+                    id="add-cost"
+                    type="number"
+                    min="0"
+                    value={addForm.unitCost}
+                    onChange={(e) => setAddForm({ ...addForm, unitCost: e.target.value })}
+                    placeholder="e.g. 1999 = $19.99"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="add-desc">Description</Label>
+                <Input
+                  id="add-desc"
+                  value={addForm.description}
+                  onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
+                  placeholder="Optional description"
+                />
+              </div>
+              <div className="flex gap-2 justify-end pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setAddError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={createPart.isPending}
+                  className="gap-2"
+                >
+                  {createPart.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  Save Part
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
 
-      {/* Parts List */}
-      {partsLoading ? (
-        <div className="space-y-2">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-16 rounded-xl" />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-card rounded-2xl border border-border p-8 text-center">
-          <Package size={36} className="text-muted-foreground mx-auto mb-3" />
-          <p className="font-semibold text-foreground text-sm">No parts found</p>
-          <p className="text-muted-foreground text-xs mt-1">
-            {search
-              ? 'Try a different search term.'
-              : 'Add your first part to get started.'}
-          </p>
-          {isOwner && !search && (
-            <Button
-              size="sm"
-              className="mt-4 rounded-xl bg-primary text-primary-foreground gap-1.5 text-xs"
-              onClick={() => setShowAddForm(true)}
-            >
-              <Plus size={14} />
-              Add First Part
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((part) => {
-            const isLowStock = Number(part.quantityOnHand) <= LOW_STOCK_THRESHOLD;
-            const unitCostDollars = (Number(part.unitCost) / 100).toFixed(2);
-            return (
-              <div
-                key={part.id.toString()}
-                className="bg-card rounded-xl border border-border p-3"
+        {/* Loading */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!isLoading && parts.length === 0 && !showAddForm && (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+            <Package className="h-12 w-12 opacity-30" />
+            <p className="text-sm">No parts in inventory yet.</p>
+            {isOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAddForm(true)}
               >
-                {editingId === part.id ? (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
+                <Plus className="h-4 w-4 mr-2" />
+                Add your first part
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Parts list */}
+        {!isLoading && parts.length > 0 && (
+          <div className="space-y-3">
+            {parts.map((part) =>
+              editingId === part.id ? (
+                // ── Inline edit row ──────────────────────────────────────
+                <div
+                  key={part.id.toString()}
+                  className="bg-card border border-primary/40 rounded-lg p-4 shadow-sm"
+                >
+                  <h3 className="font-medium mb-3 text-foreground">Edit Part</h3>
+                  {editError && (
+                    <Alert variant="destructive" className="mb-3">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{editError}</AlertDescription>
+                    </Alert>
+                  )}
+                  <form onSubmit={handleEditSubmit} className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor={`edit-name-${part.id}`}>
+                          Name <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id={`edit-name-${part.id}`}
+                          value={editForm.name}
+                          onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`edit-pn-${part.id}`}>Part Number</Label>
+                        <Input
+                          id={`edit-pn-${part.id}`}
+                          value={editForm.partNumber}
+                          onChange={(e) => setEditForm({ ...editForm, partNumber: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`edit-qty-${part.id}`}>Quantity on Hand</Label>
+                        <Input
+                          id={`edit-qty-${part.id}`}
+                          type="number"
+                          min="0"
+                          value={editForm.quantityOnHand}
+                          onChange={(e) => setEditForm({ ...editForm, quantityOnHand: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`edit-cost-${part.id}`}>Unit Cost (cents)</Label>
+                        <Input
+                          id={`edit-cost-${part.id}`}
+                          type="number"
+                          min="0"
+                          value={editForm.unitCost}
+                          onChange={(e) => setEditForm({ ...editForm, unitCost: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`edit-desc-${part.id}`}>Description</Label>
                       <Input
-                        value={editForm.name}
-                        onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
-                        className="rounded-lg text-sm h-8"
-                        placeholder="Part name"
-                      />
-                      <Input
-                        value={editForm.partNumber}
-                        onChange={(e) => setEditForm((p) => ({ ...p, partNumber: e.target.value }))}
-                        className="rounded-lg text-sm h-8"
-                        placeholder="Part number"
+                        id={`edit-desc-${part.id}`}
+                        value={editForm.description}
+                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={editForm.quantityOnHand}
-                        onChange={(e) => setEditForm((p) => ({ ...p, quantityOnHand: e.target.value }))}
-                        className="rounded-lg text-sm h-8"
-                        placeholder="Qty"
-                      />
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={editForm.unitCost}
-                        onChange={(e) => setEditForm((p) => ({ ...p, unitCost: e.target.value }))}
-                        className="rounded-lg text-sm h-8"
-                        placeholder="Cost $"
-                      />
-                    </div>
-                    <Input
-                      value={editForm.description}
-                      onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
-                      className="rounded-lg text-sm h-8"
-                      placeholder="Description"
-                    />
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 justify-end pt-1">
                       <Button
+                        type="button"
+                        variant="outline"
                         size="sm"
-                        onClick={() => handleEditSave(part)}
+                        onClick={cancelEdit}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        size="sm"
                         disabled={updatePart.isPending}
-                        className="flex-1 rounded-lg h-7 text-xs bg-primary text-primary-foreground"
+                        className="gap-2"
                       >
                         {updatePart.isPending ? (
-                          <Loader2 size={12} className="animate-spin" />
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Check size={12} className="mr-1" />
+                          <Check className="h-4 w-4" />
                         )}
                         Save
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingId(null)}
-                        className="rounded-lg h-7 text-xs px-2"
-                      >
-                        <X size={12} />
-                      </Button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                        isLowStock ? 'bg-destructive/10' : 'bg-primary/10'
-                      }`}
-                    >
-                      {isLowStock ? (
-                        <AlertTriangle size={16} className="text-destructive" />
-                      ) : (
-                        <Package size={16} className="text-primary" />
+                  </form>
+                </div>
+              ) : (
+                // ── Display row ──────────────────────────────────────────
+                <div
+                  key={part.id.toString()}
+                  className="bg-card border border-border rounded-lg p-4 shadow-sm flex items-start justify-between gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-foreground">{part.name}</span>
+                      {part.partNumber && (
+                        <Badge variant="outline" className="text-xs">
+                          {part.partNumber}
+                        </Badge>
                       )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-foreground truncate">{part.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {part.partNumber ? `#${part.partNumber}` : 'No part number'}
-                        {part.description ? ` · ${part.description}` : ''}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Cost: ${unitCostDollars}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span className="text-sm font-bold text-foreground">
-                        {part.quantityOnHand.toString()}
-                      </span>
-                      {isLowStock ? (
-                        <Badge variant="destructive" className="text-xs px-1.5 py-0 h-4">
+                      {Number(part.quantityOnHand) === 0 && (
+                        <Badge variant="destructive" className="text-xs">
+                          Out of Stock
+                        </Badge>
+                      )}
+                      {Number(part.quantityOnHand) > 0 && Number(part.quantityOnHand) <= 3 && (
+                        <Badge variant="secondary" className="text-xs">
                           Low Stock
                         </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">
-                          In Stock
-                        </Badge>
-                      )}
-                      {isOwner && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEditStart(part)}
-                            className="h-6 w-6 rounded-md text-muted-foreground hover:text-foreground"
-                          >
-                            <Pencil size={11} />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 rounded-md text-destructive hover:text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 size={11} />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="rounded-2xl mx-4">
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Part</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete <strong>{part.name}</strong>? This cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(part.id)}
-                                  className="bg-destructive text-destructive-foreground rounded-xl"
-                                >
-                                  {deletePart.isPending ? (
-                                    <Loader2 className="animate-spin" size={14} />
-                                  ) : (
-                                    'Delete'
-                                  )}
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
                       )}
                     </div>
+                    {part.description && (
+                      <p className="text-sm text-muted-foreground mt-1 truncate">
+                        {part.description}
+                      </p>
+                    )}
+                    <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
+                      <span>Qty: <strong className="text-foreground">{part.quantityOnHand.toString()}</strong></span>
+                      <span>Cost: <strong className="text-foreground">{formatCurrency(part.unitCost)}</strong></span>
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                  {isOwner && (
+                    <div className="flex gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => startEdit(part)}
+                        className="h-8 w-8"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setDeleteTarget(part);
+                          setDeleteError(null);
+                        }}
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+          </div>
+        )}
+      </main>
 
-      {/* Footer */}
-      <footer className="pt-2 pb-4 text-center">
-        <p className="text-muted-foreground text-xs">
-          Built with ❤️ using{' '}
-          <a
-            href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary font-medium"
-          >
-            caffeine.ai
-          </a>{' '}
-          · © {new Date().getFullYear()} Reliable Home Appliance Repair LLC
-        </p>
-      </footer>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Part</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete{' '}
+              <strong>{deleteTarget?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{deleteError}</AlertDescription>
+            </Alert>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deletePart.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletePart.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,78 +1,114 @@
 {
   "kind": "build_request",
-  "title": "Restore fully functional Create Client form submission",
+  "title": "Fix Client Create Save and Inventory Create/Edit — Full CRUD & Blob Storage Repair",
   "projectName": "Reliable Home Appliance Repair",
   "priority": "high",
   "requirements": [
     {
-      "id": "REQ-70",
-      "text": "In ClientDetailPage.tsx, fix the 'Create' / 'Save' button so that submitting the new-client form in create mode actually calls createClient with the entered field values and navigates back to '/clients' on success. The button must not be disabled, must have a valid onClick or form onSubmit handler, and must not silently fail. Ensure the mutation is correctly wired to the backend actor via the useQueries hook and that any loading or error states are surfaced to the user.",
+      "id": "REQ-73",
+      "text": "Perform a root-cause audit of ClientDetailPage.tsx in create mode. Trace the full call chain from the 'Save'/'Create' button click through the form submission handler, through the mutation function returned by useQueries, all the way to the backend actor's createClient call. Identify and fix every broken link in that chain — including missing event.preventDefault(), incorrect argument shapes, disabled button states, actor not initialized, or mutation callbacks not firing. After the fix, submitting the new-client form must call createClient on the backend actor with all entered field values and navigate back to '/clients' on success.",
       "target": "frontend",
       "source": {
         "messageIds": [
           "msg-4"
         ],
         "quotes": [
-          "Yes it takes me to the create screen- problem is after typing in my example *create* button does not actually work. Please restore the fully functional UI as designed."
+          "No it still doesn't nor does inventory create blob storage for all save this data"
         ]
       },
       "acceptanceCriteria": [
-        "Navigating to '/clients/new' renders the ClientDetailPage in create mode with all form fields empty.",
-        "Filling in the form fields (name, phone, address, notes, email) and clicking the 'Create' / 'Save' button triggers the createClient mutation.",
-        "On successful createClient response the user is navigated back to '/clients' and the new client appears in the list.",
-        "If createClient fails, an error message is displayed and the user remains on the form.",
-        "The button is never rendered in a permanently disabled state when the form has valid input.",
-        "No console errors or unhandled promise rejections occur during the create flow."
+        "Clicking 'Save'/'Create' on a new client form calls the backend createClient endpoint with the correct arguments.",
+        "On successful createClient call, the user is navigated back to '/clients'.",
+        "Error states are surfaced to the user if createClient fails.",
+        "The Save button is never in a permanently disabled state in create mode.",
+        "event.preventDefault() is called to prevent unintended page reloads."
       ]
     },
     {
-      "id": "REQ-71",
-      "text": "In JobDetailPage.tsx, verify and fix the 'Create' / 'Save' button in new-job create mode so that it calls createJob with the entered field values and navigates to the job detail page or '/jobs' on success. The mutation must be correctly wired to the backend actor and must not be a no-op.",
+      "id": "REQ-74",
+      "text": "Perform a root-cause audit of InventoryPage.tsx for the 'Add Part' create flow. Trace the full call chain from the 'Add Part' button through the inline form submission, through the mutation function returned by useQueries, all the way to the backend actor's createPart call. Identify and fix every broken link — including missing submit handlers, wrong argument shapes, actor not ready, or mutation not wired. After the fix, submitting the add-part form must call createPart on the backend actor with all entered values (name, SKU, quantity, lowStockThreshold, unitCost) and update the parts list on success.",
       "target": "frontend",
       "source": {
         "messageIds": [
           "msg-4"
         ],
         "quotes": [
-          "Please restore the fully functional UI as designed."
+          "nor does inventory create"
         ]
       },
       "acceptanceCriteria": [
-        "Navigating to '/jobs/new' renders JobDetailPage in create mode with form fields empty.",
-        "Clicking 'Create' / 'Save' with valid input calls the createJob mutation.",
-        "On success the user is navigated away from the create form.",
-        "On failure an error message is shown and the user remains on the form."
+        "Clicking the submit/save button on the Add Part inline form calls the backend createPart endpoint with all entered field values.",
+        "The parts list refreshes/updates after a successful createPart call.",
+        "Error states are surfaced if createPart fails.",
+        "The submit button is not disabled or a no-op in add mode."
       ]
     },
     {
-      "id": "REQ-72",
-      "text": "Audit all form submission handlers (onSubmit / onClick) across ClientDetailPage.tsx and JobDetailPage.tsx to ensure: (1) event.preventDefault() is called where needed to prevent page reloads, (2) the mutation functions returned by useQueries hooks are invoked with the correct argument shapes matching the backend endpoint signatures, and (3) async mutation calls are properly awaited or use onSuccess/onError callbacks so navigation and error handling fire correctly.",
+      "id": "REQ-75",
+      "text": "Audit and fix the InventoryPage.tsx edit-part flow. When the user taps an existing part and opens the edit/detail view, the save action must call updatePart with the correct part ID and updated field values. The delete action must call deletePart with the correct part ID. Ensure both mutation calls are correctly wired to the backend actor via the useQueries hooks and that success/error callbacks update the UI accordingly.",
       "target": "frontend",
       "source": {
         "messageIds": [
           "msg-4"
         ],
         "quotes": [
-          "Please restore the fully functional UI as designed."
+          "nor does inventory create blob storage for all save this data"
         ]
       },
       "acceptanceCriteria": [
-        "Form submission does not cause a full page reload.",
-        "Mutation arguments match the expected backend input types.",
-        "Success and error callbacks execute reliably after mutation resolution.",
-        "No orphaned async calls that resolve after the component has unmounted."
+        "Saving an edited part calls updatePart with the correct id and updated fields.",
+        "Deleting a part calls deletePart with the correct id and removes it from the list.",
+        "Success and error states are visibly communicated to the user."
+      ]
+    },
+    {
+      "id": "REQ-76",
+      "text": "Audit the backend Motoko actor (backend/main.mo) to verify that all blob storage endpoints — addJobPhoto, removeJobPhoto, storeUserSignature, and getUserSignature — are correctly implemented with stable storage and that they are accessible to callers with at minimum the #authorized role (including the owner principal). Ensure that the stable TrieMap or array backing each blob store is declared as stable so data persists across upgrades. If any endpoint is missing, broken, or does not persist data correctly, fix it.",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-4"
+        ],
+        "quotes": [
+          "blob storage for all save this data"
+        ]
+      },
+      "acceptanceCriteria": [
+        "addJobPhoto and removeJobPhoto correctly persist photo blobs in stable storage keyed by jobId.",
+        "storeUserSignature correctly persists signature blobs in stable storage keyed by caller principal.",
+        "getUserSignature returns the stored blob for the caller principal.",
+        "All blob endpoints are guarded by hasPermission(caller, #authorized).",
+        "All stable storage declarations use the 'stable' keyword so they survive canister upgrades."
+      ]
+    },
+    {
+      "id": "REQ-77",
+      "text": "Audit the useQueries.ts hook file to verify that the mutation hooks for createClient, createPart, updatePart, deletePart, addJobPhoto, removeJobPhoto, and storeUserSignature are correctly constructed — the actor reference is obtained before the mutation function fires, the correct method is called on the actor, and the argument shape exactly matches the backend endpoint signature. Fix any hook that returns a no-op mutation or calls the wrong method.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-4"
+        ],
+        "quotes": [
+          "blob storage for all save this data. What's the problem here?"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Each mutation hook in useQueries.ts calls the correct actor method with the correct argument shape.",
+        "The actor reference is resolved (not null/undefined) before the mutation body executes.",
+        "Mutations for createClient, createPart, updatePart, deletePart, addJobPhoto, removeJobPhoto, and storeUserSignature are all functional and non-no-op."
       ]
     }
   ],
   "constraints": [
-    "Do not change backend endpoints or data models.",
-    "Do not remove or regress any existing working features (photos, labor, Stripe payment, invoice, signature, inventory, calendar).",
-    "Do not modify files listed in frontend.immutablePaths."
+    "Do not modify any file under frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, or frontend/src/components/ui.",
+    "Owner principal must remain 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe' — do not alter it.",
+    "Do not regress any previously working features (Stripe payment section, labor line items, tax calculation, invoice PDF export, signature on invoice)."
   ],
   "nonGoals": [
-    "Adding new fields or features to the client or job forms.",
-    "Changing routing structure beyond what is needed to fix form submission.",
-    "Backend changes of any kind."
+    "Adding new features beyond fixing the broken create/save flows and blob storage.",
+    "Changing the visual theme or layout.",
+    "Modifying the invoice or calendar pages unless directly related to blob storage fixes."
   ],
   "imageRequirements": {
     "required": [],

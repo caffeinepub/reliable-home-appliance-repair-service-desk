@@ -1,15 +1,13 @@
 # Specification
 
 ## Summary
-**Goal:** Restore fully functional form submission for creating new clients and new jobs in the frontend.
+**Goal:** Fix all broken create/save flows for clients and inventory parts, and repair blob storage endpoints so that data is correctly persisted.
 
 **Planned changes:**
-- Fix the Create/Save button in `ClientDetailPage.tsx` so that submitting the new-client form calls `createClient` with the entered field values and navigates to `/clients` on success.
-- Fix the Create/Save button in `JobDetailPage.tsx` so that submitting the new-job form calls `createJob` with the entered field values and navigates away on success.
-- Ensure `event.preventDefault()` is called where needed to prevent page reloads.
-- Ensure mutation functions are invoked with the correct argument shapes matching backend signatures.
-- Ensure async mutations are properly awaited or use `onSuccess`/`onError` callbacks for reliable navigation and error handling.
-- Display error messages to the user when a mutation fails, keeping them on the form.
-- Ensure the Create/Save button is never permanently disabled when the form has valid input.
+- Audit and fix `ClientDetailPage.tsx` create mode: ensure the Save/Create button calls `createClient` on the backend actor with correct arguments, handles `event.preventDefault()`, and navigates to `/clients` on success.
+- Audit and fix `InventoryPage.tsx` Add Part flow: ensure the submit button calls `createPart` with all entered fields (name, SKU, quantity, lowStockThreshold, unitCost) and refreshes the parts list on success.
+- Audit and fix `InventoryPage.tsx` edit-part flow: ensure saving calls `updatePart` with correct ID and fields, and deleting calls `deletePart` with the correct ID.
+- Audit and fix `useQueries.ts` mutation hooks for `createClient`, `createPart`, `updatePart`, `deletePart`, `addJobPhoto`, `removeJobPhoto`, and `storeUserSignature` to ensure each calls the correct actor method with the correct argument shape and a resolved actor reference.
+- Audit and fix the backend Motoko actor (`backend/main.mo`) to verify `addJobPhoto`, `removeJobPhoto`, `storeUserSignature`, and `getUserSignature` use stable storage and are accessible to authorized callers.
 
-**User-visible outcome:** Users can fill out the new client or new job form, click Create/Save, and have the record successfully created with navigation to the appropriate list or detail page. Errors are surfaced clearly if submission fails.
+**User-visible outcome:** Users can create new clients, add new inventory parts, edit and delete existing parts, and have all photo/signature blobs correctly saved and persisted across canister upgrades.

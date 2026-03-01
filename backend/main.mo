@@ -16,7 +16,9 @@ import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
 import Stripe "stripe/stripe";
 import OutCall "http-outcalls/outcall";
+import Migration "migration";
 
+(with migration = Migration.run)
 actor {
   include MixinStorage();
 
@@ -31,8 +33,8 @@ actor {
   );
 
   public type UserProfile = { name : Text };
-  let userProfiles = Map.empty<Principal, UserProfile>();
-  let userSignatures = Map.empty<Principal, Blob>();
+  stable let userProfiles = Map.empty<Principal, UserProfile>();
+  stable let userSignatures = Map.empty<Principal, Blob>();
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
@@ -121,10 +123,10 @@ actor {
     jobId : ?Nat;
   };
 
-  let clientStore = Map.empty<Nat, Client>();
-  let jobStore = Map.empty<Nat, Job>();
-  let partStore = Map.empty<Nat, Part>();
-  let laborRatesStore = Map.empty<Nat, LaborRate>();
+  stable let clientStore = Map.empty<Nat, Client>();
+  stable let jobStore = Map.empty<Nat, Job>();
+  stable let partStore = Map.empty<Nat, Part>();
+  stable let laborRatesStore = Map.empty<Nat, LaborRate>();
 
   var stripeKey : ?Text = null;
   var stripeConfigured : Bool = false;
@@ -359,16 +361,18 @@ actor {
     OutCall.transform(input);
   };
 
+  // Store the caller's signature blob. Requires at minimum #user role (or owner).
   public shared ({ caller }) func storeUserSignature(sig : Blob) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authorized users can store signatures");
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users or owner can store signatures");
     };
     userSignatures.add(caller, sig);
   };
 
+  // Retrieve the caller's stored signature blob. Requires at minimum #user role (or owner).
   public query ({ caller }) func getUserSignature() : async ?Blob {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authorized users can get signatures");
+    if (not isAuthorizedOrOwner(caller)) {
+      Runtime.trap("Unauthorized: Only authorized users or owner can get signatures");
     };
     userSignatures.get(caller);
   };
@@ -470,3 +474,4 @@ actor {
     laborRatesStore.remove(laborRateId);
   };
 };
+

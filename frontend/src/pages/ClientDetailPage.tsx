@@ -1,264 +1,222 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useActor } from '../hooks/useActor';
-import { useListClients } from '../hooks/useQueries';
-import { Client } from '../backend';
+import { ArrowLeft, Save, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-
-function useGetClient(clientId: bigint | null) {
-  const { actor, isFetching } = useActor();
-  return useQuery({
-    queryKey: ['client', clientId?.toString()],
-    queryFn: async () => {
-      if (!actor || clientId === null) return null;
-      return actor.getClient(clientId);
-    },
-    enabled: !!actor && !isFetching && clientId !== null,
-  });
-}
+  useListClients,
+  useCreateClient,
+  useUpdateClient,
+} from '../hooks/useQueries';
 
 export default function ClientDetailPage() {
+  const { clientId } = useParams({ strict: false }) as { clientId?: string };
   const navigate = useNavigate();
-  // Support both /clients/new (no param or param === 'new') and /clients/$clientId (numeric param)
-  const params = useParams({ strict: false }) as { clientId?: string };
+  const isNew = !clientId || clientId === 'new';
 
-  // isNew when there's no clientId param, or when it's the literal string 'new'
-  const isNew = !params.clientId || params.clientId === 'new';
-
-  // Only parse as BigInt when we have a real numeric ID
-  const clientId: bigint | null = (() => {
-    if (isNew) return null;
-    try {
-      return BigInt(params.clientId!);
-    } catch {
-      return null;
-    }
-  })();
-
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-
-  const { data: client, isLoading } = useGetClient(clientId);
-  const { data: allClients = [] } = useListClients();
+  const { data: clients = [], isLoading: clientsLoading } = useListClients();
+  const createClient = useCreateClient();
+  const updateClient = useUpdateClient();
 
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [googleReviewUrl, setGoogleReviewUrl] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
+  // Load existing client data
   useEffect(() => {
-    if (client) {
-      setName(client.name);
-      setPhone(client.phone);
-      setAddress(client.address);
-      setEmail(client.email || '');
-      setNotes(client.notes);
+    if (!isNew && !clientsLoading && clients.length > 0 && !initialized) {
+      const id = BigInt(clientId!);
+      const existing = clients.find((c) => c.id === id);
+      if (existing) {
+        setName(existing.name);
+        setEmail(existing.email ?? '');
+        setPhone(existing.phone);
+        setAddress(existing.address);
+        setNotes(existing.notes);
+        setGoogleReviewUrl(existing.googleReviewUrl ?? '');
+        setInitialized(true);
+      }
     }
-  }, [client]);
+    if (isNew && !initialized) {
+      setInitialized(true);
+    }
+  }, [isNew, clientId, clients, clientsLoading, initialized]);
 
-  const handleSave = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!actor) return;
-    if (!name.trim()) { setSaveError('Name is required'); return; }
-    setSaving(true);
-    setSaveError(null);
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!name.trim()) {
+      setError('Client name is required.');
+      return;
+    }
+
     try {
-      // Use timestamp-based ID for new records to avoid Math.max(-Infinity) on empty arrays
-      let newId: bigint;
       if (isNew) {
-        if (allClients.length > 0) {
-          const maxId = allClients.reduce((max, c) => (c.id > max ? c.id : max), allClients[0].id);
-          newId = maxId + BigInt(1);
-        } else {
-          newId = BigInt(Date.now());
-        }
-      } else {
-        newId = clientId!;
-      }
+        // Generate a new ID based on existing clients
+        const newId =
+          clients.length === 0
+            ? BigInt(Date.now())
+            : clients.reduce((max, c) => (c.id > max ? c.id : max), clients[0].id) + 1n;
 
-      const clientData: Client = {
-        id: newId,
-        name: name.trim(),
-        phone: phone.trim(),
-        address: address.trim(),
-        email: email.trim() || undefined,
-        notes: notes.trim(),
-        googleReviewUrl: client?.googleReviewUrl,
-      };
-
-      if (isNew) {
-        await actor.createClient(clientData);
+        await createClient.mutateAsync({
+          id: newId,
+          name: name.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim(),
+          address: address.trim(),
+          notes: notes.trim(),
+          googleReviewUrl: googleReviewUrl.trim() || undefined,
+        });
+        navigate({ to: '/clients' });
       } else {
-        await actor.updateClient(clientData);
+        const id = BigInt(clientId!);
+        await updateClient.mutateAsync({
+          id,
+          name: name.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim(),
+          address: address.trim(),
+          notes: notes.trim(),
+          googleReviewUrl: googleReviewUrl.trim() || undefined,
+        });
+        navigate({ to: '/clients' });
       }
-      await queryClient.invalidateQueries({ queryKey: ['clients'] });
-      await queryClient.invalidateQueries({ queryKey: ['client', newId.toString()] });
-      navigate({ to: '/clients' });
-    } catch (e: any) {
-      setSaveError(e?.message || 'Failed to save client');
-    } finally {
-      setSaving(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save client.';
+      setError(msg);
     }
   };
 
-  const handleDelete = async () => {
-    if (!actor || !clientId) return;
-    setDeleting(true);
-    try {
-      await actor.deleteClient(clientId);
-      await queryClient.invalidateQueries({ queryKey: ['clients'] });
-      navigate({ to: '/clients' });
-    } catch (e: any) {
-      setSaveError(e?.message || 'Failed to delete client');
-    } finally {
-      setDeleting(false);
-    }
-  };
+  const isSaving = createClient.isPending || updateClient.isPending;
 
-  if (!isNew && isLoading) {
+  if (!isNew && clientsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/clients' })}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Clients
+      <header className="sticky top-0 z-10 bg-card border-b border-border px-4 py-3 flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate({ to: '/clients' })}
+          className="shrink-0"
+        >
+          <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="font-semibold text-foreground">
+        <h1 className="text-lg font-semibold font-display flex-1">
           {isNew ? 'New Client' : 'Edit Client'}
         </h1>
-        <Button size="sm" onClick={() => handleSave()} disabled={saving}>
-          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+        <Button
+          onClick={handleSave}
+          disabled={isSaving}
+          size="sm"
+          className="gap-2"
+        >
+          {isSaving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
           {isNew ? 'Create' : 'Save'}
         </Button>
-      </div>
+      </header>
 
-      <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
-        {saveError && (
-          <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-4 py-3">
-            {saveError}
+      {/* Form */}
+      <main className="max-w-2xl mx-auto p-4 pb-24">
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <form onSubmit={handleSave} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="name">
+              Name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Client full name"
+              required
+            />
           </div>
-        )}
 
-        <form onSubmit={handleSave}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Client Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="client-name">Name *</Label>
-                <Input
-                  id="client-name"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Full name"
-                  required
-                />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              id="phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="(555) 000-0000"
+            />
+          </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="client-phone">Phone</Label>
-                <Input
-                  id="client-phone"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  placeholder="(555) 000-0000"
-                  type="tel"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="client@example.com"
+            />
+          </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="client-email">Email</Label>
-                <Input
-                  id="client-email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="email@example.com"
-                  type="email"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="address">Address</Label>
+            <Input
+              id="address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="123 Main St, City, State"
+            />
+          </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="client-address">Address</Label>
-                <Input
-                  id="client-address"
-                  value={address}
-                  onChange={e => setAddress(e.target.value)}
-                  placeholder="123 Main St, City, State"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="googleReviewUrl">Google Review URL</Label>
+            <Input
+              id="googleReviewUrl"
+              type="url"
+              value={googleReviewUrl}
+              onChange={(e) => setGoogleReviewUrl(e.target.value)}
+              placeholder="https://g.page/r/..."
+            />
+          </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="client-notes">Notes</Label>
-                <Textarea
-                  id="client-notes"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="Any additional notes about this client..."
-                  rows={3}
-                />
-              </div>
-            </CardContent>
-          </Card>
-          {/* Hidden submit button so Enter key works */}
-          <button type="submit" className="sr-only" aria-hidden="true" />
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Any additional notes about this client..."
+              rows={4}
+            />
+          </div>
+
+          {/* Hidden submit button to allow Enter key submission */}
+          <button type="submit" className="hidden" aria-hidden="true" />
         </form>
-
-        {/* Delete */}
-        {!isNew && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" className="w-full" disabled={deleting}>
-                {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
-                Delete Client
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Client?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete this client. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
-      </div>
+      </main>
     </div>
   );
 }

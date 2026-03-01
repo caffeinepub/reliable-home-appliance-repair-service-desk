@@ -1,48 +1,118 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useActor } from './useActor';
 import { useInternetIdentity } from './useInternetIdentity';
-import type { Client, Job, JobStatus, LaborRate, LaborLineItem, Part, UserProfile, StripeConfiguration, ShoppingItem } from '../backend';
+import type { Client, Job, Part, LaborRate, LaborLineItem, JobStatus, UserProfile, Estimate } from '../backend';
+import { ExternalBlob } from '../backend';
 
-// ── Owner Principal ───────────────────────────────────────────────────────────
-// IMPORTANT: This is the stable owner principal. Do NOT change this value.
-// Owner: q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe
+// !! DO NOT CHANGE THIS PRINCIPAL !!
+// This is the owner principal for the app. It must never be changed.
 const OWNER_PRINCIPAL = 'q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe';
 
-export function useIsOwner(): boolean {
+export function useIsOwner() {
   const { identity } = useInternetIdentity();
   if (!identity) return false;
   return identity.getPrincipal().toString() === OWNER_PRINCIPAL;
 }
 
-// ── Clients ──────────────────────────────────────────────────────────────────
+// ─── User Profile ────────────────────────────────────────────────────────────
+
+export function useGetCallerUserProfile() {
+  const { actor, isFetching: actorFetching } = useActor();
+
+  const query = useQuery<UserProfile | null>({
+    queryKey: ['currentUserProfile'],
+    queryFn: async () => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.getCallerUserProfile();
+    },
+    enabled: !!actor && !actorFetching,
+    retry: false,
+  });
+
+  return {
+    ...query,
+    isLoading: actorFetching || query.isLoading,
+    isFetched: !!actor && query.isFetched,
+  };
+}
+
+export function useSaveCallerUserProfile() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (profile: UserProfile) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.saveCallerUserProfile(profile);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] });
+    },
+  });
+}
+
+// ─── Signature ───────────────────────────────────────────────────────────────
+
+export function useGetUserSignature() {
+  const { actor, isFetching: actorFetching } = useActor();
+
+  return useQuery<Uint8Array | null>({
+    queryKey: ['userSignature'],
+    queryFn: async () => {
+      if (!actor) throw new Error('Actor not available');
+      return actor.getUserSignature();
+    },
+    enabled: !!actor && !actorFetching,
+  });
+}
+
+export function useStoreUserSignature() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (sig: Uint8Array) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.storeUserSignature(sig);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userSignature'] });
+    },
+  });
+}
+
+// ─── Clients ─────────────────────────────────────────────────────────────────
 
 export function useListClients() {
-  const { actor, isFetching } = useActor();
+  const { actor, isFetching: actorFetching } = useActor();
+
   return useQuery<Client[]>({
     queryKey: ['clients'],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listClients();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && !actorFetching,
   });
 }
 
-export function useGetClient(clientId: bigint | undefined) {
-  const { actor, isFetching } = useActor();
+export function useGetClient(clientId: bigint | null) {
+  const { actor, isFetching: actorFetching } = useActor();
+
   return useQuery<Client | null>({
     queryKey: ['client', clientId?.toString()],
     queryFn: async () => {
-      if (!actor || clientId === undefined) return null;
+      if (!actor || clientId === null) return null;
       return actor.getClient(clientId);
     },
-    enabled: !!actor && !isFetching && clientId !== undefined,
+    enabled: !!actor && !actorFetching && clientId !== null,
   });
 }
 
 export function useCreateClient() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (client: Client) => {
       if (!actor) throw new Error('Actor not available');
@@ -57,10 +127,11 @@ export function useCreateClient() {
 export function useUpdateClient() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (client: Client) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.updateClient(client);
+      await actor.updateClient(client);
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -72,10 +143,11 @@ export function useUpdateClient() {
 export function useDeleteClient() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (clientId: bigint) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.deleteClient(clientId);
+      await actor.deleteClient(clientId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -83,35 +155,38 @@ export function useDeleteClient() {
   });
 }
 
-// ── Jobs ─────────────────────────────────────────────────────────────────────
+// ─── Jobs ─────────────────────────────────────────────────────────────────────
 
 export function useListJobs() {
-  const { actor, isFetching } = useActor();
+  const { actor, isFetching: actorFetching } = useActor();
+
   return useQuery<Job[]>({
     queryKey: ['jobs'],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listJobs();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && !actorFetching,
   });
 }
 
-export function useGetJob(jobId: bigint | undefined) {
-  const { actor, isFetching } = useActor();
+export function useGetJob(jobId: bigint | null) {
+  const { actor, isFetching: actorFetching } = useActor();
+
   return useQuery<Job | null>({
     queryKey: ['job', jobId?.toString()],
     queryFn: async () => {
-      if (!actor || jobId === undefined) return null;
+      if (!actor || jobId === null) return null;
       return actor.getJob(jobId);
     },
-    enabled: !!actor && !isFetching && jobId !== undefined,
+    enabled: !!actor && !actorFetching && jobId !== null,
   });
 }
 
 export function useCreateJob() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (job: Job) => {
       if (!actor) throw new Error('Actor not available');
@@ -126,10 +201,11 @@ export function useCreateJob() {
 export function useUpdateJob() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (job: Job) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.updateJob(job);
+      await actor.updateJob(job);
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -138,27 +214,14 @@ export function useUpdateJob() {
   });
 }
 
-export function useUpdateJobStatus() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ jobId, status }: { jobId: bigint; status: JobStatus }) => {
-      if (!actor) throw new Error('Actor not available');
-      return actor.updateJobStatus(jobId, status);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-    },
-  });
-}
-
 export function useDeleteJob() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (jobId: bigint) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.deleteJob(jobId);
+      await actor.deleteJob(jobId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -166,18 +229,78 @@ export function useDeleteJob() {
   });
 }
 
-// ── Labor Line Items ──────────────────────────────────────────────────────────
+export function useUpdateJobStatus() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ jobId, status }: { jobId: bigint; status: JobStatus }) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.updateJobStatus(jobId, status);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+export function useAddJobPhoto() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ jobId, photo }: { jobId: bigint; photo: ExternalBlob }) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.addJobPhoto(jobId, photo);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+export function useRemoveJobPhoto() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ jobId, photoIndex }: { jobId: bigint; photoIndex: bigint }) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.removeJobPhoto(jobId, photoIndex);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+export function useUpdateEstimate() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ jobId, estimate }: { jobId: bigint; estimate: Estimate }) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.updateEstimate(jobId, estimate);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
+    },
+  });
+}
 
 export function useAddLaborLineItem() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async ({ jobId, item }: { jobId: bigint; item: LaborLineItem }) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.addLaborLineItem(jobId, item);
+      await actor.addLaborLineItem(jobId, item);
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
       queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
     },
   });
@@ -186,123 +309,37 @@ export function useAddLaborLineItem() {
 export function useRemoveLaborLineItem() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async ({ jobId, index }: { jobId: bigint; index: bigint }) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.removeLaborLineItem(jobId, index);
+      await actor.removeLaborLineItem(jobId, index);
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
       queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
     },
   });
 }
 
-// ── Job Photos ────────────────────────────────────────────────────────────────
-
-export function useAddJobPhoto() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ jobId, photo }: { jobId: bigint; photo: any }) => {
-      if (!actor) throw new Error('Actor not available');
-      return actor.addJobPhoto(jobId, photo);
-    },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
-    },
-  });
-}
-
-export function useRemoveJobPhoto() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ jobId, photoIndex }: { jobId: bigint; photoIndex: bigint }) => {
-      if (!actor) throw new Error('Actor not available');
-      return actor.removeJobPhoto(jobId, photoIndex);
-    },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId.toString()] });
-    },
-  });
-}
-
-// ── Labor Rates ───────────────────────────────────────────────────────────────
-
-export function useListLaborRates() {
-  const { actor, isFetching } = useActor();
-  return useQuery<LaborRate[]>({
-    queryKey: ['laborRates'],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.listLaborRates();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useCreateLaborRate() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (laborRate: LaborRate) => {
-      if (!actor) throw new Error('Actor not available');
-      return actor.createLaborRate(laborRate);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['laborRates'] });
-    },
-  });
-}
-
-export function useUpdateLaborRate() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (laborRate: LaborRate) => {
-      if (!actor) throw new Error('Actor not available');
-      return actor.updateLaborRate(laborRate);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['laborRates'] });
-    },
-  });
-}
-
-export function useDeleteLaborRate() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (laborRateId: bigint) => {
-      if (!actor) throw new Error('Actor not available');
-      return actor.deleteLaborRate(laborRateId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['laborRates'] });
-    },
-  });
-}
-
-// ── Parts / Inventory ─────────────────────────────────────────────────────────
+// ─── Parts ────────────────────────────────────────────────────────────────────
 
 export function useListParts() {
-  const { actor, isFetching } = useActor();
+  const { actor, isFetching: actorFetching } = useActor();
+
   return useQuery<Part[]>({
     queryKey: ['parts'],
     queryFn: async () => {
       if (!actor) return [];
       return actor.listParts();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && !actorFetching,
   });
 }
 
 export function useCreatePart() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (part: Part) => {
       if (!actor) throw new Error('Actor not available');
@@ -317,10 +354,11 @@ export function useCreatePart() {
 export function useUpdatePart() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (part: Part) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.updatePart(part);
+      await actor.updatePart(part);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parts'] });
@@ -331,10 +369,11 @@ export function useUpdatePart() {
 export function useDeletePart() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (partId: bigint) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.deletePart(partId);
+      await actor.deletePart(partId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parts'] });
@@ -345,10 +384,11 @@ export function useDeletePart() {
 export function useUsePartOnJob() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async ({ partId, jobId, quantityUsed }: { partId: bigint; jobId: bigint; quantityUsed: bigint }) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.usePartOnJob(partId, jobId, quantityUsed);
+      await actor.usePartOnJob(partId, jobId, quantityUsed);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parts'] });
@@ -357,96 +397,89 @@ export function useUsePartOnJob() {
   });
 }
 
-// ── User Profile ──────────────────────────────────────────────────────────────
+// ─── Labor Rates ──────────────────────────────────────────────────────────────
 
-export function useGetCallerUserProfile() {
+export function useListLaborRates() {
   const { actor, isFetching: actorFetching } = useActor();
-  const { identity } = useInternetIdentity();
-  const query = useQuery<UserProfile | null>({
-    queryKey: ['currentUserProfile'],
+
+  return useQuery<LaborRate[]>({
+    queryKey: ['laborRates'],
     queryFn: async () => {
-      if (!actor) throw new Error('Actor not available');
-      return actor.getCallerUserProfile();
+      if (!actor) return [];
+      return actor.listLaborRates();
     },
-    enabled: !!actor && !actorFetching && !!identity,
-    retry: false,
+    enabled: !!actor && !actorFetching,
   });
-  return {
-    ...query,
-    isLoading: actorFetching || query.isLoading,
-    isFetched: !!actor && query.isFetched,
-  };
 }
 
-export function useSaveCallerUserProfile() {
+export function useCreateLaborRate() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: async (profile: UserProfile) => {
+    mutationFn: async (laborRate: LaborRate) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.saveCallerUserProfile(profile);
+      return actor.createLaborRate(laborRate);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['laborRates'] });
     },
   });
 }
 
-// ── Signature ─────────────────────────────────────────────────────────────────
-
-export function useGetUserSignature() {
-  const { actor, isFetching } = useActor();
-  const { identity } = useInternetIdentity();
-  return useQuery<Uint8Array | null>({
-    queryKey: ['userSignature'],
-    queryFn: async () => {
-      if (!actor) return null;
-      return actor.getUserSignature();
-    },
-    enabled: !!actor && !isFetching && !!identity,
-  });
-}
-
-export function useStoreUserSignature() {
+export function useUpdateLaborRate() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: async (sig: Uint8Array) => {
+    mutationFn: async (laborRate: LaborRate) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.storeUserSignature(sig);
+      await actor.updateLaborRate(laborRate);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userSignature'] });
+      queryClient.invalidateQueries({ queryKey: ['laborRates'] });
     },
   });
 }
 
-// ── Stripe ────────────────────────────────────────────────────────────────────
+export function useDeleteLaborRate() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
 
-export type CheckoutSession = {
-  id: string;
-  url: string;
-};
+  return useMutation({
+    mutationFn: async (laborRateId: bigint) => {
+      if (!actor) throw new Error('Actor not available');
+      await actor.deleteLaborRate(laborRateId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['laborRates'] });
+    },
+  });
+}
+
+// ─── Stripe ───────────────────────────────────────────────────────────────────
 
 export function useIsStripeConfigured() {
-  const { actor, isFetching } = useActor();
+  const { actor, isFetching: actorFetching } = useActor();
+
   return useQuery<boolean>({
     queryKey: ['stripeConfigured'],
     queryFn: async () => {
       if (!actor) return false;
       return actor.isStripeConfigured();
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor && !actorFetching,
   });
 }
 
 export function useSetStripeConfiguration() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: async (config: StripeConfiguration) => {
+    mutationFn: async (config: { secretKey: string; allowedCountries: string[] }) => {
       if (!actor) throw new Error('Actor not available');
-      return actor.setStripeConfiguration(config);
+      await actor.setStripeConfiguration(config);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stripeConfigured'] });
@@ -456,62 +489,17 @@ export function useSetStripeConfiguration() {
 
 export function useCreateCheckoutSession() {
   const { actor } = useActor();
+
   return useMutation({
-    mutationFn: async (items: ShoppingItem[]): Promise<CheckoutSession> => {
+    mutationFn: async (items: Array<{ productName: string; currency: string; quantity: bigint; priceInCents: bigint; productDescription: string }>) => {
       if (!actor) throw new Error('Actor not available');
       const baseUrl = `${window.location.protocol}//${window.location.host}`;
       const successUrl = `${baseUrl}/payment-success`;
       const cancelUrl = `${baseUrl}/payment-failure`;
       const result = await actor.createCheckoutSession(items, successUrl, cancelUrl);
-      const session = JSON.parse(result) as CheckoutSession;
-      if (!session?.url) {
-        throw new Error('Stripe session missing url');
-      }
+      const session = JSON.parse(result) as { id: string; url: string };
+      if (!session?.url) throw new Error('Stripe session missing url');
       return session;
-    },
-  });
-}
-
-// ── Role / Admin ──────────────────────────────────────────────────────────────
-
-export function useGetCallerUserRole() {
-  const { actor, isFetching } = useActor();
-  const { identity } = useInternetIdentity();
-  return useQuery({
-    queryKey: ['callerUserRole'],
-    queryFn: async () => {
-      if (!actor) throw new Error('Actor not available');
-      return actor.getCallerUserRole();
-    },
-    enabled: !!actor && !isFetching && !!identity,
-    retry: false,
-  });
-}
-
-export function useIsCallerAdmin() {
-  const { actor, isFetching } = useActor();
-  const { identity } = useInternetIdentity();
-  return useQuery<boolean>({
-    queryKey: ['isCallerAdmin'],
-    queryFn: async () => {
-      if (!actor) return false;
-      return actor.isCallerAdmin();
-    },
-    enabled: !!actor && !isFetching && !!identity,
-  });
-}
-
-export function useAssignUserRole() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ user, role }: { user: any; role: any }) => {
-      if (!actor) throw new Error('Actor not available');
-      return actor.assignCallerUserRole(user, role);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['callerUserRole'] });
-      queryClient.invalidateQueries({ queryKey: ['isCallerAdmin'] });
     },
   });
 }

@@ -1,63 +1,72 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Restore fully functional Create Client form submission",
+  "title": "Fix Client Create Save and Inventory Create/Edit — Full CRUD & Blob Storage Repair",
   "requirements": [
     {
-      "id": "REQ-70",
-      "summary": "Fix ClientDetailPage Create/Save button to properly call createClient mutation and navigate on success",
+      "id": "REQ-73",
+      "summary": "Fix ClientDetailPage.tsx create mode to properly call createClient and navigate on success",
       "acceptanceCriteria": [
-        "Navigating to '/clients/new' renders the ClientDetailPage in create mode with all form fields empty.",
-        "Filling in the form fields (name, phone, address, notes, email) and clicking the 'Create' / 'Save' button triggers the createClient mutation.",
-        "On successful createClient response the user is navigated back to '/clients' and the new client appears in the list.",
-        "If createClient fails, an error message is displayed and the user remains on the form.",
-        "The button is never rendered in a permanently disabled state when the form has valid input.",
-        "No console errors or unhandled promise rejections occur during the create flow."
+        "Clicking 'Save'/'Create' on a new client form calls the backend createClient endpoint with the correct arguments.",
+        "On successful createClient call, the user is navigated back to '/clients'.",
+        "Error states are surfaced to the user if createClient fails.",
+        "The Save button is never in a permanently disabled state in create mode.",
+        "event.preventDefault() is called to prevent unintended page reloads."
       ],
       "file_operations": [
         {
           "path": "frontend/src/pages/ClientDetailPage.tsx",
           "operation": "modify",
-          "description": "Review and fix the form submission handler for create mode. Ensure the Save/Create button has a proper onClick or form onSubmit handler that calls event.preventDefault(), invokes the createClient mutation from useQueries with the correct field values from form state, awaits the result or uses onSuccess callback, and navigates to '/clients' on success using the router navigate function. Verify the button is not permanently disabled when form fields are filled. Add error state display for failed mutations. Ensure the createClient mutation is correctly wired to the backend actor."
+          "description": "Audit and fix the form submission handler for create mode. Ensure event.preventDefault() is called at the top of the handler. Verify the createClient mutation from useQueries is correctly invoked with all form field values (name, email, phone, address, notes, googleReviewUrl). Confirm the mutation's onSuccess callback navigates to '/clients' using the router. Remove any logic that permanently disables the Save button in create mode. Add visible error feedback if createClient fails. Verify the create client mutation hook in useQueries.ts is properly calling actor.createClient() before implementing."
         }
       ]
     },
     {
-      "id": "REQ-71",
-      "summary": "Fix JobDetailPage Create/Save button to properly call createJob mutation and navigate on success",
+      "id": "REQ-74",
+      "summary": "Fix InventoryPage.tsx 'Add Part' inline form to properly call createPart and refresh the list",
       "acceptanceCriteria": [
-        "Navigating to '/jobs/new' renders JobDetailPage in create mode with form fields empty.",
-        "Clicking 'Create' / 'Save' with valid input calls the createJob mutation.",
-        "On success the user is navigated away from the create form.",
-        "On failure an error message is shown and the user remains on the form."
+        "Clicking the submit/save button on the Add Part inline form calls the backend createPart endpoint with all entered field values.",
+        "The parts list refreshes/updates after a successful createPart call.",
+        "Error states are surfaced if createPart fails.",
+        "The submit button is not disabled or a no-op in add mode."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/pages/JobDetailPage.tsx",
+          "path": "frontend/src/pages/InventoryPage.tsx",
           "operation": "modify",
-          "description": "Review and fix the form submission handler for create mode. Ensure the Save/Create button has a proper onClick or form onSubmit handler that calls event.preventDefault(), invokes the createJob mutation from useQueries with the correct field values matching the Job type from backend.d.ts, awaits the result or uses onSuccess callback, and navigates to '/jobs' or the new job detail page on success. Verify the button is not permanently disabled when required fields are filled. Add error state display for failed mutations. Ensure the createJob mutation is correctly wired to the backend actor."
+          "description": "Audit and fix the Add Part inline form submission handler. Ensure the form's onSubmit or button's onClick properly prevents default behavior and calls the createPart mutation from useQueries with all entered fields (name, partNumber, description, quantityOnHand, unitCost, lowStockThreshold if present). Confirm the mutation's onSuccess callback triggers a query invalidation or refetch to update the parts list. Add visible error feedback if createPart fails. Ensure the submit button is enabled and functional in add mode. Verify the create part mutation hook in useQueries.ts is properly calling actor.createPart() before implementing."
         }
       ]
     },
     {
-      "id": "REQ-72",
-      "summary": "Audit and fix form submission handlers across ClientDetailPage and JobDetailPage for proper event handling and async flow",
+      "id": "REQ-75",
+      "summary": "Fix InventoryPage.tsx edit and delete flows to properly call updatePart and deletePart",
       "acceptanceCriteria": [
-        "Form submission does not cause a full page reload.",
-        "Mutation arguments match the expected backend input types.",
-        "Success and error callbacks execute reliably after mutation resolution.",
-        "No orphaned async calls that resolve after the component has unmounted."
+        "Saving an edited part calls updatePart with the correct id and updated fields.",
+        "Deleting a part calls deletePart with the correct id and removes it from the list.",
+        "Success and error states are visibly communicated to the user."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/pages/ClientDetailPage.tsx",
+          "path": "frontend/src/pages/InventoryPage.tsx",
           "operation": "modify",
-          "description": "Audit all form submission handlers (onSubmit on form elements, onClick on buttons). Ensure event.preventDefault() is called at the start of each handler to prevent page reloads. Verify mutation function calls use the correct argument shapes matching the Client type from backend.d.ts (id as bigint, required fields: name, phone, address, notes; optional fields: email, googleReviewUrl). Ensure async mutation calls are properly awaited or use mutation.mutateAsync with .then/.catch or React Query's onSuccess/onError callbacks so navigation and error handling fire correctly. Add cleanup to prevent state updates after unmount if needed."
-        },
+          "description": "Audit and fix the edit-part save handler. Ensure the updatePart mutation from useQueries is called with the correct part id and all updated field values. Confirm the mutation's onSuccess callback updates the UI (invalidates queries or closes the edit dialog). Audit and fix the delete-part handler to call the deletePart mutation with the correct part id. Ensure both mutations provide visible success/error feedback to the user. Verify the update and delete part mutation hooks in useQueries.ts are properly calling actor.updatePart() and actor.deletePart() before implementing."
+        }
+      ]
+    },
+    {
+      "id": "REQ-77",
+      "summary": "Audit and fix useQueries.ts mutation hooks for createClient, createPart, updatePart, deletePart, addJobPhoto, removeJobPhoto, and storeUserSignature",
+      "acceptanceCriteria": [
+        "Each mutation hook in useQueries.ts calls the correct actor method with the correct argument shape.",
+        "The actor reference is resolved (not null/undefined) before the mutation body executes.",
+        "Mutations for createClient, createPart, updatePart, deletePart, addJobPhoto, removeJobPhoto, and storeUserSignature are all functional and non-no-op."
+      ],
+      "file_operations": [
         {
-          "path": "frontend/src/pages/JobDetailPage.tsx",
+          "path": "frontend/src/hooks/useQueries.ts",
           "operation": "modify",
-          "description": "Audit all form submission handlers (onSubmit on form elements, onClick on buttons). Ensure event.preventDefault() is called at the start of each handler to prevent page reloads. Verify mutation function calls use the correct argument shapes matching the Job type from backend.d.ts (id as bigint, required fields: clientId, date, tech, status, notes, laborLineItems, photos; optional fields: estimate, waiverType, stripePaymentId). Ensure async mutation calls are properly awaited or use mutation.mutateAsync with .then/.catch or React Query's onSuccess/onError callbacks so navigation and error handling fire correctly. Add cleanup to prevent state updates after unmount if needed."
+          "description": "Audit each mutation hook (useCreateClient, useCreatePart, useUpdatePart, useDeletePart, useAddJobPhoto, useRemoveJobPhoto, useStoreUserSignature). For each mutation, verify: 1) the actor reference is checked and throws an error if not available before calling any actor method; 2) the correct actor method is invoked (e.g., actor.createClient, actor.createPart, etc.); 3) the argument shape exactly matches the backend interface signature (refer to backend.d.ts types). Fix any mutation that is a no-op, calls the wrong method, or passes incorrect arguments. Ensure all mutations return the expected result or void as appropriate."
         }
       ]
     }

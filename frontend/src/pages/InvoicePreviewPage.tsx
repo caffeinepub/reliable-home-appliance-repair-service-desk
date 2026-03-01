@@ -1,10 +1,9 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearch } from '@tanstack/react-router';
-import { ArrowLeft, Download, Printer, CheckCircle, PenLine, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGetJob, useGetClient, useListParts } from '../hooks/useQueries';
 import { useSignaturePad } from '../hooks/useSignaturePad';
-import { RateType } from '../backend';
 
 const BUSINESS_NAME = 'Reliable Home Appliance Repair LLC';
 const BUSINESS_PHONE_1 = '(845) 544-3077';
@@ -27,11 +26,17 @@ export default function InvoicePreviewPage() {
 
   const jobIdBig = BigInt(jobId);
   const { data: job, isLoading: jobLoading } = useGetJob(jobIdBig);
-  const { data: client, isLoading: clientLoading } = useGetClient(job?.clientId);
+  // Coerce undefined → null so useGetClient receives bigint | null
+  const { data: client, isLoading: clientLoading } = useGetClient(job?.clientId ?? null);
   const { data: allParts = [] } = useListParts();
 
   // Client signature (local only — not stored to backend)
-  const { canvasRef: clientCanvasRef, clear: clearClientSig, getSignatureBytes: getClientSigBytes, isEmpty: clientSigIsEmpty } = useSignaturePad();
+  const {
+    canvasRef: clientCanvasRef,
+    clear: clearClientSig,
+    getSignatureBytes: getClientSigBytes,
+    isEmpty: clientSigIsEmpty,
+  } = useSignaturePad();
   const [clientSigSaved, setClientSigSaved] = useState(false);
   const [clientSigUrl, setClientSigUrl] = useState<string | null>(null);
   const [clientSigError, setClientSigError] = useState('');
@@ -57,7 +62,7 @@ export default function InvoicePreviewPage() {
     const safe = toSafeUint8Array(bytes);
     const blob = new Blob([safe], { type: 'image/png' });
     const url = URL.createObjectURL(blob);
-    setClientSigUrl(prev => {
+    setClientSigUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return url;
     });
@@ -76,7 +81,7 @@ export default function InvoicePreviewPage() {
 
   // ── Derived totals ──
   const jobParts = allParts.filter(
-    p => p.jobId !== undefined && p.jobId !== null && job && p.jobId === job.id
+    (p) => p.jobId !== undefined && p.jobId !== null && job && p.jobId === job.id
   );
   const partsSubtotal = jobParts.reduce((sum, p) => sum + Number(p.unitCost), 0);
   const laborSubtotal = (job?.laborLineItems || []).reduce(
@@ -102,7 +107,7 @@ export default function InvoicePreviewPage() {
 
     const laborRows = (job.laborLineItems || [])
       .map(
-        item => `
+        (item) => `
         <tr>
           <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
             <div style="font-weight:500">${item.name}</div>
@@ -123,7 +128,7 @@ export default function InvoicePreviewPage() {
 
     const partRows = jobParts
       .map(
-        part => `
+        (part) => `
         <tr>
           <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
             <div style="font-weight:500">${part.name}</div>
@@ -320,11 +325,15 @@ export default function InvoicePreviewPage() {
                 src="/assets/generated/reliable-logo.dim_256x256.png"
                 alt="Logo"
                 className="h-16 w-16 object-contain"
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
               />
               <div>
                 <h2 className="text-xl font-bold text-green-800">{BUSINESS_NAME}</h2>
-                <p className="text-sm text-gray-500">{BUSINESS_PHONE_1} &nbsp;|&nbsp; {BUSINESS_PHONE_2}</p>
+                <p className="text-sm text-gray-500">
+                  {BUSINESS_PHONE_1} &nbsp;|&nbsp; {BUSINESS_PHONE_2}
+                </p>
                 <p className="text-sm text-gray-500">{BUSINESS_EMAIL}</p>
               </div>
             </div>
@@ -335,7 +344,7 @@ export default function InvoicePreviewPage() {
             </div>
           </div>
 
-          {/* Bill To */}
+          {/* Bill To / Job Details */}
           <div className="grid grid-cols-2 gap-8 mb-8">
             <div>
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
@@ -366,7 +375,7 @@ export default function InvoicePreviewPage() {
             </div>
           </div>
 
-          {/* Parts Line Items */}
+          {/* Parts */}
           {jobParts.length > 0 && (
             <div className="mb-4">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
@@ -375,9 +384,15 @@ export default function InvoicePreviewPage() {
               <table className="w-full mb-2">
                 <thead>
                   <tr className="border-b-2 border-gray-200">
-                    <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Part</th>
-                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Qty</th>
-                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Amount</th>
+                    <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                      Part
+                    </th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                      Qty
+                    </th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                      Amount
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -385,7 +400,9 @@ export default function InvoicePreviewPage() {
                     <tr key={idx} className="border-b border-gray-100">
                       <td className="py-2 text-sm text-gray-700">
                         <div className="font-medium">{part.name}</div>
-                        {part.partNumber && <div className="text-xs text-gray-400">#{part.partNumber}</div>}
+                        {part.partNumber && (
+                          <div className="text-xs text-gray-400">#{part.partNumber}</div>
+                        )}
                       </td>
                       <td className="py-2 text-sm text-gray-700 text-right">1</td>
                       <td className="py-2 text-sm font-medium text-gray-900 text-right">
@@ -398,19 +415,27 @@ export default function InvoicePreviewPage() {
             </div>
           )}
 
-          {/* Labor Line Items */}
-          {job.laborLineItems.length > 0 && (
+          {/* Labor */}
+          {job.laborLineItems && job.laborLineItems.length > 0 && (
             <div className="mb-6">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                 Labor
               </h3>
-              <table className="w-full">
+              <table className="w-full mb-2">
                 <thead>
                   <tr className="border-b-2 border-gray-200">
-                    <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Description</th>
-                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Rate</th>
-                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Qty/Hrs</th>
-                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">Amount</th>
+                    <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                      Description
+                    </th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                      Rate
+                    </th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                      Hrs
+                    </th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2">
+                      Amount
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -418,13 +443,16 @@ export default function InvoicePreviewPage() {
                     <tr key={idx} className="border-b border-gray-100">
                       <td className="py-2 text-sm text-gray-700">
                         <div className="font-medium">{item.name}</div>
-                        {item.description && <div className="text-xs text-gray-400">{item.description}</div>}
+                        {item.description && (
+                          <div className="text-xs text-gray-400">{item.description}</div>
+                        )}
                       </td>
                       <td className="py-2 text-sm text-gray-700 text-right">
-                        {formatCurrency(Number(item.rateAmount))}/{item.rateType === RateType.hourly ? 'hr' : 'flat'}
+                        {formatCurrency(Number(item.rateAmount))}/
+                        {item.rateType === 'hourly' ? 'hr' : 'flat'}
                       </td>
                       <td className="py-2 text-sm text-gray-700 text-right">
-                        {item.rateType === RateType.hourly ? item.hours.toFixed(1) : '1'}
+                        {item.rateType === 'hourly' ? item.hours.toFixed(1) : '—'}
                       </td>
                       <td className="py-2 text-sm font-medium text-gray-900 text-right">
                         {formatCurrency(Number(item.totalAmount))}
@@ -437,25 +465,25 @@ export default function InvoicePreviewPage() {
           )}
 
           {/* Totals */}
-          <div className="flex justify-end mb-8">
-            <div className="w-64">
-              <div className="flex justify-between py-1.5 text-sm text-gray-600">
+          <div className="flex justify-end mb-6">
+            <div className="w-64 space-y-1">
+              <div className="flex justify-between text-sm text-gray-600">
                 <span>Parts Subtotal</span>
                 <span>{formatCurrency(partsSubtotal)}</span>
               </div>
-              <div className="flex justify-between py-1.5 text-sm text-gray-600">
+              <div className="flex justify-between text-sm text-gray-600">
                 <span>Labor Subtotal</span>
                 <span>{formatCurrency(laborSubtotal)}</span>
               </div>
-              <div className="flex justify-between py-1.5 text-sm text-gray-600 border-t border-gray-200 mt-1">
+              <div className="flex justify-between text-sm text-gray-600 border-t border-gray-200 pt-1 mt-1">
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between py-1.5 text-sm text-gray-600">
+              <div className="flex justify-between text-sm text-gray-600">
                 <span>Tax ({taxRate}%)</span>
                 <span>{formatCurrency(Math.round(taxAmount))}</span>
               </div>
-              <div className="flex justify-between py-2.5 border-t-2 border-gray-900 font-bold text-base">
+              <div className="flex justify-between font-bold text-base border-t-2 border-gray-900 pt-2 mt-1">
                 <span>Total</span>
                 <span>{formatCurrency(Math.round(grandTotal))}</span>
               </div>
@@ -465,94 +493,65 @@ export default function InvoicePreviewPage() {
           {/* Notes */}
           {job.notes && (
             <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Notes</h3>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                Notes
+              </h3>
               <p className="text-sm text-gray-600 whitespace-pre-wrap">{job.notes}</p>
             </div>
           )}
 
-          {/* Customer Signature Section */}
-          <div className="mt-6 pt-6 border-t-2 border-gray-200">
-            <div className="flex items-center gap-2 mb-3">
-              <PenLine className="h-4 w-4 text-green-700" />
-              <h3 className="text-xs font-semibold text-green-700 uppercase tracking-wider">
-                Customer Signature
-              </h3>
-            </div>
+          {/* Customer Signature */}
+          <div className="border-t-2 border-gray-200 pt-6 mt-6">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              Customer Signature
+            </h3>
 
             {clientSigSaved && clientSigUrl ? (
-              /* Saved signature display */
-              <div>
-                <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 inline-block">
-                  <img
-                    src={clientSigUrl}
-                    alt="Customer Signature"
-                    className="max-h-20 block"
-                  />
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  Signed on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              <div className="space-y-2">
+                <img
+                  src={clientSigUrl}
+                  alt="Customer Signature"
+                  className="max-h-24 border border-gray-200 rounded"
+                />
+                <p className="text-xs text-gray-400">
+                  Signed on{' '}
+                  {new Date().toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
                 </p>
-                <div className="flex items-center gap-2 mt-3">
-                  <div className="flex items-center gap-1.5 text-green-700 text-sm font-medium">
-                    <CheckCircle className="h-4 w-4" />
-                    Signature saved
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-500 hover:text-red-600 h-7 px-2"
-                    onClick={handleClearClientSignature}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Clear
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearClientSignature}
+                  className="text-xs"
+                >
+                  Clear Signature
+                </Button>
               </div>
             ) : (
-              /* Signature pad */
-              <div>
-                <p className="text-xs text-gray-500 mb-2">
-                  Please sign below to acknowledge the work performed and authorize payment.
-                </p>
-                <div className="relative border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 overflow-hidden"
-                  style={{ touchAction: 'none' }}>
-                  <canvas
-                    ref={clientCanvasRef}
-                    width={560}
-                    height={140}
-                    className="w-full block cursor-crosshair"
-                    style={{ height: '140px', touchAction: 'none' }}
-                  />
-                  {clientSigIsEmpty && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <span className="text-gray-300 text-sm select-none">Sign here</span>
-                    </div>
-                  )}
-                  {/* Signature line */}
-                  <div className="absolute bottom-8 left-6 right-6 border-b border-gray-300 pointer-events-none" />
-                </div>
-
+              <div className="space-y-3">
+                <canvas
+                  ref={clientCanvasRef}
+                  width={500}
+                  height={120}
+                  className="w-full border border-gray-300 rounded-lg bg-white touch-none cursor-crosshair"
+                  style={{ maxHeight: '120px' }}
+                />
                 {clientSigError && (
-                  <p className="text-xs text-red-500 mt-1">{clientSigError}</p>
+                  <p className="text-xs text-red-500">{clientSigError}</p>
                 )}
-
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleClearClientSignature}
-                    className="text-gray-600"
+                    className="text-xs"
                   >
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                     Clear
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveClientSignature}
-                    disabled={clientSigIsEmpty}
-                    className="bg-green-700 hover:bg-green-800 text-white"
-                  >
-                    <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                  <Button size="sm" onClick={handleSaveClientSignature} className="text-xs">
                     Save Signature
                   </Button>
                 </div>
@@ -560,11 +559,6 @@ export default function InvoicePreviewPage() {
             )}
           </div>
         </div>
-
-        {/* Footer note */}
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          Thank you for choosing {BUSINESS_NAME}
-        </p>
       </div>
     </div>
   );

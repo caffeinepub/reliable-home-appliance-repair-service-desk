@@ -1,15 +1,37 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-03-01T00:25:59.795Z",
-  "summary": "The diff modifies ClientDetailPage.tsx and JobDetailPage.tsx to fix form submission in create mode. Both files implement handleSave with event.preventDefault(), direct actor calls (createClient/createJob), error state surfacing, and query invalidation followed by navigation. The changes appear to address all three requirements. Some details are truncated but the file summaries confirm the intent and implementation.",
-  "missing_requirements": [],
-  "hallucinated_features": [],
-  "confidence": 0.82,
+  "generatedAt": "2026-03-01T00:38:12.829Z",
+  "summary": "The diff addresses all five requirements. REQ-73 (ClientDetailPage create flow), REQ-74/75 (InventoryPage add/edit/delete flows), and REQ-77 (useQueries.ts mutation hooks) are clearly implemented in the frontend files. REQ-76 (backend blob storage) is addressed in backend/main.mo with stable storage and endpoint implementations. However, there are some gaps worth noting, particularly around the Part schema mismatch — REQ-74 specifies SKU/quantity/lowStockThreshold fields but the implementation uses partNumber/quantityOnHand with no lowStockThreshold. The blob storage implementation details are truncated so full verification is not possible.",
+  "missing_requirements": [
+    {
+      "id": "REQ-74",
+      "requirement": "The add-part form must call createPart with all entered values including name, SKU, quantity, lowStockThreshold, and unitCost.",
+      "reason": "The InventoryPage.tsx and Part type use 'partNumber' instead of 'SKU' and 'quantityOnHand' instead of 'quantity', and there is no 'lowStockThreshold' field anywhere in the diff. The backend Part type also lacks 'lowStockThreshold'. The AC explicitly requires lowStockThreshold to be submitted.",
+      "evidence": [
+        "frontend/src/pages/InventoryPage.tsx",
+        "backend/main.mo"
+      ]
+    }
+  ],
+  "hallucinated_features": [
+    {
+      "description": "A migration module (backend/migration.mo) was added as a no-op migration runner.",
+      "reason": "The build request does not mention adding a migration module or migration infrastructure. This is an extra file not requested by any requirement.",
+      "evidence": [
+        "backend/migration.mo"
+      ]
+    }
+  ],
+  "confidence": 0.72,
   "changed_files": [
+    "backend/main.mo",
+    "backend/migration.mo",
     "frontend-file-summaries.txt",
+    "frontend/src/hooks/useQueries.ts",
     "frontend/src/pages/ClientDetailPage.tsx",
-    "frontend/src/pages/JobDetailPage.tsx",
+    "frontend/src/pages/InventoryPage.tsx",
+    "frontend/src/pages/InvoicePreviewPage.tsx",
     "project_state.json"
   ]
 }
