@@ -1,17 +1,45 @@
-# Specification
+# Reliable Home Appliance Repair Service Desk
 
-## Summary
-**Goal:** Clean up the Job Detail page's Stripe UI, move the damage waiver to be a job-only option that flows into the invoice preview, and enable signed estimates to be shared via PDF, HTML, email, and SMS.
+## Current State
+- Mobile-first service desk app with Motoko backend and React frontend
+- Nav tabs: Dashboard, Clients, Jobs, Inventory, Settings
+- Labor rates currently embedded in Settings page (owner-only)
+- Settings page shows truncated principal ID with "Ryan" references
+- Actor initialization causes "actor not available" errors when saving too quickly
+- Delete functions exist in backend but frontend may be missing some UI hooks
+- No analytics section
+- No Google Maps routing view
 
-**Planned changes:**
-- Remove all explanatory/instructional text from the Stripe payment section on the Job Detail page, keeping only the "Charge via Stripe" button and the Paid/Unpaid badge.
-- Add a Damage Waiver toggle/checkbox to the Job Detail page (off by default); when enabled, reveal an editable text field pre-populated with the default waiver text and persist both the enabled state and text on the job record.
-- Remove the damage waiver from any location other than the Job Detail page (as a job option) and the Invoice/Estimate preview page (when enabled for that job).
-- On the Invoice/Estimate preview page, when the job has the waiver enabled, display the waiver text prominently before the signature section.
-- After a customer saves their signature on the Invoice/Estimate preview page, render the signature image inline in the "Customer Signature" area.
-- Add a "Download PDF" button that exports the full invoice including the inline signature via html2canvas + jsPDF.
-- Add a "Download HTML" button that generates and downloads a self-contained .html file of the invoice with the signature embedded as a base64 data URL.
-- Add a "Share via Email" button that opens a mailto: link with subject "Your Estimate from Reliable Home Appliance Repair LLC" and a pre-filled plain-text body containing client name, job date, post-tax total, and a note about the signed estimate.
-- Add a "Share via SMS" button that opens an sms: link with the message "Your estimate from Reliable Home Appliance Repair LLC is ready. Total: $[amount]. Please reply to confirm."
+## Requested Changes (Diff)
 
-**User-visible outcome:** Technicians can optionally attach an editable damage waiver to a job, which appears on the estimate before the customer signs. Once signed, the invoice can be shared with the customer as a PDF, HTML file, email, or SMS — all including the captured signature. The Job Detail page's Stripe section is also decluttered to show only the essential button and status badge.
+### Add
+- Labor Rates as a dedicated nav tab (5th item, Settings moves to last)
+- LaborRatesPage: full CRUD, custom rates, rate calculator for estimates
+- Analytics card in Settings: income collected per technician (computed from jobs/labor data)
+- Google Maps iframe embed in Calendar/Scheduling page for routing
+- Settings: login/logout portal section at top
+- Settings: display full principal ID in a copyable text field
+- Settings: descriptive instructions for granting authorized user access (no names)
+
+### Modify
+- Settings page: remove all "Ryan" references, replace with generic "technician" instructions
+- Settings page: show FULL principal ID (not truncated), with copy-to-clipboard button
+- Settings page: add login/logout section at top
+- Settings page: add analytics — income by technician (JB & RH labels allowed as initials only in display)
+- Layout nav bar: add Labor Rates tab, reorder tabs
+- Actor hook: improve initialization — disable save button with clear message, auto-retry, do not block indefinitely
+- All CRUD pages: confirm delete buttons work for clients, jobs, inventory, labor rates
+
+### Remove
+- Labor rates section from Settings page
+- "For Ryan" amber callout box from Settings
+- Truncated principal ID display
+
+## Implementation Plan
+1. Create `LaborRatesPage.tsx` with full CRUD and rate calculator
+2. Add `/labor-rates` route in `App.tsx`
+3. Update `Layout.tsx` nav to include Labor Rates tab
+4. Update `SettingsPage.tsx`: remove labor rates, remove Ryan refs, full principal ID with copy button, login/logout section, analytics section (income by tech)
+5. Add Google Maps iframe to CalendarPage for routing visualization
+6. Improve actor error handling across all pages — show "Connecting..." state, retry button, never silently fail
+7. Verify delete buttons are present and working on Clients, Jobs, Inventory pages
