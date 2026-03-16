@@ -32,7 +32,6 @@ export default function Layout() {
     data: userProfile,
     isLoading: profileLoading,
     isFetched,
-    error: profileError,
   } = useGetCallerUserProfile();
 
   const currentPath =
@@ -40,6 +39,17 @@ export default function Layout() {
   const isAuthPage =
     currentPath === "/login" || currentPath === "/profile-setup";
 
+  const principalStr = identity?.getPrincipal().toString() ?? "";
+  const localStorageKey = principalStr ? `rhar_profile_${principalStr}` : null;
+
+  // Cache profile in localStorage when successfully fetched
+  useEffect(() => {
+    if (userProfile && localStorageKey) {
+      localStorage.setItem(localStorageKey, JSON.stringify(userProfile));
+    }
+  }, [userProfile, localStorageKey]);
+
+  // Navigation / auth guard
   useEffect(() => {
     if (isInitializing) return;
     if (!identity) {
@@ -48,7 +58,12 @@ export default function Layout() {
     }
     if (!actor) return;
     if (profileLoading || !isFetched) return;
-    if (profileError || !userProfile) {
+
+    // Check localStorage cache before redirecting to profile-setup
+    const cachedProfile = localStorageKey
+      ? localStorage.getItem(localStorageKey)
+      : null;
+    if (!userProfile && !cachedProfile) {
       navigate({ to: "/profile-setup" });
     }
   }, [
@@ -57,12 +72,16 @@ export default function Layout() {
     actor,
     profileLoading,
     isFetched,
-    profileError,
     userProfile,
     navigate,
+    localStorageKey,
   ]);
 
-  const showNav = !!identity && !isAuthPage && !!userProfile;
+  const cachedProfileStr = localStorageKey
+    ? localStorage.getItem(localStorageKey)
+    : null;
+  const showNav =
+    !!identity && !isAuthPage && (!!userProfile || !!cachedProfileStr);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

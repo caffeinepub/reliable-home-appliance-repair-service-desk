@@ -50,6 +50,7 @@ import {
   useCreateJob,
   useDeleteJob,
   useGetJob,
+  useGetJobPartLineItems,
   useListClients,
   useListLaborRates,
   useListParts,
@@ -87,6 +88,7 @@ export default function JobDetailPage() {
   const removeLaborItem = useRemoveLaborLineItem();
   const addPartItem = useAddJobPartLineItem();
   const removePartItem = useRemoveJobPartLineItem();
+  const { data: partLineItemsData = [] } = useGetJobPartLineItems(jobId);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -129,10 +131,8 @@ export default function JobDetailPage() {
     setInitialized(true);
   }
 
-  // Compute costs from job's partLineItems (new API) or fall back to 0
-  const partLineItems: JobPartLineItem[] =
-    // biome-ignore lint/suspicious/noExplicitAny: new backend field
-    (job as any)?.partLineItems ?? [];
+  // Fetch part line items from backend (stored separately from job)
+  const partLineItems: JobPartLineItem[] = partLineItemsData;
 
   const partCost = partLineItems.reduce(
     (s, i) => s + Number(i.unitPrice) * Number(i.quantity),

@@ -316,6 +316,9 @@ export function useAddJobPartLineItem() {
       queryClient.invalidateQueries({
         queryKey: ["job", variables.jobId.toString()],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["jobPartLineItems", variables.jobId.toString()],
+      });
     },
   });
 }
@@ -335,7 +338,22 @@ export function useRemoveJobPartLineItem() {
       queryClient.invalidateQueries({
         queryKey: ["job", variables.jobId.toString()],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["jobPartLineItems", variables.jobId.toString()],
+      });
     },
+  });
+}
+
+export function useGetJobPartLineItems(jobId: bigint | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery<JobPartLineItem[]>({
+    queryKey: ["jobPartLineItems", jobId?.toString()],
+    queryFn: async () => {
+      if (!actor || jobId === null) return [];
+      return actor.getJobPartLineItems(jobId);
+    },
+    enabled: !!actor && !isFetching && jobId !== null,
   });
 }
 

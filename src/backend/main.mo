@@ -26,8 +26,9 @@ actor {
   stable var nextJobNumber = 1;
   stable var nextInvoiceNumber = 1;
 
+  // Owner: Jeffrey Burgholzer
   let ownerPrincipal = Principal.fromText(
-    "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe"
+    "asn62-s2yb6-ezdxu-wy6eu-ml2sx-yaqyb-tvmkf-bgefi-2iqtw-a7b53-yqe"
   );
 
   public type UserProfile = { name : Text };
@@ -35,7 +36,10 @@ actor {
   stable var userSignatures = Map.empty<Principal, Blob>();
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (caller != ownerPrincipal and not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (caller == ownerPrincipal) {
+      return userProfiles.get(caller);
+    };
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       return null;
     };
     userProfiles.get(caller);
@@ -49,7 +53,11 @@ actor {
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (caller != ownerPrincipal and not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (caller == ownerPrincipal) {
+      userProfiles.add(caller, profile);
+      return;
+    };
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can save profiles");
     };
     userProfiles.add(caller, profile);
@@ -83,16 +91,14 @@ actor {
     totalAmount : Nat;
   };
 
-  // Part line item for a job — stored in a separate stable map keyed by jobId
-  // This avoids breaking stable type compatibility with the existing Job type.
   public type JobPartLineItem = {
     id : Nat;
-    partId : ?Nat;      // null = manually entered (not from inventory)
+    partId : ?Nat;
     partNumber : Text;
     name : Text;
     description : Text;
     quantity : Nat;
-    unitPrice : Nat;    // in cents
+    unitPrice : Nat;
   };
 
   public type JobStatus = { #open; #inProgress; #complete };
@@ -114,7 +120,6 @@ actor {
     waiverText : Text;
   };
 
-  // Job type is unchanged from previous version to preserve stable compatibility
   public type Job = {
     id : Nat;
     clientId : Nat;
@@ -155,7 +160,6 @@ actor {
   stable var jobStore = Map.empty<Nat, Job>();
   stable var partStore = Map.empty<Nat, Part>();
   stable var laborRatesStore = Map.empty<Nat, LaborRate>();
-  // Separate stable store for job part line items — new, starts empty, no migration needed
   stable var jobPartLineItemsStore = Map.empty<Nat, [JobPartLineItem]>();
   stable var invoiceStore = Map.empty<Nat, Invoice>();
   stable var stripeKey : ?Text = null;
@@ -234,7 +238,6 @@ actor {
   public shared ({ caller }) func deleteJob(jobId : Nat) : async () {
     checkAuth(caller);
     jobStore.remove(jobId);
-    // Also remove associated part line items
     jobPartLineItemsStore.remove(jobId);
   };
 
@@ -310,7 +313,7 @@ actor {
     };
   };
 
-  // ─── Job Part Line Items (separate store) ───────────────────────────────────
+  // ─── Job Part Line Items ────────────────────────────────────────────────────
 
   public query ({ caller }) func getJobPartLineItems(jobId : Nat) : async [JobPartLineItem] {
     checkAuth(caller);
@@ -330,7 +333,6 @@ actor {
     let list = List.fromArray<JobPartLineItem>(existing);
     list.add(item);
     jobPartLineItemsStore.add(jobId, list.toArray());
-    // Decrement inventory if linked to a part
     switch (item.partId) {
       case (null) {};
       case (?pid) {

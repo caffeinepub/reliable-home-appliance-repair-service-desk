@@ -31,7 +31,7 @@ import {
 } from "../hooks/useQueries";
 
 const OWNER_PRINCIPAL =
-  "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe";
+  "asn62-s2yb6-ezdxu-wy6eu-ml2sx-yaqyb-tvmkf-bgefi-2iqtw-a7b53-yqe";
 
 export default function SettingsPage() {
   const {
@@ -427,7 +427,6 @@ export default function SettingsPage() {
                   disabled={setStripeConfig.isPending}
                   data-ocid="settings.submit_button"
                 >
-                  {setStripeConfig.isPending ? null : null}
                   {stripeSaved
                     ? "✓ Saved!"
                     : stripeConfigured
