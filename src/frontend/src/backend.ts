@@ -134,6 +134,15 @@ export interface LaborRate {
     amount: bigint;
     rateType: RateType;
 }
+export interface JobPartLineItem {
+    id: bigint;
+    partId: [] | [bigint];
+    partNumber: string;
+    name: string;
+    description: string;
+    quantity: bigint;
+    unitPrice: bigint;
+}
 export interface Job {
     id: bigint;
     status: JobStatus;
@@ -230,6 +239,7 @@ export interface backendInterface {
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
     addJobPhoto(jobId: bigint, photo: ExternalBlob): Promise<void>;
+    addJobPartLineItem(jobId: bigint, item: JobPartLineItem): Promise<void>;
     addLaborLineItem(jobId: bigint, laborLineItem: LaborLineItem): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
@@ -259,6 +269,8 @@ export interface backendInterface {
     listLaborRates(): Promise<Array<LaborRate>>;
     listParts(): Promise<Array<Part>>;
     removeJobPhoto(jobId: bigint, photoIndex: bigint): Promise<void>;
+    getJobPartLineItems(jobId: bigint): Promise<Array<JobPartLineItem>>;
+    removeJobPartLineItem(jobId: bigint, index: bigint): Promise<void>;
     removeLaborLineItem(jobId: bigint, index: bigint): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
@@ -275,7 +287,7 @@ export interface backendInterface {
     updatePart(part: Part): Promise<void>;
     usePartOnJob(partId: bigint, jobId: bigint, quantityUsed: bigint): Promise<void>;
 }
-import type { Client as _Client, DamageWaiver as _DamageWaiver, Estimate as _Estimate, ExternalBlob as _ExternalBlob, Job as _Job, JobStatus as _JobStatus, LaborLineItem as _LaborLineItem, LaborRate as _LaborRate, Part as _Part, RateType as _RateType, StripeSessionStatus as _StripeSessionStatus, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole, WaiverType as _WaiverType, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
+import type { Client as _Client, DamageWaiver as _DamageWaiver, Estimate as _Estimate, ExternalBlob as _ExternalBlob, Job as _Job, JobPartLineItem as _JobPartLineItem, JobStatus as _JobStatus, LaborLineItem as _LaborLineItem, LaborRate as _LaborRate, Part as _Part, RateType as _RateType, StripeSessionStatus as _StripeSessionStatus, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole, WaiverType as _WaiverType, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
@@ -387,6 +399,48 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.addJobPhoto(arg0, await to_candid_ExternalBlob_n8(this._uploadFile, this._downloadFile, arg1));
+            return result;
+        }
+    }
+    async addJobPartLineItem(arg0: bigint, arg1: JobPartLineItem): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.addJobPartLineItem(arg0, to_candid_JobPartLineItem(arg1));
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.addJobPartLineItem(arg0, to_candid_JobPartLineItem(arg1));
+            return result;
+        }
+    }
+    async getJobPartLineItems(arg0: bigint): Promise<Array<JobPartLineItem>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getJobPartLineItems(arg0);
+                return result.map(from_candid_JobPartLineItem);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getJobPartLineItems(arg0);
+            return result.map(from_candid_JobPartLineItem);
+        }
+    }
+    async removeJobPartLineItem(arg0: bigint, arg1: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.removeJobPartLineItem(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.removeJobPartLineItem(arg0, arg1);
             return result;
         }
     }
@@ -1572,6 +1626,28 @@ function to_candid_vec_n23(_uploadFile: (file: ExternalBlob) => Promise<Uint8Arr
 }
 async function to_candid_vec_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<ExternalBlob>): Promise<Array<_ExternalBlob>> {
     return await Promise.all(value.map(async (x)=>await to_candid_ExternalBlob_n8(_uploadFile, _downloadFile, x)));
+}
+function to_candid_JobPartLineItem(value: JobPartLineItem): _JobPartLineItem {
+    return {
+        id: value.id,
+        partId: value.partId,
+        partNumber: value.partNumber,
+        name: value.name,
+        description: value.description,
+        quantity: value.quantity,
+        unitPrice: value.unitPrice,
+    };
+}
+function from_candid_JobPartLineItem(value: _JobPartLineItem): JobPartLineItem {
+    return {
+        id: value.id,
+        partId: value.partId,
+        partNumber: value.partNumber,
+        name: value.name,
+        description: value.description,
+        quantity: value.quantity,
+        unitPrice: value.unitPrice,
+    };
 }
 export interface CreateActorOptions {
     agent?: Agent;

@@ -286,6 +286,59 @@ export function useRemoveLaborLineItem() {
   });
 }
 
+// ─── Job Part Line Items ─────────────────────────────────────────────────────
+
+export interface JobPartLineItem {
+  id: bigint;
+  partId: [] | [bigint];
+  partNumber: string;
+  name: string;
+  description: string;
+  quantity: bigint;
+  unitPrice: bigint;
+}
+
+export function useAddJobPartLineItem() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      jobId,
+      item,
+    }: { jobId: bigint; item: JobPartLineItem }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.addJobPartLineItem(jobId, item);
+    },
+    onSuccess: (
+      _data: unknown,
+      variables: { jobId: bigint; item: JobPartLineItem },
+    ) => {
+      queryClient.invalidateQueries({
+        queryKey: ["job", variables.jobId.toString()],
+      });
+    },
+  });
+}
+
+export function useRemoveJobPartLineItem() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ jobId, index }: { jobId: bigint; index: bigint }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.removeJobPartLineItem(jobId, index);
+    },
+    onSuccess: (
+      _data: unknown,
+      variables: { jobId: bigint; index: bigint },
+    ) => {
+      queryClient.invalidateQueries({
+        queryKey: ["job", variables.jobId.toString()],
+      });
+    },
+  });
+}
+
 // ─── Parts / Inventory ───────────────────────────────────────────────────────
 
 export function useListParts() {
@@ -378,6 +431,99 @@ export function useUsePartOnJob() {
   });
 }
 
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+
+export interface AppInvoice {
+  id: bigint;
+  jobId: bigint;
+  invoiceNumber: bigint;
+  issuedAt: bigint;
+  notes: string;
+  isPaid: boolean;
+}
+
+export function useListInvoices() {
+  const { actor, isFetching } = useActor();
+  return useQuery<AppInvoice[]>({
+    queryKey: ["invoices"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: new backend method
+        return await (actor as any).listInvoices();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useGetInvoice(id: bigint | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery<AppInvoice | null>({
+    queryKey: ["invoice", id?.toString()],
+    queryFn: async () => {
+      if (!actor || id === null) return null;
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: new backend method
+        return await (actor as any).getInvoice(id);
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!actor && !isFetching && id !== null,
+  });
+}
+
+export function useCreateInvoice() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (invoice: AppInvoice) => {
+      if (!actor) throw new Error("Actor not available");
+      // biome-ignore lint/suspicious/noExplicitAny: new backend method
+      return (actor as any).createInvoice(invoice) as Promise<bigint>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    },
+  });
+}
+
+export function useUpdateInvoice() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (invoice: AppInvoice) => {
+      if (!actor) throw new Error("Actor not available");
+      // biome-ignore lint/suspicious/noExplicitAny: new backend method
+      return (actor as any).updateInvoice(invoice);
+    },
+    onSuccess: (_data: unknown, variables: AppInvoice) => {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({
+        queryKey: ["invoice", variables.id.toString()],
+      });
+    },
+  });
+}
+
+export function useDeleteInvoice() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (invoiceId: bigint) => {
+      if (!actor) throw new Error("Actor not available");
+      // biome-ignore lint/suspicious/noExplicitAny: new backend method
+      return (actor as any).deleteInvoice(invoiceId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    },
+  });
+}
+
 // ─── Labor Rates ─────────────────────────────────────────────────────────────
 
 export function useListLaborRates() {
@@ -441,8 +587,12 @@ export function useGetCallerUserProfile() {
   const query = useQuery<UserProfile | null>({
     queryKey: ["currentUserProfile"],
     queryFn: async () => {
-      if (!actor) throw new Error("Actor not available");
-      return actor.getCallerUserProfile();
+      if (!actor) return null; // don't throw — treat as no profile yet
+      try {
+        return await actor.getCallerUserProfile();
+      } catch {
+        return null; // treat any auth/canister error as "no profile yet"
+      }
     },
     enabled: !!actor && !actorFetching,
     retry: false,

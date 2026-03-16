@@ -1,71 +1,68 @@
-import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Outlet, useNavigate } from "@tanstack/react-router";
 import {
-  Briefcase,
-  DollarSign,
-  LayoutDashboard,
+  BarChart2,
+  CalendarDays,
+  ClipboardList,
+  Home,
   Package,
   Settings,
   Users,
+  Wrench,
 } from "lucide-react";
 import { useEffect } from "react";
+import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { useGetCallerUserProfile } from "../hooks/useQueries";
 
 const NAV_ITEMS = [
-  { path: "/", label: "Dash", icon: LayoutDashboard },
+  { path: "/", label: "Dashboard", icon: Home },
   { path: "/clients", label: "Clients", icon: Users },
-  { path: "/jobs", label: "Jobs", icon: Briefcase },
+  { path: "/jobs", label: "Jobs", icon: ClipboardList },
   { path: "/inventory", label: "Inventory", icon: Package },
-  { path: "/labor-rates", label: "Labor", icon: DollarSign },
+  { path: "/invoices", label: "Invoices", icon: BarChart2 },
+  { path: "/labor-rates", label: "Labor Rates", icon: Wrench },
   { path: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function Layout() {
   const navigate = useNavigate();
-  const routerState = useRouterState();
-  const currentPath = routerState.location.pathname;
   const { identity, isInitializing } = useInternetIdentity();
+  const { actor } = useActor();
   const {
     data: userProfile,
     isLoading: profileLoading,
     isFetched,
+    error: profileError,
   } = useGetCallerUserProfile();
 
-  const isAuthenticated = !!identity;
+  const currentPath =
+    typeof window !== "undefined" ? window.location.pathname : "/";
   const isAuthPage =
     currentPath === "/login" || currentPath === "/profile-setup";
 
   useEffect(() => {
     if (isInitializing) return;
-    if (!isAuthenticated && !isAuthPage) {
+    if (!identity) {
       navigate({ to: "/login" });
       return;
     }
-    if (
-      isAuthenticated &&
-      !profileLoading &&
-      isFetched &&
-      userProfile === null &&
-      currentPath !== "/profile-setup"
-    ) {
+    if (!actor) return;
+    if (profileLoading || !isFetched) return;
+    if (profileError || !userProfile) {
       navigate({ to: "/profile-setup" });
-      return;
-    }
-    if (isAuthenticated && userProfile && currentPath === "/login") {
-      navigate({ to: "/" });
     }
   }, [
-    isAuthenticated,
+    identity,
     isInitializing,
+    actor,
     profileLoading,
     isFetched,
+    profileError,
     userProfile,
-    currentPath,
-    isAuthPage,
     navigate,
   ]);
 
-  const showNav = isAuthenticated && !isAuthPage && userProfile !== null;
+  const showNav = !!identity && !isAuthPage && !!userProfile;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -74,9 +71,9 @@ export default function Layout() {
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary-foreground/15 shrink-0">
             <img
-              src="/assets/generated/reliable-logo.dim_256x256.png"
-              alt="Logo"
-              className="w-7 h-7 object-contain"
+              src="/assets/generated/logo-wrench-gear-house-transparent.dim_200x200.png"
+              alt="Reliable Home Appliance Repair LLC"
+              className="w-8 h-8 object-contain"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = "none";
                 (e.target as HTMLImageElement).parentElement!.innerHTML =
@@ -86,7 +83,7 @@ export default function Layout() {
           </div>
           <div className="min-w-0">
             <h1 className="font-display font-700 text-base leading-tight tracking-wide truncate">
-              Reliable Home Appliance Repair
+              Reliable Home Appliance Repair LLC
             </h1>
             <p className="text-primary-foreground/70 text-xs font-medium tracking-wider uppercase">
               Service Desk
@@ -111,31 +108,18 @@ export default function Layout() {
                   : currentPath.startsWith(path);
               return (
                 <button
-                  type="button"
                   key={path}
-                  data-ocid={`nav.${label.toLowerCase().replace(/[^a-z0-9]/g, "")}.link`}
+                  type="button"
                   onClick={() => navigate({ to: path })}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 transition-colors min-h-[52px] ${
+                  className={`flex-1 flex flex-col items-center justify-center py-2 px-1 gap-0.5 text-[10px] font-medium transition-colors min-w-0 ${
                     isActive
-                      ? "text-primary"
+                      ? "text-primary bg-primary/5"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
+                  data-ocid={`nav.${label.toLowerCase().replace(/ /g, "_")}.link`}
                 >
-                  <Icon
-                    size={18}
-                    strokeWidth={isActive ? 2.5 : 1.8}
-                    className={isActive ? "text-primary" : ""}
-                  />
-                  <span
-                    className={`text-[8px] font-semibold tracking-wide leading-none ${
-                      isActive ? "text-primary" : ""
-                    }`}
-                  >
-                    {label}
-                  </span>
-                  {isActive && (
-                    <span className="absolute bottom-0 w-6 h-0.5 bg-primary rounded-t-full" />
-                  )}
+                  <Icon className="h-4.5 w-4.5 shrink-0" />
+                  <span className="truncate w-full text-center">{label}</span>
                 </button>
               );
             })}

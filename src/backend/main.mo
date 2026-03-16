@@ -18,38 +18,38 @@ import OutCall "http-outcalls/outcall";
 
 
 actor {
-  // Persistent blob storage now handled by storage component, no explicit migration needed.
   include MixinStorage();
 
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  var nextJobNumber = 1;
+  stable var nextJobNumber = 1;
+  stable var nextInvoiceNumber = 1;
 
   let ownerPrincipal = Principal.fromText(
     "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe"
   );
 
   public type UserProfile = { name : Text };
-  var userProfiles = Map.empty<Principal, UserProfile>();
-  var userSignatures = Map.empty<Principal, Blob>();
+  stable var userProfiles = Map.empty<Principal, UserProfile>();
+  stable var userSignatures = Map.empty<Principal, Blob>();
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can get profiles");
+    if (caller != ownerPrincipal and not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      return null;
     };
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+    if (caller != ownerPrincipal and caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
     userProfiles.get(user);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (caller != ownerPrincipal and not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can save profiles");
     };
     userProfiles.add(caller, profile);
@@ -83,6 +83,18 @@ actor {
     totalAmount : Nat;
   };
 
+  // Part line item for a job — stored in a separate stable map keyed by jobId
+  // This avoids breaking stable type compatibility with the existing Job type.
+  public type JobPartLineItem = {
+    id : Nat;
+    partId : ?Nat;      // null = manually entered (not from inventory)
+    partNumber : Text;
+    name : Text;
+    description : Text;
+    quantity : Nat;
+    unitPrice : Nat;    // in cents
+  };
+
   public type JobStatus = { #open; #inProgress; #complete };
 
   public type Estimate = {
@@ -102,6 +114,7 @@ actor {
     waiverText : Text;
   };
 
+  // Job type is unchanged from previous version to preserve stable compatibility
   public type Job = {
     id : Nat;
     clientId : Nat;
@@ -129,63 +142,71 @@ actor {
     jobId : ?Nat;
   };
 
-  var clientStore = Map.empty<Nat, Client>();
-  var jobStore = Map.empty<Nat, Job>();
-  var partStore = Map.empty<Nat, Part>();
-  var laborRatesStore = Map.empty<Nat, LaborRate>();
-  var stripeKey : ?Text = null;
-  var stripeConfigured : Bool = false;
+  public type Invoice = {
+    id : Nat;
+    jobId : Nat;
+    invoiceNumber : Nat;
+    issuedAt : Time.Time;
+    notes : Text;
+    isPaid : Bool;
+  };
+
+  stable var clientStore = Map.empty<Nat, Client>();
+  stable var jobStore = Map.empty<Nat, Job>();
+  stable var partStore = Map.empty<Nat, Part>();
+  stable var laborRatesStore = Map.empty<Nat, LaborRate>();
+  // Separate stable store for job part line items — new, starts empty, no migration needed
+  stable var jobPartLineItemsStore = Map.empty<Nat, [JobPartLineItem]>();
+  stable var invoiceStore = Map.empty<Nat, Invoice>();
+  stable var stripeKey : ?Text = null;
+  stable var stripeConfigured : Bool = false;
 
   func isAuthorizedOrOwner(caller : Principal) : Bool {
-    if (caller == ownerPrincipal) {
-      return true;
-    };
+    if (caller == ownerPrincipal) return true;
     AccessControl.hasPermission(accessControlState, caller, #user);
   };
 
-  public shared ({ caller }) func createClient(client : Client) : async Nat {
+  func checkAuth(caller : Principal) {
     if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can create clients");
+      Runtime.trap("Unauthorized: Only authorized users or owner can perform this action");
     };
+  };
+
+  // ─── Clients ────────────────────────────────────────────────────────────────
+
+  public shared ({ caller }) func createClient(client : Client) : async Nat {
+    checkAuth(caller);
     clientStore.add(client.id, client);
     client.id;
   };
 
   public query ({ caller }) func getClient(_clientId : Nat) : async Client {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can get clients");
-    };
+    checkAuth(caller);
     switch (clientStore.get(_clientId)) {
       case (null) { Runtime.trap("Client not found") };
-      case (?client) { client };
+      case (?c) { c };
     };
   };
 
   public query ({ caller }) func listClients() : async [Client] {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can list clients");
-    };
+    checkAuth(caller);
     clientStore.values().toArray();
   };
 
   public shared ({ caller }) func updateClient(client : Client) : async () {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can update clients");
-    };
+    checkAuth(caller);
     clientStore.add(client.id, client);
   };
 
   public shared ({ caller }) func deleteClient(clientId : Nat) : async () {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can delete clients");
-    };
+    checkAuth(caller);
     clientStore.remove(clientId);
   };
 
+  // ─── Jobs ───────────────────────────────────────────────────────────────────
+
   public shared ({ caller }) func createJob(job : Job) : async Nat {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can create jobs");
-    };
+    checkAuth(caller);
     let newJob = { job with id = nextJobNumber };
     jobStore.add(newJob.id, newJob);
     nextJobNumber += 1;
@@ -201,9 +222,7 @@ actor {
   };
 
   public query ({ caller }) func listJobs() : async [Job] {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can list jobs");
-    };
+    checkAuth(caller);
     jobStore.values().toArray();
   };
 
@@ -215,17 +234,16 @@ actor {
   public shared ({ caller }) func deleteJob(jobId : Nat) : async () {
     checkAuth(caller);
     jobStore.remove(jobId);
+    // Also remove associated part line items
+    jobPartLineItemsStore.remove(jobId);
   };
 
   public shared ({ caller }) func updateJobStatus(jobId : Nat, newStatus : JobStatus) : async () {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can update job status");
-    };
+    checkAuth(caller);
     switch (jobStore.get(jobId)) {
       case (null) { Runtime.trap("Job not found") };
       case (?job) {
-        let updatedJob = { job with status = newStatus };
-        jobStore.add(jobId, updatedJob);
+        jobStore.add(jobId, { job with status = newStatus });
       };
     };
   };
@@ -235,10 +253,9 @@ actor {
     switch (jobStore.get(jobId)) {
       case (null) { Runtime.trap("Job not found") };
       case (?job) {
-        let photosList = List.fromArray(job.photos);
-        photosList.add(photo);
-        let updatedJob = { job with photos = photosList.toArray() };
-        jobStore.add(jobId, updatedJob);
+        let list = List.fromArray(job.photos);
+        list.add(photo);
+        jobStore.add(jobId, { job with photos = list.toArray() });
       };
     };
   };
@@ -248,18 +265,11 @@ actor {
     switch (jobStore.get(jobId)) {
       case (null) { Runtime.trap("Job not found") };
       case (?job) {
-        if (photoIndex >= job.photos.size()) {
-          Runtime.trap("Invalid photo index");
-        };
-        let photosList = List.fromArray(job.photos);
-        let filteredPhotos = photosList.enumerate().filter(
-          func((i, _)) { i != photoIndex }
-        );
-        let newPhotosList = filteredPhotos.map(
-          func((_, photo)) { photo }
-        );
-        let updatedJob = { job with photos = newPhotosList.toArray() };
-        jobStore.add(jobId, updatedJob);
+        if (photoIndex >= job.photos.size()) Runtime.trap("Invalid photo index");
+        let filtered = List.fromArray(job.photos).enumerate()
+          .filter(func((i, _)) { i != photoIndex })
+          .map(func((_, p)) { p });
+        jobStore.add(jobId, { job with photos = filtered.toArray() });
       };
     };
   };
@@ -269,8 +279,7 @@ actor {
     switch (jobStore.get(jobId)) {
       case (null) { Runtime.trap("Job not found") };
       case (?job) {
-        let updatedJob = { job with estimate = ?estimate };
-        jobStore.add(jobId, updatedJob);
+        jobStore.add(jobId, { job with estimate = ?estimate });
       };
     };
   };
@@ -280,10 +289,9 @@ actor {
     switch (jobStore.get(jobId)) {
       case (null) { Runtime.trap("Job not found") };
       case (?job) {
-        let laborItemsList = List.fromArray<LaborLineItem>(job.laborLineItems);
-        laborItemsList.add(laborLineItem);
-        let updatedJob = { job with laborLineItems = laborItemsList.toArray() };
-        jobStore.add(jobId, updatedJob);
+        let list = List.fromArray<LaborLineItem>(job.laborLineItems);
+        list.add(laborLineItem);
+        jobStore.add(jobId, { job with laborLineItems = list.toArray() });
       };
     };
   };
@@ -293,31 +301,192 @@ actor {
     switch (jobStore.get(jobId)) {
       case (null) { Runtime.trap("Job not found") };
       case (?job) {
-        if (index >= job.laborLineItems.size()) {
-          Runtime.trap("Invalid labor line item index");
-        };
-        let laborItemsList = List.fromArray<LaborLineItem>(job.laborLineItems);
-        let filteredLaborItems = laborItemsList.enumerate().filter(
-          func((i, _)) { i != index }
-        );
-        let newLaborItemsList = filteredLaborItems.map(
-          func((_, item)) { item }
-        );
-        let updatedJob = { job with laborLineItems = newLaborItemsList.toArray() };
-        jobStore.add(jobId, updatedJob);
+        if (index >= job.laborLineItems.size()) Runtime.trap("Invalid labor line item index");
+        let filtered = List.fromArray<LaborLineItem>(job.laborLineItems).enumerate()
+          .filter(func((i, _)) { i != index })
+          .map(func((_, it)) { it });
+        jobStore.add(jobId, { job with laborLineItems = filtered.toArray() });
       };
     };
   };
 
+  // ─── Job Part Line Items (separate store) ───────────────────────────────────
+
+  public query ({ caller }) func getJobPartLineItems(jobId : Nat) : async [JobPartLineItem] {
+    checkAuth(caller);
+    switch (jobPartLineItemsStore.get(jobId)) {
+      case (null) { [] };
+      case (?items) { items };
+    };
+  };
+
+  public shared ({ caller }) func addJobPartLineItem(jobId : Nat, item : JobPartLineItem) : async () {
+    checkAuth(caller);
+    if (not jobStore.containsKey(jobId)) Runtime.trap("Job not found");
+    let existing = switch (jobPartLineItemsStore.get(jobId)) {
+      case (null) { [] };
+      case (?items) { items };
+    };
+    let list = List.fromArray<JobPartLineItem>(existing);
+    list.add(item);
+    jobPartLineItemsStore.add(jobId, list.toArray());
+    // Decrement inventory if linked to a part
+    switch (item.partId) {
+      case (null) {};
+      case (?pid) {
+        switch (partStore.get(pid)) {
+          case (null) {};
+          case (?part) {
+            let used = if (item.quantity > part.quantityOnHand) { part.quantityOnHand } else { item.quantity };
+            partStore.add(pid, { part with quantityOnHand = part.quantityOnHand - used; jobId = ?jobId });
+          };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func removeJobPartLineItem(jobId : Nat, index : Nat) : async () {
+    checkAuth(caller);
+    let existing = switch (jobPartLineItemsStore.get(jobId)) {
+      case (null) { Runtime.trap("No parts on this job") };
+      case (?items) { items };
+    };
+    if (index >= existing.size()) Runtime.trap("Invalid part line item index");
+    let filtered = List.fromArray<JobPartLineItem>(existing).enumerate()
+      .filter(func((i, _)) { i != index })
+      .map(func((_, it)) { it });
+    jobPartLineItemsStore.add(jobId, filtered.toArray());
+  };
+
+  // ─── Invoices ───────────────────────────────────────────────────────────────
+
+  public shared ({ caller }) func createInvoice(invoice : Invoice) : async Nat {
+    checkAuth(caller);
+    let newInvoice = { invoice with id = nextInvoiceNumber; invoiceNumber = nextInvoiceNumber };
+    invoiceStore.add(newInvoice.id, newInvoice);
+    nextInvoiceNumber += 1;
+    newInvoice.id;
+  };
+
+  public query ({ caller }) func getInvoice(invoiceId : Nat) : async Invoice {
+    checkAuth(caller);
+    switch (invoiceStore.get(invoiceId)) {
+      case (null) { Runtime.trap("Invoice not found") };
+      case (?inv) { inv };
+    };
+  };
+
+  public query ({ caller }) func listInvoices() : async [Invoice] {
+    checkAuth(caller);
+    invoiceStore.values().toArray();
+  };
+
+  public shared ({ caller }) func updateInvoice(invoice : Invoice) : async () {
+    checkAuth(caller);
+    invoiceStore.add(invoice.id, invoice);
+  };
+
+  public shared ({ caller }) func deleteInvoice(invoiceId : Nat) : async () {
+    checkAuth(caller);
+    invoiceStore.remove(invoiceId);
+  };
+
+  // ─── Inventory (Parts) ──────────────────────────────────────────────────────
+
+  public shared ({ caller }) func createPart(part : Part) : async Nat {
+    checkAuth(caller);
+    partStore.add(part.id, part);
+    part.id;
+  };
+
+  public query ({ caller }) func getPart(partId : Nat) : async Part {
+    checkAuth(caller);
+    switch (partStore.get(partId)) {
+      case (null) { Runtime.trap("Part not found") };
+      case (?part) { part };
+    };
+  };
+
+  public query ({ caller }) func listParts() : async [Part] {
+    checkAuth(caller);
+    partStore.values().toArray();
+  };
+
+  public shared ({ caller }) func updatePart(part : Part) : async () {
+    checkAuth(caller);
+    if (not partStore.containsKey(part.id)) Runtime.trap("Part not found");
+    partStore.add(part.id, part);
+  };
+
+  public shared ({ caller }) func deletePart(partId : Nat) : async () {
+    checkAuth(caller);
+    if (not partStore.containsKey(partId)) Runtime.trap("Part not found");
+    partStore.remove(partId);
+  };
+
+  public shared ({ caller }) func usePartOnJob(partId : Nat, jobId : Nat, quantityUsed : Nat) : async () {
+    checkAuth(caller);
+    switch (partStore.get(partId)) {
+      case (null) { Runtime.trap("Part not found") };
+      case (?part) {
+        if (not jobStore.containsKey(jobId)) Runtime.trap("Job not found");
+        if (part.quantityOnHand < quantityUsed) Runtime.trap("Insufficient quantity on hand");
+        partStore.add(partId, { part with quantityOnHand = part.quantityOnHand - quantityUsed; jobId = ?jobId });
+      };
+    };
+  };
+
+  public query ({ caller }) func getTotalPartCostByJob(jobId : Nat) : async Nat {
+    checkAuth(caller);
+    switch (jobPartLineItemsStore.get(jobId)) {
+      case (null) { 0 };
+      case (?items) {
+        items.foldLeft(0, func(acc, item) { acc + item.unitPrice * item.quantity });
+      };
+    };
+  };
+
+  // ─── Labor Rates ────────────────────────────────────────────────────────────
+
+  public shared ({ caller }) func createLaborRate(laborRate : LaborRate) : async Nat {
+    checkAuth(caller);
+    laborRatesStore.add(laborRate.id, laborRate);
+    laborRate.id;
+  };
+
+  public query ({ caller }) func listLaborRates() : async [LaborRate] {
+    checkAuth(caller);
+    laborRatesStore.values().toArray();
+  };
+
+  public shared ({ caller }) func updateLaborRate(laborRate : LaborRate) : async () {
+    checkAuth(caller);
+    laborRatesStore.add(laborRate.id, laborRate);
+  };
+
+  public shared ({ caller }) func deleteLaborRate(laborRateId : Nat) : async () {
+    checkAuth(caller);
+    laborRatesStore.remove(laborRateId);
+  };
+
+  // ─── Scheduling ─────────────────────────────────────────────────────────────
+
+  public shared ({ caller }) func updateJobSchedule(jobId : Nat, scheduledStart : ?Time.Time, scheduledEnd : ?Time.Time) : async () {
+    checkAuth(caller);
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) {
+        jobStore.add(jobId, { job with scheduledStart; scheduledEnd });
+      };
+    };
+  };
+
+  // ─── Payments (Stripe) ──────────────────────────────────────────────────────
+
   func getStripeConfiguration() : Stripe.StripeConfiguration {
     switch (stripeKey) {
       case (null) { Runtime.trap("Stripe key not set") };
-      case (?key) {
-        {
-          secretKey = key;
-          allowedCountries = ["US"];
-        };
-      };
+      case (?key) { { secretKey = key; allowedCountries = ["US"] } };
     };
   };
 
@@ -326,35 +495,52 @@ actor {
   };
 
   public shared ({ caller }) func setStripeConfiguration(config : Stripe.StripeConfiguration) : async () {
-    if (caller != ownerPrincipal) {
-      Runtime.trap("Unauthorized: Only the owner can set Stripe configuration");
-    };
+    if (caller != ownerPrincipal) Runtime.trap("Unauthorized: Only the owner can set Stripe configuration");
     stripeKey := ?config.secretKey;
     stripeConfigured := true;
   };
 
   public shared ({ caller }) func getStripeSessionStatus(sessionId : Text) : async Stripe.StripeSessionStatus {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can get Stripe session status");
-    };
+    checkAuth(caller);
     await Stripe.getSessionStatus(getStripeConfiguration(), sessionId, transform);
   };
 
   public shared ({ caller }) func createCheckoutSession(items : [Stripe.ShoppingItem], successUrl : Text, cancelUrl : Text) : async Text {
     checkAuth(caller);
-    await Stripe.createCheckoutSession(
-      getStripeConfiguration(),
-      caller,
-      items,
-      successUrl,
-      cancelUrl,
-      transform
-    );
+    await Stripe.createCheckoutSession(getStripeConfiguration(), caller, items, successUrl, cancelUrl, transform);
   };
 
   public query func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
     OutCall.transform(input);
   };
+
+  public shared ({ caller }) func updateJobPayment(jobId : Nat, paymentIntentId : Text) : async () {
+    checkAuth(caller);
+    switch (jobStore.get(jobId)) {
+      case (null) { Runtime.trap("Job not found") };
+      case (?job) {
+        jobStore.add(jobId, { job with stripePaymentId = ?paymentIntentId });
+      };
+    };
+  };
+
+  public shared ({ caller }) func createPaymentIntent(jobId : Nat, amountInCents : Nat) : async Text {
+    checkAuth(caller);
+    let amount = Int.abs(amountInCents);
+    let url = "https://api.stripe.com/v1/payment_intents";
+    let headers : [OutCall.Header] = [
+      { name = "Authorization"; value = "Bearer " # getStripeConfiguration().secretKey },
+      { name = "Content-Type"; value = "application/x-www-form-urlencoded" },
+    ];
+    let body = "amount=" # amount.toText() # "&currency=usd";
+    let response = await OutCall.httpPostRequest(url, headers, body, transform);
+    switch (response.size()) {
+      case (0) { Runtime.trap("Stripe API call failed or returned no data") };
+      case (_) { response };
+    };
+  };
+
+  // ─── Signatures ─────────────────────────────────────────────────────────────
 
   public shared ({ caller }) func storeUserSignature(sig : Blob) : async () {
     checkAuth(caller);
@@ -366,176 +552,10 @@ actor {
     userSignatures.get(caller);
   };
 
-  public shared ({ caller }) func createPart(part : Part) : async Nat {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can create parts");
-    };
-    partStore.add(part.id, part);
-    part.id;
-  };
+  // ─── Damage Waivers ─────────────────────────────────────────────────────────
 
-  public query ({ caller }) func getPart(partId : Nat) : async Part {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can get parts");
-    };
-    switch (partStore.get(partId)) {
-      case (null) { Runtime.trap("Part not found") };
-      case (?part) { part };
-    };
-  };
-
-  public query ({ caller }) func listParts() : async [Part] {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can list parts");
-    };
-    partStore.values().toArray();
-  };
-
-  public shared ({ caller }) func updatePart(part : Part) : async () {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can update parts");
-    };
-    if (not partStore.containsKey(part.id)) {
-      Runtime.trap("Part not found");
-    };
-    partStore.add(part.id, part);
-  };
-
-  public shared ({ caller }) func deletePart(partId : Nat) : async () {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can delete parts");
-    };
-    if (not partStore.containsKey(partId)) {
-      Runtime.trap("Part not found");
-    };
-    partStore.remove(partId);
-  };
-
-  public shared ({ caller }) func usePartOnJob(partId : Nat, jobId : Nat, quantityUsed : Nat) : async () {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can use parts on jobs");
-    };
-    switch (partStore.get(partId)) {
-      case (null) { Runtime.trap("Part not found") };
-      case (?part) {
-        if (not jobStore.containsKey(jobId)) {
-          Runtime.trap("Job not found");
-        };
-        if (part.quantityOnHand < quantityUsed) {
-          Runtime.trap("Insufficient quantity on hand");
-        };
-        let updatedPart = {
-          part with
-          quantityOnHand = part.quantityOnHand - quantityUsed;
-          jobId = ?jobId;
-        };
-        partStore.add(partId, updatedPart);
-      };
-    };
-  };
-
-  public shared ({ caller }) func createLaborRate(laborRate : LaborRate) : async Nat {
-    if (caller != ownerPrincipal) {
-      Runtime.trap("Unauthorized: Only the owner can create labor rates");
-    };
-    laborRatesStore.add(laborRate.id, laborRate);
-    laborRate.id;
-  };
-
-  public query ({ caller }) func listLaborRates() : async [LaborRate] {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can list labor rates");
-    };
-    laborRatesStore.values().toArray();
-  };
-
-  public shared ({ caller }) func updateLaborRate(laborRate : LaborRate) : async () {
-    if (caller != ownerPrincipal) {
-      Runtime.trap("Unauthorized: Only the owner can update labor rates");
-    };
-    laborRatesStore.add(laborRate.id, laborRate);
-  };
-
-  public shared ({ caller }) func deleteLaborRate(laborRateId : Nat) : async () {
-    if (caller != ownerPrincipal) {
-      Runtime.trap("Unauthorized: Only the owner can delete labor rates");
-    };
-    laborRatesStore.remove(laborRateId);
-  };
-
-  public query ({ caller }) func getTotalPartCostByJob(jobId : Nat) : async Nat {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can get total part cost");
-    };
-    let parts = partStore.values().toArray();
-    let jobParts = parts.filter(func(p) { p.jobId == ?jobId });
-    let total = jobParts.foldLeft(
-      0,
-      func(acc, part) { acc + part.unitCost },
-    );
-    total;
-  };
-
-  public shared ({ caller }) func updateJobSchedule(jobId : Nat, scheduledStart : ?Time.Time, scheduledEnd : ?Time.Time) : async () {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can update job schedule");
-    };
-    switch (jobStore.get(jobId)) {
-      case (null) { Runtime.trap("Job not found") };
-      case (?job) {
-        let updatedJob = {
-          job with
-          scheduledStart;
-          scheduledEnd;
-        };
-        jobStore.add(jobId, updatedJob);
-      };
-    };
-  };
-
-  public shared ({ caller }) func updateJobPayment(jobId : Nat, paymentIntentId : Text) : async () {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can update job payment");
-    };
-    switch (jobStore.get(jobId)) {
-      case (null) { Runtime.trap("Job not found") };
-      case (?job) {
-        let updatedJob = { job with stripePaymentId = ?paymentIntentId };
-        jobStore.add(jobId, updatedJob);
-      };
-    };
-  };
-
-  public shared ({ caller }) func createPaymentIntent(jobId : Nat, amountInCents : Nat) : async Text {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can create payment intents");
-    };
-
-    let amount = Int.abs(amountInCents);
-
-    let url = "https://api.stripe.com/v1/payment_intents";
-    let headers : [OutCall.Header] = [
-      {
-        name = "Authorization";
-        value = "Bearer " # getStripeConfiguration().secretKey;
-      },
-      { name = "Content-Type"; value = "application/x-www-form-urlencoded" },
-    ];
-    let body = "amount=" # amount.toText() # "&currency=usd";
-
-    let response = await OutCall.httpPostRequest(url, headers, body, transform);
-
-    switch (response.size()) {
-      case (0) { Runtime.trap("Stripe API call failed or returned no data") };
-      case (_) { response };
-    };
-  };
-
-  // Damage Waiver Management
   public query ({ caller }) func getDamageWaiver(jobId : Nat) : async ?DamageWaiver {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users can get damage waivers");
-    };
+    checkAuth(caller);
     switch (jobStore.get(jobId)) {
       case (null) { Runtime.trap("Job not found") };
       case (?job) { job.damageWaiver };
@@ -543,21 +563,12 @@ actor {
   };
 
   public shared ({ caller }) func updateDamageWaiver(jobId : Nat, waiver : DamageWaiver) : async () {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users can update damage waivers");
-    };
+    checkAuth(caller);
     switch (jobStore.get(jobId)) {
       case (null) { Runtime.trap("Job not found") };
       case (?job) {
-        let updatedJob = { job with damageWaiver = ?waiver };
-        jobStore.add(jobId, updatedJob);
+        jobStore.add(jobId, { job with damageWaiver = ?waiver });
       };
-    };
-  };
-
-  func checkAuth(caller : Principal) {
-    if (not isAuthorizedOrOwner(caller)) {
-      Runtime.trap("Unauthorized: Only authorized users or owner can perform this action");
     };
   };
 };

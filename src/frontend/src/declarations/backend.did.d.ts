@@ -59,6 +59,15 @@ export interface LaborRate {
   'amount' : bigint,
   'rateType' : RateType,
 }
+export interface JobPartLineItem {
+  'id' : bigint,
+  'partId' : [] | [bigint],
+  'partNumber' : string,
+  'name' : string,
+  'description' : string,
+  'quantity' : bigint,
+  'unitPrice' : bigint,
+}
 export interface Part {
   'id' : bigint,
   'partNumber' : string,
@@ -137,6 +146,7 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addJobPhoto' : ActorMethod<[bigint, ExternalBlob], undefined>,
+  'addJobPartLineItem' : ActorMethod<[bigint, JobPartLineItem], undefined>,
   'addLaborLineItem' : ActorMethod<[bigint, LaborLineItem], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'createCheckoutSession' : ActorMethod<
@@ -169,6 +179,8 @@ export interface _SERVICE {
   'listLaborRates' : ActorMethod<[], Array<LaborRate>>,
   'listParts' : ActorMethod<[], Array<Part>>,
   'removeJobPhoto' : ActorMethod<[bigint, bigint], undefined>,
+  'getJobPartLineItems' : ActorMethod<[bigint], Array<JobPartLineItem>>,
+  'removeJobPartLineItem' : ActorMethod<[bigint, bigint], undefined>,
   'removeLaborLineItem' : ActorMethod<[bigint, bigint], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,

@@ -29,6 +29,15 @@ export const LaborLineItem = IDL.Record({
   'rateAmount' : IDL.Nat,
   'rateType' : RateType,
 });
+export const JobPartLineItem = IDL.Record({
+  'id' : IDL.Nat,
+  'partId' : IDL.Opt(IDL.Nat),
+  'partNumber' : IDL.Text,
+  'name' : IDL.Text,
+  'description' : IDL.Text,
+  'quantity' : IDL.Nat,
+  'unitPrice' : IDL.Nat,
+});
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
   'user' : IDL.Null,
@@ -161,6 +170,7 @@ export const idlService = IDL.Service({
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addJobPhoto' : IDL.Func([IDL.Nat, ExternalBlob], [], []),
+  'addJobPartLineItem' : IDL.Func([IDL.Nat, JobPartLineItem], [], []),
   'addLaborLineItem' : IDL.Func([IDL.Nat, LaborLineItem], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'createCheckoutSession' : IDL.Func(
@@ -198,6 +208,8 @@ export const idlService = IDL.Service({
   'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
   'listParts' : IDL.Func([], [IDL.Vec(Part)], ['query']),
   'removeJobPhoto' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
+  'getJobPartLineItems' : IDL.Func([IDL.Nat], [IDL.Vec(JobPartLineItem)], ['query']),
+  'removeJobPartLineItem' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
   'removeLaborLineItem' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
@@ -376,6 +388,7 @@ export const idlFactory = ({ IDL }) => {
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addJobPhoto' : IDL.Func([IDL.Nat, ExternalBlob], [], []),
+    'addJobPartLineItem' : IDL.Func([IDL.Nat, JobPartLineItem], [], []),
     'addLaborLineItem' : IDL.Func([IDL.Nat, LaborLineItem], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'createCheckoutSession' : IDL.Func(
@@ -413,6 +426,8 @@ export const idlFactory = ({ IDL }) => {
     'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
     'listParts' : IDL.Func([], [IDL.Vec(Part)], ['query']),
     'removeJobPhoto' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
+    'getJobPartLineItems' : IDL.Func([IDL.Nat], [IDL.Vec(JobPartLineItem)], ['query']),
+    'removeJobPartLineItem' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
     'removeLaborLineItem' : IDL.Func([IDL.Nat, IDL.Nat], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),

@@ -135,8 +135,18 @@ export enum WaiverType {
     preexisting = "preexisting",
     potential = "potential"
 }
+export interface JobPartLineItem {
+    id: bigint;
+    partId: [] | [bigint];
+    partNumber: string;
+    name: string;
+    description: string;
+    quantity: bigint;
+    unitPrice: bigint;
+}
 export interface backendInterface {
     addJobPhoto(jobId: bigint, photo: ExternalBlob): Promise<void>;
+    addJobPartLineItem(jobId: bigint, item: JobPartLineItem): Promise<void>;
     addLaborLineItem(jobId: bigint, laborLineItem: LaborLineItem): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
@@ -166,6 +176,8 @@ export interface backendInterface {
     listLaborRates(): Promise<Array<LaborRate>>;
     listParts(): Promise<Array<Part>>;
     removeJobPhoto(jobId: bigint, photoIndex: bigint): Promise<void>;
+    getJobPartLineItems(jobId: bigint): Promise<Array<JobPartLineItem>>;
+    removeJobPartLineItem(jobId: bigint, index: bigint): Promise<void>;
     removeLaborLineItem(jobId: bigint, index: bigint): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;

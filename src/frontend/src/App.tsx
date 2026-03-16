@@ -14,6 +14,7 @@ import ClientsPage from "./pages/ClientsPage";
 import DashboardPage from "./pages/DashboardPage";
 import InventoryPage from "./pages/InventoryPage";
 import InvoicePreviewPage from "./pages/InvoicePreviewPage";
+import InvoicesPage from "./pages/InvoicesPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
 import LaborRatesPage from "./pages/LaborRatesPage";
@@ -115,6 +116,12 @@ const laborRatesRoute = createRoute({
   component: LaborRatesPage,
 });
 
+const invoicesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/invoices",
+  component: InvoicesPage,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -132,6 +139,7 @@ const routeTree = rootRoute.addChildren([
   newJobRoute,
   jobDetailRoute,
   invoiceRoute,
+  invoicesRoute,
   inventoryRoute,
   calendarRoute,
   laborRatesRoute,

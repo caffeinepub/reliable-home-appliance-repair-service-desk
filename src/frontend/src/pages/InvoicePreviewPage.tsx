@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -10,9 +12,10 @@ import {
   MessageSquare,
   Printer,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import SignatureCapture from "../components/SignatureCapture";
+import type { JobPartLineItem } from "../hooks/useQueries";
 import { useGetJob } from "../hooks/useQueries";
 import { useGetClient } from "../hooks/useQueries";
 import {
@@ -20,8 +23,10 @@ import {
   useStoreUserSignature,
 } from "../hooks/useQueries";
 
-const TAX_RATE = 0.08875;
-const DIAGNOSTIC_FEE = 8500;
+const COMPANY_NAME = "Reliable Home Appliance Repair LLC";
+const COMPANY_PHONE1 = "(845) 636-3574";
+const COMPANY_PHONE2 = "(845) 544-3077";
+const COMPANY_EMAIL = "rhappliance1@gmail.com";
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -49,8 +54,8 @@ export default function InvoicePreviewPage() {
 
   const [sigImageUrl, setSigImageUrl] = useState<string | null>(null);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [taxRateStr, setTaxRateStr] = useState("8.875");
 
-  // Build a displayable URL from stored signature bytes
   useEffect(() => {
     if (existingSig && existingSig.length > 0) {
       const plain = new ArrayBuffer(existingSig.length);
@@ -102,21 +107,42 @@ export default function InvoicePreviewPage() {
     );
   }
 
+  // biome-ignore lint/suspicious/noExplicitAny: new backend field
+  const partLineItems: JobPartLineItem[] = (job as any)?.partLineItems ?? [];
+
+  const partCost = partLineItems.reduce(
+    (s, i) => s + Number(i.unitPrice) * Number(i.quantity),
+    0,
+  );
   const laborCost = job.laborLineItems.reduce(
     (s, i) => s + Number(i.totalAmount),
     0,
   );
-  const subtotal = DIAGNOSTIC_FEE + laborCost;
-  const tax = Math.round(subtotal * TAX_RATE);
+  const taxRate =
+    Math.max(0, Math.min(100, Number.parseFloat(taxRateStr) || 0)) / 100;
+  const subtotal = partCost + laborCost;
+  const tax = Math.round(subtotal * taxRate);
   const total = subtotal + tax;
 
   const clientName = client?.name ?? "Customer";
   const clientEmail = client?.email ?? "";
   const clientPhone = client?.phone ?? "";
 
-  // ── Share / Export helpers ──────────────────────────────────────────────────
-
   const buildInvoiceHTML = () => {
+    const partRows = partLineItems
+      .map(
+        (item) =>
+          `<tr>
+            <td style="padding:6px 0;border-bottom:1px solid #eee">
+              ${item.name}${item.partNumber ? ` <span style="color:#888;font-size:.8em">#${item.partNumber}</span>` : ""}
+              ${item.description ? ` — ${item.description}` : ""}
+              <span style="color:#888;font-size:.8em"> (qty ${item.quantity})</span>
+            </td>
+            <td style="padding:6px 0;border-bottom:1px solid #eee;text-align:right">${formatCents(Number(item.unitPrice) * Number(item.quantity))}</td>
+          </tr>`,
+      )
+      .join("");
+
     const laborRows = job.laborLineItems
       .map(
         (item) =>
@@ -135,12 +161,13 @@ export default function InvoicePreviewPage() {
   <title>Invoice / Estimate — Job #${job.id}</title>
   <style>
     body{font-family:system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#111}
-    h1{font-size:1.6rem;margin:0}
+    h1{font-size:1.4rem;margin:0;color:#15803d}
     .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
     .company{font-size:.85rem;color:#555;line-height:1.6}
     .client-block{margin-bottom:24px}
     table{width:100%;border-collapse:collapse}
     th{text-align:left;padding:6px 0;border-bottom:2px solid #111;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+    .section-label{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#888;padding:8px 0 4px}
     .total-row td{padding:4px 0;font-size:.95rem}
     .grand-total td{font-weight:700;font-size:1.1rem;border-top:2px solid #111;padding-top:8px}
     .sig-section{margin-top:40px;border-top:1px solid #ddd;padding-top:20px}
@@ -150,10 +177,10 @@ export default function InvoicePreviewPage() {
 <body>
   <div class="header">
     <div>
-      <h1>Reliable Tech Repair</h1>
+      <h1>${COMPANY_NAME}</h1>
       <div class="company">
-        (347) 389-4821 &nbsp;|&nbsp; (347) 389-4822<br/>
-        reliabletechrepair@gmail.com
+        ${COMPANY_PHONE1} &nbsp;|&nbsp; ${COMPANY_PHONE2}<br/>
+        ${COMPANY_EMAIL}
       </div>
     </div>
     <div style="text-align:right;font-size:.85rem;color:#555">
@@ -178,11 +205,8 @@ export default function InvoicePreviewPage() {
       </tr>
     </thead>
     <tbody>
-      <tr>
-        <td style="padding:6px 0;border-bottom:1px solid #eee">Diagnostic Fee</td>
-        <td style="padding:6px 0;border-bottom:1px solid #eee;text-align:right">${formatCents(DIAGNOSTIC_FEE)}</td>
-      </tr>
-      ${laborRows}
+      ${partLineItems.length > 0 ? `<tr><td colspan="2" class="section-label">Parts</td></tr>${partRows}` : ""}
+      ${job.laborLineItems.length > 0 ? `<tr><td colspan="2" class="section-label">Labor</td></tr>${laborRows}` : ""}
     </tbody>
     <tfoot>
       <tr class="total-row">
@@ -190,7 +214,7 @@ export default function InvoicePreviewPage() {
         <td style="text-align:right">${formatCents(subtotal)}</td>
       </tr>
       <tr class="total-row">
-        <td>Tax (8.875%)</td>
+        <td>Tax (${taxRateStr}%)</td>
         <td style="text-align:right">${formatCents(tax)}</td>
       </tr>
       <tr class="grand-total">
@@ -210,7 +234,7 @@ export default function InvoicePreviewPage() {
   }
 
   <p style="margin-top:40px;font-size:.75rem;color:#999;text-align:center">
-    Thank you for choosing Reliable Tech Repair!
+    Thank you for choosing ${COMPANY_NAME}!
   </p>
 </body>
 </html>`;
@@ -228,7 +252,6 @@ export default function InvoicePreviewPage() {
   };
 
   const handleDownloadPDF = () => {
-    // Use print-to-PDF via a hidden iframe with print stylesheet
     const html = buildInvoiceHTML();
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
@@ -257,8 +280,19 @@ export default function InvoicePreviewPage() {
 
   const handleSendEmail = () => {
     const subject = encodeURIComponent(`Invoice / Estimate for Job #${job.id}`);
+    const partsLines = partLineItems
+      .map(
+        (i) =>
+          `${i.name}${i.partNumber ? ` (#${i.partNumber})` : ""} x${i.quantity}: ${formatCents(Number(i.unitPrice) * Number(i.quantity))}`,
+      )
+      .join("\n");
+    const laborLines = job.laborLineItems
+      .map((i) => `${i.name}: ${formatCents(Number(i.totalAmount))}`)
+      .join("\n");
     const body = encodeURIComponent(
-      `Hi ${clientName},\n\nPlease find your invoice summary below:\n\nJob #${job.id} — ${formatDate(job.date)}\nDiagnostic Fee: ${formatCents(DIAGNOSTIC_FEE)}\n${job.laborLineItems.map((i) => `${i.name}: ${formatCents(Number(i.totalAmount))}`).join("\n")}\nSubtotal: ${formatCents(subtotal)}\nTax (8.875%): ${formatCents(tax)}\nTotal: ${formatCents(total)}\n\nThank you for choosing Reliable Home Appliance Repair LLC!\n(845) 544-3077 | rhappliance1@gmail.com`,
+      `Hi ${clientName},\n\nPlease find your invoice summary below:\n\nJob #${job.id} — ${formatDate(job.date)}\n${
+        partsLines ? `Parts:\n${partsLines}\n` : ""
+      }${laborLines ? `Labor:\n${laborLines}\n` : ""}\nSubtotal: ${formatCents(subtotal)}\nTax (${taxRateStr}%): ${formatCents(tax)}\nTotal: ${formatCents(total)}\n\nThank you for choosing ${COMPANY_NAME}!\n${COMPANY_PHONE1} | ${COMPANY_EMAIL}`,
     );
     const to = encodeURIComponent(clientEmail);
     window.open(`mailto:${to}?subject=${subject}&body=${body}`, "_self");
@@ -266,7 +300,7 @@ export default function InvoicePreviewPage() {
 
   const handleSendText = () => {
     const body = encodeURIComponent(
-      `Hi ${clientName}! Your repair estimate from Reliable Home Appliance Repair LLC:\nJob #${job.id} — Total: ${formatCents(total)}\nQuestions? Call (845) 544-3077`,
+      `Hi ${clientName}! Your repair estimate from ${COMPANY_NAME}:\nJob #${job.id} — Total: ${formatCents(total)}\nQuestions? Call ${COMPANY_PHONE1}`,
     );
     window.open(`sms:${clientPhone}?body=${body}`, "_self");
   };
@@ -292,6 +326,7 @@ export default function InvoicePreviewPage() {
           size="sm"
           onClick={handleViewHTML}
           className="flex items-center gap-1.5"
+          data-ocid="invoice.html.button"
         >
           <FileCode className="h-4 w-4" />
           View HTML
@@ -301,6 +336,7 @@ export default function InvoicePreviewPage() {
           size="sm"
           onClick={handleDownloadPDF}
           className="flex items-center gap-1.5"
+          data-ocid="invoice.pdf.button"
         >
           <Download className="h-4 w-4" />
           Download PDF
@@ -310,6 +346,7 @@ export default function InvoicePreviewPage() {
           size="sm"
           onClick={handleSendEmail}
           className="flex items-center gap-1.5"
+          data-ocid="invoice.email.button"
         >
           <Mail className="h-4 w-4" />
           Send Email
@@ -319,6 +356,7 @@ export default function InvoicePreviewPage() {
           size="sm"
           onClick={handleSendText}
           className="flex items-center gap-1.5"
+          data-ocid="invoice.text.button"
         >
           <MessageSquare className="h-4 w-4" />
           Send Text
@@ -333,22 +371,20 @@ export default function InvoicePreviewPage() {
         {/* Company Header */}
         <div className="flex flex-col sm:flex-row sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-1">
+            <div className="flex items-center gap-2 mb-1">
               <img
-                src="/assets/generated/reliable-logo.dim_256x256.png"
-                alt="Reliable Tech Repair"
-                className="h-10 w-10 rounded-lg object-contain"
+                src="/assets/generated/logo-wrench-gear-house-transparent.dim_200x200.png"
+                alt="Reliable Home Appliance Repair LLC"
+                className="h-9 w-9 object-contain"
               />
-              <h2 className="text-lg font-bold font-display">
-                Reliable Tech Repair
+              <h2 className="text-base font-bold font-display leading-tight text-green-700 dark:text-green-400">
+                Reliable Home Appliance Repair LLC
               </h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              (347) 389-4821 | (347) 389-4822
+              {COMPANY_PHONE1} | {COMPANY_PHONE2}
             </p>
-            <p className="text-sm text-muted-foreground">
-              reliabletechrepair@gmail.com
-            </p>
+            <p className="text-sm text-muted-foreground">{COMPANY_EMAIL}</p>
           </div>
           <div className="text-sm text-right">
             <p className="font-semibold text-base">Job #{job.id.toString()}</p>
@@ -385,17 +421,65 @@ export default function InvoicePreviewPage() {
 
         <Separator />
 
-        {/* Line Items */}
+        {/* Parts Line Items */}
+        {partLineItems.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Parts
+            </p>
+            {partLineItems.map((item, idx) => (
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: invoice line items positional
+                key={`inv-part-${idx}`}
+                className="flex justify-between text-sm py-1"
+              >
+                <div>
+                  <span>{item.name}</span>
+                  {item.partNumber && (
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      #{item.partNumber}
+                    </span>
+                  )}
+                  {item.description && (
+                    <span className="text-muted-foreground ml-1">
+                      — {item.description}
+                    </span>
+                  )}
+                  <span className="text-muted-foreground ml-1 text-xs">
+                    ×{Number(item.quantity)}
+                  </span>
+                </div>
+                <span>
+                  {formatCents(Number(item.unitPrice) * Number(item.quantity))}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Labor Line Items */}
         <div className="space-y-2">
+          {partLineItems.length > 0 && (
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Labor
+            </p>
+          )}
           <div className="flex justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground pb-1 border-b">
             <span>Description</span>
             <span>Amount</span>
           </div>
 
-          <div className="flex justify-between text-sm py-1">
-            <span>Diagnostic Fee</span>
-            <span>{formatCents(DIAGNOSTIC_FEE)}</span>
-          </div>
+          {job.laborLineItems.length === 0 && partLineItems.length === 0 && (
+            <p className="text-sm text-muted-foreground py-2">
+              No items added.
+            </p>
+          )}
+
+          {job.laborLineItems.length === 0 && partLineItems.length > 0 && (
+            <p className="text-sm text-muted-foreground py-1">
+              No labor items.
+            </p>
+          )}
 
           {job.laborLineItems.map((item, idx) => (
             <div
@@ -418,14 +502,43 @@ export default function InvoicePreviewPage() {
 
         <Separator />
 
+        {/* Tax Rate Input */}
+        <div className="flex items-center gap-3 no-print">
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">
+            Tax Rate (%)
+          </Label>
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            step="0.001"
+            value={taxRateStr}
+            onChange={(e) => setTaxRateStr(e.target.value)}
+            className="w-24 h-7 text-right text-sm"
+            data-ocid="invoice.tax_rate_input"
+          />
+        </div>
+
         {/* Totals */}
         <div className="space-y-1.5 text-sm">
+          {partCost > 0 && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Parts</span>
+              <span>{formatCents(partCost)}</span>
+            </div>
+          )}
+          {laborCost > 0 && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Labor</span>
+              <span>{formatCents(laborCost)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-muted-foreground">
             <span>Subtotal</span>
             <span>{formatCents(subtotal)}</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
-            <span>Tax (8.875%)</span>
+            <span>Tax ({taxRateStr}%)</span>
             <span>{formatCents(tax)}</span>
           </div>
           <Separator />
@@ -490,7 +603,7 @@ export default function InvoicePreviewPage() {
 
         {/* Footer */}
         <div className="text-center text-xs text-muted-foreground pt-2">
-          Thank you for choosing Reliable Tech Repair!
+          Thank you for choosing {COMPANY_NAME}!
         </div>
       </div>
 

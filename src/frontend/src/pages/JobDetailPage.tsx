@@ -29,6 +29,8 @@ import {
   FileText,
   Image as ImageIcon,
   Loader2,
+  Package,
+  Pencil,
   Plus,
   Save,
   Trash2,
@@ -41,22 +43,21 @@ import { type Job, JobStatus, type LaborLineItem, RateType } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
+  type JobPartLineItem,
+  useAddJobPartLineItem,
   useAddJobPhoto,
   useAddLaborLineItem,
   useCreateJob,
   useDeleteJob,
   useGetJob,
-  useGetTotalPartCostByJob,
   useListClients,
   useListLaborRates,
   useListParts,
+  useRemoveJobPartLineItem,
   useRemoveJobPhoto,
   useRemoveLaborLineItem,
   useUpdateJob,
 } from "../hooks/useQueries";
-
-const TAX_RATE = 0.08875;
-const DIAGNOSTIC_FEE = 8500; // cents
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -74,9 +75,8 @@ export default function JobDetailPage() {
 
   const { data: job, isLoading: jobLoading } = useGetJob(jobId);
   const { data: clients = [] } = useListClients();
-  const { data: parts = [] } = useListParts();
+  const { data: inventoryParts = [] } = useListParts();
   const { data: laborRates = [] } = useListLaborRates();
-  const { data: partCostBigInt } = useGetTotalPartCostByJob(jobId);
 
   const createJob = useCreateJob();
   const updateJob = useUpdateJob();
@@ -85,6 +85,8 @@ export default function JobDetailPage() {
   const removePhoto = useRemoveJobPhoto();
   const addLaborItem = useAddLaborLineItem();
   const removeLaborItem = useRemoveLaborLineItem();
+  const addPartItem = useAddJobPartLineItem();
+  const removePartItem = useRemoveJobPartLineItem();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -96,6 +98,7 @@ export default function JobDetailPage() {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
     {},
   );
+  const [taxRateStr, setTaxRateStr] = useState("8.875");
 
   // Labor line item form
   const [showLaborForm, setShowLaborForm] = useState(false);
@@ -103,6 +106,20 @@ export default function JobDetailPage() {
   const [laborDesc, setLaborDesc] = useState("");
   const [laborRateId, setLaborRateId] = useState<string>("");
   const [laborHours, setLaborHours] = useState("1");
+
+  // Parts form
+  const [showPartsForm, setShowPartsForm] = useState(false);
+  const [partsMode, setPartsMode] = useState<"inventory" | "manual">(
+    "inventory",
+  );
+  const [selectedInventoryPartId, setSelectedInventoryPartId] =
+    useState<string>("");
+  const [partNumber, setPartNumber] = useState("");
+  const [partName, setPartName] = useState("");
+  const [partDescription, setPartDescription] = useState("");
+  const [partQty, setPartQty] = useState("1");
+  const [partUnitPrice, setPartUnitPrice] = useState("");
+  const [editingPartIndex, setEditingPartIndex] = useState<number | null>(null);
 
   // Initialize form from existing job
   if (!initialized && job && !isNew) {
@@ -112,15 +129,25 @@ export default function JobDetailPage() {
     setInitialized(true);
   }
 
-  const partCost = partCostBigInt ? Number(partCostBigInt) : 0;
+  // Compute costs from job's partLineItems (new API) or fall back to 0
+  const partLineItems: JobPartLineItem[] =
+    // biome-ignore lint/suspicious/noExplicitAny: new backend field
+    (job as any)?.partLineItems ?? [];
+
+  const partCost = partLineItems.reduce(
+    (s, i) => s + Number(i.unitPrice) * Number(i.quantity),
+    0,
+  );
   const laborCost = job
     ? job.laborLineItems.reduce(
         (sum, item) => sum + Number(item.totalAmount),
         0,
       )
     : 0;
-  const subtotal = DIAGNOSTIC_FEE + partCost + laborCost;
-  const tax = Math.round(subtotal * TAX_RATE);
+  const taxRate =
+    Math.max(0, Math.min(100, Number.parseFloat(taxRateStr) || 0)) / 100;
+  const subtotal = partCost + laborCost;
+  const tax = Math.round(subtotal * taxRate);
   const total = subtotal + tax;
 
   const handleSave = async () => {
@@ -171,13 +198,8 @@ export default function JobDetailPage() {
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (!jobId) {
-        toast.error("Please save the job first before adding photos");
-        return;
-      }
       const files = Array.from(e.target.files ?? []);
-      if (files.length === 0) return;
-
+      if (!files.length || !jobId) return;
       for (const file of files) {
         const key = `${file.name}-${Date.now()}`;
         setUploadProgress((prev) => ({ ...prev, [key]: 0 }));
@@ -193,9 +215,9 @@ export default function JobDetailPage() {
             delete next[key];
             return next;
           });
-          toast.success("Photo uploaded");
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : "Upload failed";
+          const msg =
+            err instanceof Error ? err.message : "Failed to upload photo";
           toast.error(msg);
           setUploadProgress((prev) => {
             const next = { ...prev };
@@ -204,7 +226,6 @@ export default function JobDetailPage() {
           });
         }
       }
-      // Reset input so same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = "";
     },
     [jobId, addPhoto],
@@ -273,6 +294,113 @@ export default function JobDetailPage() {
     }
   };
 
+  const resetPartsForm = () => {
+    setSelectedInventoryPartId("");
+    setPartNumber("");
+    setPartName("");
+    setPartDescription("");
+    setPartQty("1");
+    setPartUnitPrice("");
+    setEditingPartIndex(null);
+  };
+
+  const handleEditPart = (idx: number) => {
+    const item = partLineItems[idx];
+    if (!item) return;
+    setEditingPartIndex(idx);
+    if (item.partId && item.partId.length > 0) {
+      setPartsMode("inventory");
+      setSelectedInventoryPartId((item.partId[0] as bigint).toString());
+    } else {
+      setPartsMode("manual");
+      setSelectedInventoryPartId("");
+    }
+    setPartNumber(item.partNumber ?? "");
+    setPartName(item.name);
+    setPartDescription(item.description ?? "");
+    setPartQty(Number(item.quantity).toString());
+    setPartUnitPrice((Number(item.unitPrice) / 100).toFixed(2));
+    setShowPartsForm(true);
+  };
+
+  const handleAddPart = async () => {
+    if (!jobId) {
+      toast.error("Save the job first");
+      return;
+    }
+
+    let item: JobPartLineItem;
+
+    if (partsMode === "inventory") {
+      const inv = inventoryParts.find(
+        (p) => p.id.toString() === selectedInventoryPartId,
+      );
+      if (!inv) {
+        toast.error("Select a part from inventory");
+        return;
+      }
+      const qty = Math.max(1, Number.parseInt(partQty) || 1);
+      item = {
+        id: BigInt(0),
+        partId: [inv.id],
+        partNumber: inv.partNumber,
+        name: inv.name,
+        description: inv.description,
+        quantity: BigInt(qty),
+        unitPrice: inv.unitCost,
+      };
+    } else {
+      if (!partName) {
+        toast.error("Enter a part name");
+        return;
+      }
+      const qty = Math.max(1, Number.parseInt(partQty) || 1);
+      const priceInCents = Math.round(
+        (Number.parseFloat(partUnitPrice) || 0) * 100,
+      );
+      item = {
+        id: BigInt(0),
+        partId: [],
+        partNumber: partNumber,
+        name: partName,
+        description: partDescription,
+        quantity: BigInt(qty),
+        unitPrice: BigInt(priceInCents),
+      };
+    }
+
+    try {
+      if (editingPartIndex !== null) {
+        // Remove old, then add updated
+        await removePartItem.mutateAsync({
+          jobId,
+          index: BigInt(editingPartIndex),
+        });
+        await addPartItem.mutateAsync({ jobId, item });
+        toast.success("Part updated");
+      } else {
+        await addPartItem.mutateAsync({ jobId, item });
+        toast.success("Part added");
+      }
+      setShowPartsForm(false);
+      resetPartsForm();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save part";
+      toast.error(msg);
+    }
+  };
+
+  const handleRemovePart = async (index: number) => {
+    if (!jobId) return;
+    try {
+      await removePartItem.mutateAsync({ jobId, index: BigInt(index) });
+      toast.success("Part removed");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to remove part";
+      toast.error(msg);
+    }
+  };
+
   const isSaving = createJob.isPending || updateJob.isPending;
   const isLoading = jobLoading && !isNew;
 
@@ -335,7 +463,7 @@ export default function JobDetailPage() {
           <div className="space-y-2">
             <Label>Client</Label>
             <Select value={clientId} onValueChange={setClientId}>
-              <SelectTrigger>
+              <SelectTrigger data-ocid="jobs.client.select">
                 <SelectValue placeholder="Select a client…" />
               </SelectTrigger>
               <SelectContent>
@@ -354,7 +482,7 @@ export default function JobDetailPage() {
               value={status}
               onValueChange={(v) => setStatus(v as JobStatus)}
             >
-              <SelectTrigger>
+              <SelectTrigger data-ocid="jobs.status.select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -374,6 +502,7 @@ export default function JobDetailPage() {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Job notes, device description, issues…"
               rows={4}
+              data-ocid="jobs.notes.textarea"
             />
           </div>
         </CardContent>
@@ -390,6 +519,7 @@ export default function JobDetailPage() {
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingCount > 0}
+                data-ocid="jobs.upload_button"
               >
                 {uploadingCount > 0 ? (
                   <>
@@ -406,7 +536,6 @@ export default function JobDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* Hidden file input — capture="environment" triggers camera on mobile */}
             <input
               ref={fileInputRef}
               type="file"
@@ -417,7 +546,6 @@ export default function JobDetailPage() {
               onChange={handleFileSelect}
             />
 
-            {/* Upload progress bars */}
             {Object.entries(uploadProgress).map(([key, pct]) => (
               <div key={key} className="mb-2">
                 <div className="flex justify-between text-xs text-muted-foreground mb-1">
@@ -433,7 +561,6 @@ export default function JobDetailPage() {
               </div>
             ))}
 
-            {/* Photo grid */}
             {job?.photos && job.photos.length > 0 ? (
               <div className="grid grid-cols-3 gap-2">
                 {job.photos.map((photo, idx) => (
@@ -459,10 +586,13 @@ export default function JobDetailPage() {
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2">
+              <div
+                className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2"
+                data-ocid="jobs.photos.empty_state"
+              >
                 <ImageIcon className="h-8 w-8 opacity-40" />
                 <p className="text-sm">
-                  No photos yet. Tap "Add Photo" to upload.
+                  No photos yet. Tap Add Photo to capture.
                 </p>
               </div>
             )}
@@ -471,25 +601,268 @@ export default function JobDetailPage() {
       )}
 
       {/* Parts */}
-      {!isNew && parts.filter((p) => p.jobId === jobId).length > 0 && (
+      {!isNew && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Parts Used</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {parts
-              .filter((p) => p.jobId === jobId)
-              .map((p) => (
-                <div
-                  key={p.id.toString()}
-                  className="flex justify-between text-sm"
-                >
-                  <span>{p.name}</span>
-                  <span className="text-muted-foreground">
-                    {formatCents(Number(p.unitCost))}
-                  </span>
+            <CardTitle className="text-base flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Package className="h-4 w-4" />
+                Parts
+              </span>
+              {!showPartsForm && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      resetPartsForm();
+                      setPartsMode("inventory");
+                      setShowPartsForm(true);
+                    }}
+                    data-ocid="jobs.parts.open_modal_button"
+                  >
+                    <Package className="h-4 w-4 mr-1" />
+                    From Inventory
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      resetPartsForm();
+                      setPartsMode("manual");
+                      setShowPartsForm(true);
+                    }}
+                    data-ocid="jobs.parts.secondary_button"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Manual
+                  </Button>
                 </div>
-              ))}
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {showPartsForm && (
+              <div
+                className="border rounded-lg p-3 space-y-3 bg-muted/30"
+                data-ocid="jobs.parts.panel"
+              >
+                {editingPartIndex !== null && (
+                  <p className="text-xs font-medium text-primary">
+                    Editing part {editingPartIndex + 1}
+                  </p>
+                )}
+                <div className="flex gap-2 mb-1">
+                  <button
+                    type="button"
+                    onClick={() => setPartsMode("inventory")}
+                    className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                      partsMode === "inventory"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground"
+                    }`}
+                    data-ocid="jobs.parts.toggle"
+                  >
+                    From Inventory
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPartsMode("manual")}
+                    className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                      partsMode === "manual"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    Manual Entry
+                  </button>
+                </div>
+
+                {partsMode === "inventory" ? (
+                  <>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Select Part</Label>
+                      <Select
+                        value={selectedInventoryPartId}
+                        onValueChange={setSelectedInventoryPartId}
+                      >
+                        <SelectTrigger data-ocid="jobs.parts.select">
+                          <SelectValue placeholder="Choose from inventory…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {inventoryParts.map((p) => (
+                            <SelectItem
+                              key={p.id.toString()}
+                              value={p.id.toString()}
+                            >
+                              {p.name}
+                              {p.partNumber ? ` — #${p.partNumber}` : ""}
+                              {" — "}
+                              {formatCents(Number(p.unitCost))}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Quantity</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={partQty}
+                        onChange={(e) => setPartQty(e.target.value)}
+                        className="w-24"
+                        data-ocid="jobs.parts.input"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Part Number</Label>
+                        <Input
+                          value={partNumber}
+                          onChange={(e) => setPartNumber(e.target.value)}
+                          placeholder="e.g. WPW10"
+                          data-ocid="jobs.parts.input"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Unit Price ($)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={partUnitPrice}
+                          onChange={(e) => setPartUnitPrice(e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Name *</Label>
+                      <Input
+                        value={partName}
+                        onChange={(e) => setPartName(e.target.value)}
+                        placeholder="e.g. Water inlet valve"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Description</Label>
+                      <Input
+                        value={partDescription}
+                        onChange={(e) => setPartDescription(e.target.value)}
+                        placeholder="Optional details"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Quantity</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={partQty}
+                        onChange={(e) => setPartQty(e.target.value)}
+                        className="w-24"
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleAddPart}
+                    disabled={addPartItem.isPending || removePartItem.isPending}
+                    data-ocid="jobs.parts.submit_button"
+                  >
+                    {addPartItem.isPending || removePartItem.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : editingPartIndex !== null ? (
+                      "Update Part"
+                    ) : (
+                      "Add Part"
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setShowPartsForm(false);
+                      resetPartsForm();
+                    }}
+                    data-ocid="jobs.parts.cancel_button"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {partLineItems.length > 0
+              ? partLineItems.map((item, idx) => (
+                  <div
+                    // biome-ignore lint/suspicious/noArrayIndexKey: part items indexed by position
+                    key={`part-${idx}`}
+                    className="flex items-start justify-between gap-2"
+                    data-ocid={`jobs.parts.item.${idx + 1}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {item.name}
+                      </p>
+                      {item.partNumber && (
+                        <p className="text-xs text-muted-foreground">
+                          #{item.partNumber}
+                        </p>
+                      )}
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {item.description}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {Number(item.quantity)} ×{" "}
+                        {formatCents(Number(item.unitPrice))} ={" "}
+                        <span className="font-medium text-foreground">
+                          {formatCents(
+                            Number(item.quantity) * Number(item.unitPrice),
+                          )}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground shrink-0"
+                        onClick={() => handleEditPart(idx)}
+                        data-ocid={`jobs.parts.edit_button.${idx + 1}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive shrink-0"
+                        onClick={() => handleRemovePart(idx)}
+                        data-ocid={`jobs.parts.delete_button.${idx + 1}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              : !showPartsForm && (
+                  <p
+                    className="text-sm text-muted-foreground py-2"
+                    data-ocid="jobs.parts.empty_state"
+                  >
+                    No parts added. Use the buttons above to add parts.
+                  </p>
+                )}
           </CardContent>
         </Card>
       )}
@@ -504,6 +877,7 @@ export default function JobDetailPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowLaborForm(!showLaborForm)}
+                data-ocid="jobs.labor.open_modal_button"
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Add Labor
@@ -566,6 +940,7 @@ export default function JobDetailPage() {
                     size="sm"
                     onClick={handleAddLabor}
                     disabled={addLaborItem.isPending}
+                    data-ocid="jobs.labor.submit_button"
                   >
                     {addLaborItem.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -577,6 +952,7 @@ export default function JobDetailPage() {
                     size="sm"
                     variant="ghost"
                     onClick={() => setShowLaborForm(false)}
+                    data-ocid="jobs.labor.cancel_button"
                   >
                     Cancel
                   </Button>
@@ -584,47 +960,52 @@ export default function JobDetailPage() {
               </div>
             )}
 
-            {job?.laborLineItems && job.laborLineItems.length > 0 ? (
-              job.laborLineItems.map((item, idx) => (
-                <div
-                  // biome-ignore lint/suspicious/noArrayIndexKey: labor items indexed by position
-                  key={`labor-${idx}`}
-                  className="flex items-start justify-between gap-2"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.name}</p>
-                    {item.description && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {item.description}
+            {job?.laborLineItems && job.laborLineItems.length > 0
+              ? job.laborLineItems.map((item, idx) => (
+                  <div
+                    // biome-ignore lint/suspicious/noArrayIndexKey: labor items indexed by position
+                    key={`labor-${idx}`}
+                    className="flex items-start justify-between gap-2"
+                    data-ocid={`jobs.labor.item.${idx + 1}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {item.name}
                       </p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      {item.rateType === RateType.hourly
-                        ? `${item.hours}h × ${formatCents(Number(item.rateAmount))}/hr`
-                        : "Flat rate"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-sm font-medium">
-                      {formatCents(Number(item.totalAmount))}
-                    </span>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {item.description}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {item.rateType === RateType.hourly
+                          ? `${item.hours}hr @ ${formatCents(Number(item.rateAmount))}/hr`
+                          : "Flat rate"}{" "}
+                        —{" "}
+                        <span className="font-medium text-foreground">
+                          {formatCents(Number(item.totalAmount))}
+                        </span>
+                      </p>
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-destructive"
+                      className="h-7 w-7 text-destructive shrink-0"
                       onClick={() => handleRemoveLabor(idx)}
-                      disabled={removeLaborItem.isPending}
+                      data-ocid={`jobs.labor.delete_button.${idx + 1}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-2">
-                No labor items yet
-              </p>
-            )}
+                ))
+              : !showLaborForm && (
+                  <p
+                    className="text-sm text-muted-foreground py-2"
+                    data-ocid="jobs.labor.empty_state"
+                  >
+                    No labor items yet.
+                  </p>
+                )}
           </CardContent>
         </Card>
       )}
@@ -635,11 +1016,7 @@ export default function JobDetailPage() {
           <CardHeader>
             <CardTitle className="text-base">Totals</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Diagnostic Fee</span>
-              <span>{formatCents(DIAGNOSTIC_FEE)}</span>
-            </div>
+          <CardContent className="space-y-3 text-sm">
             {partCost > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Parts</span>
@@ -652,8 +1029,23 @@ export default function JobDetailPage() {
                 <span>{formatCents(laborCost)}</span>
               </div>
             )}
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-muted-foreground text-sm">
+                Tax Rate (%)
+              </Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.001"
+                value={taxRateStr}
+                onChange={(e) => setTaxRateStr(e.target.value)}
+                className="w-24 h-7 text-right text-sm"
+                data-ocid="jobs.tax_rate_input"
+              />
+            </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Tax (8.875%)</span>
+              <span className="text-muted-foreground">Tax ({taxRateStr}%)</span>
               <span>{formatCents(tax)}</span>
             </div>
             <Separator />
@@ -693,7 +1085,7 @@ export default function JobDetailPage() {
             data-ocid="jobs.secondary_button"
           >
             <FileText className="h-4 w-4 mr-2" />
-            View Estimate
+            Estimate
           </Button>
         )}
       </div>
