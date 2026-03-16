@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  CreditCard,
   Download,
   FileCode,
   Loader2,
@@ -18,6 +19,10 @@ import SignatureCapture from "../components/SignatureCapture";
 import type { JobPartLineItem } from "../hooks/useQueries";
 import { useGetJob } from "../hooks/useQueries";
 import { useGetClient } from "../hooks/useQueries";
+import {
+  useCreateCheckoutSession,
+  useIsStripeConfigured,
+} from "../hooks/useQueries";
 import {
   useGetUserSignature,
   useStoreUserSignature,
@@ -45,6 +50,8 @@ export default function InvoicePreviewPage() {
   const params = useParams({ strict: false }) as { jobId?: string };
   const jobId = params.jobId ? BigInt(params.jobId) : null;
 
+  const { data: stripeConfigured } = useIsStripeConfigured();
+  const createCheckoutSession = useCreateCheckoutSession();
   const { data: job, isLoading: jobLoading } = useGetJob(jobId);
   const { data: client, isLoading: clientLoading } = useGetClient(
     job ? job.clientId : null,
@@ -361,6 +368,43 @@ export default function InvoicePreviewPage() {
           <MessageSquare className="h-4 w-4" />
           Send Text
         </Button>
+        {stripeConfigured && (
+          <Button
+            variant="default"
+            size="sm"
+            disabled={createCheckoutSession.isPending}
+            onClick={async () => {
+              if (!job) return;
+              try {
+                const url = await createCheckoutSession.mutateAsync({
+                  items: [
+                    {
+                      productName: `Service Invoice #${job.id}`,
+                      currency: "usd",
+                      priceInCents: BigInt(total),
+                      quantity: 1n,
+                      productDescription: "Appliance repair service",
+                    },
+                  ],
+                  successUrl: window.location.href,
+                  cancelUrl: window.location.href,
+                });
+                window.open(url, "_blank");
+              } catch {
+                toast.error("Failed to create payment link");
+              }
+            }}
+            className="flex items-center gap-1.5 bg-green-700 hover:bg-green-800 text-white"
+            data-ocid="invoice.pay_now.button"
+          >
+            {createCheckoutSession.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CreditCard className="h-4 w-4" />
+            )}
+            Pay Now
+          </Button>
+        )}
       </div>
 
       {/* Invoice Document */}

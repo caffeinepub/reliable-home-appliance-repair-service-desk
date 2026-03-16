@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  CreditCard,
   FileText,
   Image as ImageIcon,
   Loader2,
@@ -47,10 +48,12 @@ import {
   useAddJobPartLineItem,
   useAddJobPhoto,
   useAddLaborLineItem,
+  useCreateCheckoutSession,
   useCreateJob,
   useDeleteJob,
   useGetJob,
   useGetJobPartLineItems,
+  useIsStripeConfigured,
   useListClients,
   useListLaborRates,
   useListParts,
@@ -77,6 +80,8 @@ export default function JobDetailPage() {
   const { data: job, isLoading: jobLoading } = useGetJob(jobId);
   const { data: clients = [] } = useListClients();
   const { data: inventoryParts = [] } = useListParts();
+  const { data: stripeConfigured } = useIsStripeConfigured();
+  const createCheckoutSession = useCreateCheckoutSession();
   const { data: laborRates = [] } = useListLaborRates();
 
   const createJob = useCreateJob();
@@ -1086,6 +1091,42 @@ export default function JobDetailPage() {
           >
             <FileText className="h-4 w-4 mr-2" />
             Estimate
+          </Button>
+        )}
+        {!isNew && jobId && stripeConfigured && (
+          <Button
+            variant="default"
+            disabled={createCheckoutSession.isPending}
+            onClick={async () => {
+              try {
+                const url = await createCheckoutSession.mutateAsync({
+                  items: [
+                    {
+                      productName: `Service Job #${jobId}`,
+                      currency: "usd",
+                      priceInCents: BigInt(total),
+                      quantity: 1n,
+                      productDescription: "Appliance repair service",
+                    },
+                  ],
+                  successUrl: window.location.href,
+                  cancelUrl: window.location.href,
+                });
+                await navigator.clipboard.writeText(url);
+                toast.success("Payment link copied to clipboard");
+              } catch {
+                toast.error("Failed to create payment link");
+              }
+            }}
+            className="bg-green-700 hover:bg-green-800 text-white"
+            data-ocid="jobs.payment_link.button"
+          >
+            {createCheckoutSession.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CreditCard className="h-4 w-4 mr-2" />
+            )}
+            Send Payment Link
           </Button>
         )}
       </div>

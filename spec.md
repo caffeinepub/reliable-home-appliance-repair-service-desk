@@ -1,45 +1,28 @@
 # Reliable Home Appliance Repair Service Desk
 
 ## Current State
-- Mobile-first service desk app with Motoko backend and React frontend
-- Nav tabs: Dashboard, Clients, Jobs, Inventory, Settings
-- Labor rates currently embedded in Settings page (owner-only)
-- Settings page shows truncated principal ID with "Ryan" references
-- Actor initialization causes "actor not available" errors when saving too quickly
-- Delete functions exist in backend but frontend may be missing some UI hooks
-- No analytics section
-- No Google Maps routing view
+- Backend has `isCallerAdmin()` that checks hardcoded owner principal first, then AccessControl
+- Frontend `useIsOwner` hook uses query key `["isOwner"]` without identity — causes stale caching where anonymous result (false) can persist after login
+- No Stripe payment link/button on estimates or invoices
+- `createCheckoutSession` exists in backend but no frontend hook or UI
 
 ## Requested Changes (Diff)
 
 ### Add
-- Labor Rates as a dedicated nav tab (5th item, Settings moves to last)
-- LaborRatesPage: full CRUD, custom rates, rate calculator for estimates
-- Analytics card in Settings: income collected per technician (computed from jobs/labor data)
-- Google Maps iframe embed in Calendar/Scheduling page for routing
-- Settings: login/logout portal section at top
-- Settings: display full principal ID in a copyable text field
-- Settings: descriptive instructions for granting authorized user access (no names)
+- `useCreateCheckoutSession` mutation hook in useQueries.ts
+- "Pay Now" Stripe button on InvoicePreviewPage (shown when Stripe is configured)
+- "Send Payment Link" on estimate section in JobDetailPage (shown when Stripe is configured)
 
 ### Modify
-- Settings page: remove all "Ryan" references, replace with generic "technician" instructions
-- Settings page: show FULL principal ID (not truncated), with copy-to-clipboard button
-- Settings page: add login/logout section at top
-- Settings page: add analytics — income by technician (JB & RH labels allowed as initials only in display)
-- Layout nav bar: add Labor Rates tab, reorder tabs
-- Actor hook: improve initialization — disable save button with clear message, auto-retry, do not block indefinitely
-- All CRUD pages: confirm delete buttons work for clients, jobs, inventory, labor rates
+- `useIsOwner` query key to include principal string, ensuring fresh fetch after login/logout
+- `useIsOwner` to add `refetchOnMount: 'always'` and remove stale cache
+- Settings page: ensure `isOwner` re-evaluates after actor is ready
 
 ### Remove
-- Labor rates section from Settings page
-- "For Ryan" amber callout box from Settings
-- Truncated principal ID display
+- Nothing
 
 ## Implementation Plan
-1. Create `LaborRatesPage.tsx` with full CRUD and rate calculator
-2. Add `/labor-rates` route in `App.tsx`
-3. Update `Layout.tsx` nav to include Labor Rates tab
-4. Update `SettingsPage.tsx`: remove labor rates, remove Ryan refs, full principal ID with copy button, login/logout section, analytics section (income by tech)
-5. Add Google Maps iframe to CalendarPage for routing visualization
-6. Improve actor error handling across all pages — show "Connecting..." state, retry button, never silently fail
-7. Verify delete buttons are present and working on Clients, Jobs, Inventory pages
+1. Fix `useIsOwner` in useQueries.ts — add principal to query key
+2. Add `useCreateCheckoutSession` hook
+3. Add `useIsStripeConfigured` check in InvoicePreviewPage and show "Pay Now" button
+4. Add payment link generation to JobDetailPage estimate section

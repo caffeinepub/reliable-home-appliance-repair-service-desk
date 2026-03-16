@@ -10,6 +10,7 @@ import {
   Check,
   Copy,
   CreditCard,
+  KeyRound,
   LogIn,
   LogOut,
   Settings,
@@ -24,14 +25,13 @@ import { UserRole } from "../backend";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useAssignUserRole,
+  useForceGrantAdminByToken,
   useGetCallerUserProfile,
+  useIsOwner,
   useIsStripeConfigured,
   useListJobs,
   useSetStripeConfiguration,
 } from "../hooks/useQueries";
-
-const OWNER_PRINCIPAL =
-  "asn62-s2yb6-ezdxu-wy6eu-ml2sx-yaqyb-tvmkf-bgefi-2iqtw-a7b53-yqe";
 
 export default function SettingsPage() {
   const {
@@ -41,15 +41,17 @@ export default function SettingsPage() {
     isInitializing,
   } = useInternetIdentity();
   const isLoggedIn = !!identity;
-  const isOwner = identity?.getPrincipal().toString() === OWNER_PRINCIPAL;
   const principalStr = identity?.getPrincipal().toString() ?? "";
 
   const { data: userProfile } = useGetCallerUserProfile();
   const { data: jobs = [] } = useListJobs();
   const { data: stripeConfigured } = useIsStripeConfigured();
+  // Use backend-verified owner check (works across draft and live domains)
+  const { data: isOwner = false } = useIsOwner();
 
   const setStripeConfig = useSetStripeConfiguration();
   const assignRole = useAssignUserRole();
+  const forceGrantAdmin = useForceGrantAdminByToken();
 
   // Stripe form
   const [stripeKey, setStripeKey] = useState("");
@@ -61,6 +63,11 @@ export default function SettingsPage() {
   const [grantedUsers, setGrantedUsers] = useState<string[]>([]);
   const [userError, setUserError] = useState("");
   const [addingUser, setAddingUser] = useState(false);
+
+  // Restore owner access (live domain token recovery)
+  const [adminToken, setAdminToken] = useState("");
+  const [tokenError, setTokenError] = useState("");
+  const [claimingAdmin, setClaimingAdmin] = useState(false);
 
   // Copy principal
   const [copied, setCopied] = useState(false);
@@ -138,6 +145,31 @@ export default function SettingsPage() {
       toast.success("User access revoked");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to remove user");
+    }
+  };
+
+  const handleClaimAdmin = async () => {
+    if (!adminToken.trim()) {
+      setTokenError("Please enter your admin token");
+      return;
+    }
+    setTokenError("");
+    setClaimingAdmin(true);
+    try {
+      const success = await forceGrantAdmin.mutateAsync(adminToken.trim());
+      if (success) {
+        toast.success("Owner access restored! Refreshing…");
+        setAdminToken("");
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        setTokenError("Invalid admin token. Please check and try again.");
+      }
+    } catch (e: unknown) {
+      setTokenError(
+        e instanceof Error ? e.message : "Failed to restore owner access.",
+      );
+    } finally {
+      setClaimingAdmin(false);
     }
   };
 
@@ -249,6 +281,59 @@ export default function SettingsPage() {
                   ) : (
                     <Copy className="h-4 w-4" />
                   )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Restore Owner Access — shown when logged in but not yet owner on this domain */}
+        {isLoggedIn && !isOwner && (
+          <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                <KeyRound className="h-4 w-4" />
+                Restore Owner Access
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                If you are the owner and your admin access is not showing, enter
+                your admin token below to restore full owner rights on this
+                device.
+              </p>
+              {tokenError && (
+                <p
+                  className="text-xs text-destructive"
+                  data-ocid="settings.error_state"
+                >
+                  {tokenError}
+                </p>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="admin-token-input">Admin Token</Label>
+                <Input
+                  id="admin-token-input"
+                  type="password"
+                  placeholder="Enter your admin token…"
+                  value={adminToken}
+                  onChange={(e) => setAdminToken(e.target.value)}
+                  className="font-mono text-xs"
+                  data-ocid="settings.input"
+                />
+                <Button
+                  onClick={handleClaimAdmin}
+                  disabled={claimingAdmin || !adminToken.trim()}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                  size="sm"
+                  data-ocid="settings.primary_button"
+                >
+                  {claimingAdmin ? (
+                    <span className="animate-spin mr-1">⏳</span>
+                  ) : (
+                    <KeyRound className="h-4 w-4 mr-1" />
+                  )}
+                  Restore Owner Access
                 </Button>
               </div>
             </CardContent>

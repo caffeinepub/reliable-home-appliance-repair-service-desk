@@ -170,6 +170,7 @@ export interface backendInterface {
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getUserSignature(): Promise<Uint8Array | null>;
     isCallerAdmin(): Promise<boolean>;
+    forceGrantAdminByToken(token: string): Promise<boolean>;
     isStripeConfigured(): Promise<boolean>;
     listClients(): Promise<Array<Client>>;
     listJobs(): Promise<Array<Job>>;

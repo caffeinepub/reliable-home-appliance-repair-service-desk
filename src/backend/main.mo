@@ -20,20 +20,21 @@ import OutCall "http-outcalls/outcall";
 actor {
   include MixinStorage();
 
-  let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
-
-  stable var nextJobNumber = 1;
-  stable var nextInvoiceNumber = 1;
-
-  // Owner: Jeffrey Burgholzer
+  // Owner: Jeffrey Burgholzer — hardcoded principal, recognized on all domains
   let ownerPrincipal = Principal.fromText(
     "asn62-s2yb6-ezdxu-wy6eu-ml2sx-yaqyb-tvmkf-bgefi-2iqtw-a7b53-yqe"
   );
 
+  let accessControlState = AccessControl.initState();
+  include MixinAuthorization(accessControlState, ownerPrincipal);
+
+  stable var nextJobNumber = 1;
+  stable var nextInvoiceNumber = 1;
+
   public type UserProfile = { name : Text };
   stable var userProfiles = Map.empty<Principal, UserProfile>();
   stable var userSignatures = Map.empty<Principal, Blob>();
+
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (caller == ownerPrincipal) {
@@ -174,6 +175,11 @@ actor {
     if (not isAuthorizedOrOwner(caller)) {
       Runtime.trap("Unauthorized: Only authorized users or owner can perform this action");
     };
+  };
+
+  func isAdminOrOwner(caller : Principal) : Bool {
+    if (caller == ownerPrincipal) return true;
+    AccessControl.isAdmin(accessControlState, caller);
   };
 
   // ─── Clients ────────────────────────────────────────────────────────────────
@@ -496,8 +502,9 @@ actor {
     stripeConfigured;
   };
 
+  // Allow both the hardcoded ownerPrincipal AND any AccessControl admin to configure Stripe
   public shared ({ caller }) func setStripeConfiguration(config : Stripe.StripeConfiguration) : async () {
-    if (caller != ownerPrincipal) Runtime.trap("Unauthorized: Only the owner can set Stripe configuration");
+    if (not isAdminOrOwner(caller)) Runtime.trap("Unauthorized: Only the owner or admin can set Stripe configuration");
     stripeKey := ?config.secretKey;
     stripeConfigured := true;
   };

@@ -36,7 +36,6 @@ import type React from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { RateType } from "../backend";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useCreateLaborRate,
   useDeleteLaborRate,
@@ -44,13 +43,7 @@ import {
   useUpdateLaborRate,
 } from "../hooks/useQueries";
 
-const OWNER_PRINCIPAL =
-  "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe";
-
 export default function LaborRatesPage() {
-  const { identity } = useInternetIdentity();
-  const isOwner = identity?.getPrincipal().toString() === OWNER_PRINCIPAL;
-
   const { data: laborRates = [], isLoading } = useListLaborRates();
   const createRate = useCreateLaborRate();
   const updateRate = useUpdateLaborRate();
@@ -255,51 +248,47 @@ export default function LaborRatesPage() {
                             ? "Hourly"
                             : "Flat"}
                         </Badge>
-                        {isOwner && (
-                          <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => startEdit(rate)}
+                          data-ocid={`laborrates.edit_button.${idx + 1}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => startEdit(rate)}
-                              data-ocid={`laborrates.edit_button.${idx + 1}`}
+                              data-ocid={`laborrates.delete_button.${idx + 1}`}
                             >
-                              <Pencil className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  data-ocid={`laborrates.delete_button.${idx + 1}`}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent data-ocid="laborrates.dialog">
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    Delete Labor Rate
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Delete "{rate.name}"? This cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel data-ocid="laborrates.cancel_button">
-                                    Cancel
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDelete(rate.id)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    data-ocid="laborrates.confirm_button"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </>
-                        )}
+                          </AlertDialogTrigger>
+                          <AlertDialogContent data-ocid="laborrates.dialog">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Delete Labor Rate
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Delete "{rate.name}"? This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel data-ocid="laborrates.cancel_button">
+                                Cancel
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(rate.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                data-ocid="laborrates.confirm_button"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   ),
@@ -309,73 +298,71 @@ export default function LaborRatesPage() {
           </CardContent>
         </Card>
 
-        {/* Add New Rate — owner only */}
-        {isOwner && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Add Labor Rate
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleAdd} className="space-y-3">
+        {/* Add New Rate */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Labor Rate
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAdd} className="space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="rate-name">Rate Name</Label>
+                <Input
+                  id="rate-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Standard Hourly, Trip Charge"
+                  data-ocid="laborrates.input"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label htmlFor="rate-name">Rate Name</Label>
+                  <Label>Type</Label>
+                  <Select
+                    value={rateType}
+                    onValueChange={(v) => setRateType(v as RateType)}
+                  >
+                    <SelectTrigger data-ocid="laborrates.select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={RateType.hourly}>Hourly</SelectItem>
+                      <SelectItem value={RateType.flat}>Flat Rate</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="rate-amount">Amount ($)</Label>
                   <Input
-                    id="rate-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Standard Hourly, Trip Charge"
-                    data-ocid="laborrates.input"
+                    id="rate-amount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label>Type</Label>
-                    <Select
-                      value={rateType}
-                      onValueChange={(v) => setRateType(v as RateType)}
-                    >
-                      <SelectTrigger data-ocid="laborrates.select">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={RateType.hourly}>Hourly</SelectItem>
-                        <SelectItem value={RateType.flat}>Flat Rate</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="rate-amount">Amount ($)</Label>
-                    <Input
-                      id="rate-amount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={createRate.isPending}
-                  data-ocid="laborrates.primary_button"
-                >
-                  {createRate.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  ) : (
-                    <Plus className="h-4 w-4 mr-1" />
-                  )}
-                  Add Rate
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        )}
+              </div>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={createRate.isPending}
+                data-ocid="laborrates.primary_button"
+              >
+                {createRate.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-1" />
+                )}
+                Add Rate
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
         {/* Calculator */}
         <Card>

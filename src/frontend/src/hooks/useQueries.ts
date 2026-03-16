@@ -14,6 +14,7 @@ import {
   type UserRole,
 } from "../backend";
 import { useActor } from "./useActor";
+import { useInternetIdentity } from "./useInternetIdentity";
 
 // ─── Clients ────────────────────────────────────────────────────────────────
 
@@ -740,13 +741,17 @@ export function useGetCallerUserRole() {
 
 export function useIsOwner() {
   const { actor, isFetching } = useActor();
+  const { identity } = useInternetIdentity();
+  const principalStr = identity?.getPrincipal().toString() ?? "anonymous";
   return useQuery<boolean>({
-    queryKey: ["isOwner"],
+    queryKey: ["isOwner", principalStr],
     queryFn: async () => {
       if (!actor) return false;
       return actor.isCallerAdmin();
     },
     enabled: !!actor && !isFetching,
+    staleTime: 0,
+    refetchOnMount: true,
   });
 }
 
@@ -794,6 +799,44 @@ export function useSetStripeConfiguration() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stripeConfigured"] });
+    },
+  });
+}
+
+export function useForceGrantAdminByToken() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (token: string) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.forceGrantAdminByToken(token);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["isOwner"] });
+    },
+  });
+}
+
+export function useCreateCheckoutSession() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async ({
+      items,
+      successUrl,
+      cancelUrl,
+    }: {
+      items: Array<{
+        productName: string;
+        currency: string;
+        quantity: bigint;
+        priceInCents: bigint;
+        productDescription: string;
+      }>;
+      successUrl: string;
+      cancelUrl: string;
+    }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.createCheckoutSession(items, successUrl, cancelUrl);
     },
   });
 }

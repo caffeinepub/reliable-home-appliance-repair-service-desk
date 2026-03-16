@@ -263,6 +263,7 @@ export interface backendInterface {
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getUserSignature(): Promise<Uint8Array | null>;
     isCallerAdmin(): Promise<boolean>;
+    forceGrantAdminByToken(token: string): Promise<boolean>;
     isStripeConfigured(): Promise<boolean>;
     listClients(): Promise<Array<Client>>;
     listJobs(): Promise<Array<Job>>;
@@ -763,6 +764,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.isCallerAdmin();
+            return result;
+        }
+    }
+    async forceGrantAdminByToken(arg0: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.forceGrantAdminByToken(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.forceGrantAdminByToken(arg0);
             return result;
         }
     }
