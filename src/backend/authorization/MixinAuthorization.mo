@@ -1,7 +1,6 @@
 import AccessControl "./access-control";
 import Prim "mo:prim";
 import Runtime "mo:core/Runtime";
-import Principal "mo:core/Principal";
 
 mixin (accessControlState : AccessControl.AccessControlState, ownerPrincipal : Principal) {
   // Initialize auth (first caller becomes admin, others become users)
@@ -17,21 +16,23 @@ mixin (accessControlState : AccessControl.AccessControlState, ownerPrincipal : P
   };
 
   public query ({ caller }) func getCallerUserRole() : async AccessControl.UserRole {
-    if (caller == ownerPrincipal) { return #admin };
     AccessControl.getUserRole(accessControlState, caller);
   };
 
+  // Allow the hardcoded owner to bypass AccessControl role assignment restrictions
   public shared ({ caller }) func assignCallerUserRole(user : Principal, role : AccessControl.UserRole) : async () {
-    // Owner can always assign roles; AccessControl admins can also assign roles
     if (caller == ownerPrincipal) {
+      // Owner can always assign roles directly
       accessControlState.userRoles.add(user, role);
-      return;
+    } else {
+      // Admin-only check happens inside
+      AccessControl.assignRole(accessControlState, caller, user, role);
     };
-    AccessControl.assignRole(accessControlState, caller, user, role);
   };
 
+  // Returns true if caller is the hardcoded owner OR in the AccessControl admin list
   public query ({ caller }) func isCallerAdmin() : async Bool {
-    if (caller == ownerPrincipal) { return true };
+    if (caller == ownerPrincipal) return true;
     AccessControl.isAdmin(accessControlState, caller);
   };
 };

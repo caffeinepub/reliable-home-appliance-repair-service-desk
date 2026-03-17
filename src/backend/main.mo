@@ -21,12 +21,46 @@ import OutCall "http-outcalls/outcall";
 actor {
   include MixinStorage();
 
-  // Owner: Jeffrey Burgholzer — hardcoded principal, recognized on all domains
+  // Owner: Jeffrey Burgholzer — hardcoded principal (live domain)
   let ownerPrincipal = Principal.fromText(
     "asn62-s2yb6-ezdxu-wy6eu-ml2sx-yaqyb-tvmkf-bgefi-2iqtw-a7b53-yqe"
   );
+  // Draft domain principal for the same owner (Internet Identity generates per-domain principals)
+  let draftOwnerPrincipal = Principal.fromText(
+    "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe"
+  );
+
+  // ─── Stable access control state (survives upgrades) ────────────────────────
+  // We persist role assignments so technicians don't lose access on each deploy.
+  stable var stableUserRoles : [(Principal, AccessControl.UserRole)] = [];
+  stable var stableAdminAssigned : Bool = false;
 
   let accessControlState = AccessControl.initState();
+
+  // On every start (fresh deploy OR upgrade), ensure owner is always admin.
+  // For upgrades, postupgrade() will also restore other users.
+  accessControlState.userRoles.add(ownerPrincipal, #admin);
+  accessControlState.userRoles.add(draftOwnerPrincipal, #admin);
+  accessControlState.adminAssigned := true;
+
+  system func preupgrade() {
+    // Save all role assignments before upgrade
+    stableUserRoles := accessControlState.userRoles.entries().toArray();
+    stableAdminAssigned := accessControlState.adminAssigned;
+  };
+
+  system func postupgrade() {
+    // Restore role assignments after upgrade
+    for ((p, r) in stableUserRoles.vals()) {
+      accessControlState.userRoles.add(p, r);
+    };
+    accessControlState.adminAssigned := stableAdminAssigned;
+    // Always ensure owner keeps admin rights after restore
+    accessControlState.userRoles.add(ownerPrincipal, #admin);
+    accessControlState.userRoles.add(draftOwnerPrincipal, #admin);
+    accessControlState.adminAssigned := true;
+  };
+
   include MixinAuthorization(accessControlState, ownerPrincipal);
 
   stable var nextJobNumber = 1;
@@ -180,6 +214,7 @@ actor {
 
   func isAdminOrOwner(caller : Principal) : Bool {
     if (caller == ownerPrincipal) return true;
+    if (caller == draftOwnerPrincipal) return true;
     AccessControl.isAdmin(accessControlState, caller);
   };
 

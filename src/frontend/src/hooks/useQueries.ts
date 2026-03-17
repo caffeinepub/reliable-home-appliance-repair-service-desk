@@ -734,8 +734,12 @@ export function useGetCallerUserRole() {
   });
 }
 
-const OWNER_PRINCIPAL =
-  "asn62-s2yb6-ezdxu-wy6eu-ml2sx-yaqyb-tvmkf-bgefi-2iqtw-a7b53-yqe";
+// Both the live-domain and draft-domain principals for the owner (Jeffrey Burgholzer).
+// Internet Identity generates different principals per domain — both are recognized.
+const OWNER_PRINCIPALS = new Set([
+  "asn62-s2yb6-ezdxu-wy6eu-ml2sx-yaqyb-tvmkf-bgefi-2iqtw-a7b53-yqe",
+  "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe",
+]);
 
 export function useIsOwner() {
   const { actor, isFetching } = useActor();
@@ -744,7 +748,7 @@ export function useIsOwner() {
   return useQuery<boolean>({
     queryKey: ["isOwner", principalStr],
     queryFn: async () => {
-      if (principalStr === OWNER_PRINCIPAL) return true;
+      if (OWNER_PRINCIPALS.has(principalStr)) return true;
       if (!actor) return false;
       return actor.isCallerAdmin();
     },
