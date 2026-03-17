@@ -118,7 +118,7 @@ export default function Layout() {
 
       {/* Bottom Navigation */}
       {showNav && (
-        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border shadow-lg safe-bottom">
+        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border shadow-lg safe-bottom print:hidden">
           <div className="flex items-stretch">
             {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
               const isActive =

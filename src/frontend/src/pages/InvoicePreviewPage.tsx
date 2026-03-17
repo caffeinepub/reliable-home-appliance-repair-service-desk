@@ -61,7 +61,7 @@ export default function InvoicePreviewPage() {
 
   const [sigImageUrl, setSigImageUrl] = useState<string | null>(null);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
-  const [taxRateStr, setTaxRateStr] = useState("8.875");
+  const [taxRateStr, setTaxRateStr] = useState("8.125");
 
   useEffect(() => {
     if (existingSig && existingSig.length > 0) {
@@ -114,8 +114,10 @@ export default function InvoicePreviewPage() {
     );
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: new backend field
-  const partLineItems: JobPartLineItem[] = (job as any)?.partLineItems ?? [];
+  const partLineItems: JobPartLineItem[] =
+    ((job as unknown as Record<string, unknown>)?.partLineItems as
+      | JobPartLineItem[]
+      | undefined) ?? [];
 
   const partCost = partLineItems.reduce(
     (s, i) => s + Number(i.unitPrice) * Number(i.quantity),
@@ -160,49 +162,78 @@ export default function InvoicePreviewPage() {
       )
       .join("");
 
+    const photosHTML =
+      job.photos && job.photos.length > 0
+        ? `<div style="margin-top:32px;border-top:1px solid #eee;padding-top:20px">
+          <p style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:12px">Job Photos</p>
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            ${job.photos.map((p) => `<img src="${p.getDirectURL()}" style="width:180px;height:140px;object-fit:cover;border-radius:6px;border:1px solid #ddd" />`).join("")}
+          </div>
+        </div>`
+        : "";
+
+    const notesHTML = job.notes
+      ? `<div style="margin-bottom:24px;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px">
+          <p style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#888;margin:0 0 6px">Notes</p>
+          <p style="font-size:.9rem;color:#374151;line-height:1.6;margin:0">${job.notes}</p>
+        </div>`
+      : "";
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Invoice / Estimate — Job #${job.id}</title>
+  <title>Estimate / Invoice — Job #${job.id}</title>
   <style>
-    body{font-family:system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#111}
-    h1{font-size:1.4rem;margin:0;color:#15803d}
-    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
-    .company{font-size:.85rem;color:#555;line-height:1.6}
-    .client-block{margin-bottom:24px}
-    table{width:100%;border-collapse:collapse}
-    th{text-align:left;padding:6px 0;border-bottom:2px solid #111;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
-    .section-label{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#888;padding:8px 0 4px}
-    .total-row td{padding:4px 0;font-size:.95rem}
-    .grand-total td{font-weight:700;font-size:1.1rem;border-top:2px solid #111;padding-top:8px}
-    .sig-section{margin-top:40px;border-top:1px solid #ddd;padding-top:20px}
-    @media print{body{margin:20px}}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,sans-serif;max-width:700px;margin:32px auto;padding:0 24px;color:#111;background:#fff}
+    h1{font-size:1.3rem;margin:0;color:#15803d;font-weight:700}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid #15803d}
+    .company-info{font-size:.82rem;color:#555;line-height:1.7;margin-top:4px}
+    .job-meta{text-align:right;font-size:.82rem;color:#555;line-height:1.7}
+    .job-meta strong{font-size:1rem;color:#111;display:block}
+    .client-block{margin-bottom:20px;padding:12px 14px;background:#f0fdf4;border-radius:6px;font-size:.88rem;line-height:1.6}
+    .client-block strong{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#166534;display:block;margin-bottom:4px}
+    table{width:100%;border-collapse:collapse;margin-bottom:8px}
+    th{text-align:left;padding:7px 0;border-bottom:2px solid #111;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:#555}
+    .section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;padding:10px 0 4px}
+    .total-row td{padding:5px 0;font-size:.93rem;color:#555}
+    .subtotal-divider td{border-top:1px solid #ddd;padding-top:6px}
+    .grand-total td{font-weight:700;font-size:1.05rem;border-top:2px solid #111;padding-top:8px;color:#111}
+    .sig-section{margin-top:36px;border-top:1px solid #ddd;padding-top:18px}
+    .waiver-section{margin-top:20px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:.8rem;color:#78350f;line-height:1.6}
+    .footer-note{margin-top:36px;font-size:.72rem;color:#9ca3af;text-align:center;padding-top:16px;border-top:1px solid #f0f0f0}
+    @media print{
+      body{margin:16px}
+      .no-print{display:none!important}
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <div>
       <h1>${COMPANY_NAME}</h1>
-      <div class="company">
-        ${COMPANY_PHONE1} &nbsp;|&nbsp; ${COMPANY_PHONE2}<br/>
+      <div class="company-info">
+        ${COMPANY_PHONE1} &nbsp;&bull;&nbsp; ${COMPANY_PHONE2}<br/>
         ${COMPANY_EMAIL}
       </div>
     </div>
-    <div style="text-align:right;font-size:.85rem;color:#555">
-      <strong>Job #${job.id}</strong><br/>
+    <div class="job-meta">
+      <strong>Job #${job.id}</strong>
       ${formatDate(job.date)}<br/>
-      Status: ${job.status}
+      <span style="text-transform:capitalize;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:99px;font-size:.75rem;font-weight:600">${job.status}</span>
     </div>
   </div>
 
   <div class="client-block">
-    <strong>Bill To:</strong><br/>
+    <strong>Bill To</strong>
     ${clientName}<br/>
     ${clientPhone ? `${clientPhone}<br/>` : ""}
-    ${clientEmail ? `${clientEmail}<br/>` : ""}
+    ${clientEmail ? `${clientEmail}` : ""}
   </div>
+
+  ${notesHTML}
 
   <table>
     <thead>
@@ -216,7 +247,7 @@ export default function InvoicePreviewPage() {
       ${job.laborLineItems.length > 0 ? `<tr><td colspan="2" class="section-label">Labor</td></tr>${laborRows}` : ""}
     </tbody>
     <tfoot>
-      <tr class="total-row">
+      <tr class="total-row subtotal-divider">
         <td>Subtotal</td>
         <td style="text-align:right">${formatCents(subtotal)}</td>
       </tr>
@@ -234,15 +265,19 @@ export default function InvoicePreviewPage() {
   ${
     sigImageUrl
       ? `<div class="sig-section">
-          <p style="font-size:.85rem;color:#555;margin-bottom:8px">Customer Signature</p>
-          <img src="${sigImageUrl}" style="max-height:80px;border-bottom:1px solid #999"/>
+          <p style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:10px">Customer Signature</p>
+          <img src="${sigImageUrl}" style="max-height:90px;border-bottom:1px solid #999;display:block"/>
         </div>`
       : ""
   }
 
-  <p style="margin-top:40px;font-size:.75rem;color:#999;text-align:center">
-    Thank you for choosing ${COMPANY_NAME}!
-  </p>
+  ${job.damageWaiver?.enabled ? `<div class="waiver-section"><strong style="display:block;margin-bottom:4px">Damage Waiver</strong>${job.damageWaiver.waiverText}</div>` : ""}
+
+  ${photosHTML}
+
+  <div class="footer-note">
+    Thank you for choosing ${COMPANY_NAME}! &nbsp;&bull;&nbsp; ${COMPANY_PHONE1} &nbsp;&bull;&nbsp; ${COMPANY_EMAIL}
+  </div>
 </body>
 </html>`;
   };
@@ -260,29 +295,18 @@ export default function InvoicePreviewPage() {
 
   const handleDownloadPDF = () => {
     const html = buildInvoiceHTML();
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    document.body.appendChild(iframe);
-    const doc = iframe.contentWindow?.document;
-    if (!doc) {
-      toast.error("Could not generate PDF");
-      document.body.removeChild(iframe);
+    const win = window.open("", "_blank");
+    if (!win) {
+      toast.error("Pop-up blocked. Please allow pop-ups for this site.");
       return;
     }
-    doc.open();
-    doc.write(html);
-    doc.close();
-    iframe.contentWindow?.focus();
+    win.document.write(html);
+    win.document.close();
     setTimeout(() => {
-      iframe.contentWindow?.print();
-      setTimeout(() => document.body.removeChild(iframe), 2000);
+      win.focus();
+      win.print();
     }, 500);
-    toast.info('Use "Save as PDF" in the print dialog to download.');
+    toast.info("Use the print dialog to save as PDF");
   };
 
   const handleSendEmail = () => {
@@ -313,7 +337,7 @@ export default function InvoicePreviewPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 pb-24 space-y-6">
+    <div className="max-w-2xl mx-auto px-4 py-6 pb-36 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 no-print">
         <Button
@@ -343,10 +367,10 @@ export default function InvoicePreviewPage() {
           size="sm"
           onClick={handleDownloadPDF}
           className="flex items-center gap-1.5"
-          data-ocid="invoice.pdf.button"
+          data-ocid="invoice.save_pdf.button"
         >
           <Download className="h-4 w-4" />
-          Download PDF
+          Save as PDF
         </Button>
         <Button
           variant="outline"
@@ -376,12 +400,12 @@ export default function InvoicePreviewPage() {
             onClick={async () => {
               if (!job) return;
               try {
-                const url = await createCheckoutSession.mutateAsync({
+                const rawResponse = await createCheckoutSession.mutateAsync({
                   items: [
                     {
                       productName: `Service Invoice #${job.id}`,
                       currency: "usd",
-                      priceInCents: BigInt(total),
+                      priceInCents: BigInt(Math.round(total)),
                       quantity: 1n,
                       productDescription: "Appliance repair service",
                     },
@@ -389,9 +413,52 @@ export default function InvoicePreviewPage() {
                   successUrl: window.location.href,
                   cancelUrl: window.location.href,
                 });
-                window.open(url, "_blank");
-              } catch {
-                toast.error("Failed to create payment link");
+                // Parse Stripe JSON response — fix: don't use blanket catch that swallows Stripe errors
+                let paymentUrl: string;
+                let parsedResp: Record<string, unknown> | null = null;
+                try {
+                  parsedResp = JSON.parse(rawResponse) as Record<
+                    string,
+                    unknown
+                  >;
+                } catch {
+                  /* not JSON */
+                }
+                if (parsedResp?.error) {
+                  const stripeErr = parsedResp.error as Record<string, unknown>;
+                  throw new Error(
+                    String(
+                      stripeErr.message || stripeErr.code || "Stripe API error",
+                    ),
+                  );
+                }
+                if (typeof parsedResp?.url === "string") {
+                  paymentUrl = parsedResp.url;
+                } else if (rawResponse.startsWith("https://")) {
+                  paymentUrl = rawResponse;
+                } else {
+                  throw new Error(
+                    `No payment URL in response. Raw: ${rawResponse.slice(0, 300)}`,
+                  );
+                }
+                window.open(paymentUrl, "_blank");
+                try {
+                  await navigator.clipboard.writeText(paymentUrl);
+                } catch {
+                  // clipboard optional
+                }
+                toast.success("Payment link opened in new tab");
+              } catch (err: unknown) {
+                // Handle both standard Error instances and ICP agent rejection objects
+                const msg =
+                  err instanceof Error
+                    ? err.message
+                    : typeof err === "object" &&
+                        err !== null &&
+                        "message" in err
+                      ? String((err as { message: unknown }).message)
+                      : String(err);
+                toast.error(msg || "Failed to create payment link");
               }
             }}
             className="flex items-center gap-1.5 bg-green-700 hover:bg-green-800 text-white"
@@ -634,6 +701,29 @@ export default function InvoicePreviewPage() {
           )}
         </div>
 
+        {/* Job Photos */}
+        {job.photos && job.photos.length > 0 && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Job Photos
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {job.photos.map((photo, idx) => (
+                  <img
+                    // biome-ignore lint/suspicious/noArrayIndexKey: photo order stable
+                    key={`preview-photo-${idx}`}
+                    src={photo.getDirectURL()}
+                    alt={`Site documentation ${idx + 1}`}
+                    className="w-full h-36 object-cover rounded-lg border border-border"
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Damage Waiver */}
         {job.damageWaiver?.enabled && (
           <>
@@ -646,7 +736,7 @@ export default function InvoicePreviewPage() {
         )}
 
         {/* Footer */}
-        <div className="text-center text-xs text-muted-foreground pt-2">
+        <div className="text-center text-xs text-muted-foreground pt-2 pb-2">
           Thank you for choosing {COMPANY_NAME}!
         </div>
       </div>

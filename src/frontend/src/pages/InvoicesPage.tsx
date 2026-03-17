@@ -80,8 +80,10 @@ export default function InvoicesPage() {
   const computeJobTotal = (jobId: bigint): number => {
     const job = getJob(jobId);
     if (!job) return 0;
-    // biome-ignore lint/suspicious/noExplicitAny: new backend field
-    const partItems: JobPartLineItem[] = (job as any)?.partLineItems ?? [];
+    const partItems: JobPartLineItem[] =
+      ((job as unknown as Record<string, unknown>)?.partLineItems as
+        | JobPartLineItem[]
+        | undefined) ?? [];
     const partCost = partItems.reduce(
       (s, i) => s + Number(i.unitPrice) * Number(i.quantity),
       0,

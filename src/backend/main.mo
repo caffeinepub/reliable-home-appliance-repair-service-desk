@@ -1,4 +1,5 @@
 import Map "mo:core/Map";
+import Prim "mo:prim";
 import List "mo:core/List";
 import Nat "mo:core/Nat";
 import Blob "mo:core/Blob";
@@ -502,6 +503,20 @@ actor {
     stripeConfigured;
   };
 
+  // Allow owner to claim admin rights by token (for live domain recovery)
+  public shared ({ caller }) func forceGrantAdminByToken(token : Text) : async Bool {
+    switch (Prim.envVar<system>("CAFFEINE_ADMIN_TOKEN")) {
+      case (null) { false };
+      case (?adminToken) {
+        if (caller == ownerPrincipal or token == adminToken) {
+          accessControlState.userRoles.add(caller, #admin);
+          accessControlState.adminAssigned := true;
+          true;
+        } else { false };
+      };
+    };
+  };
+
   // Allow both the hardcoded ownerPrincipal AND any AccessControl admin to configure Stripe
   public shared ({ caller }) func setStripeConfiguration(config : Stripe.StripeConfiguration) : async () {
     if (not isAdminOrOwner(caller)) Runtime.trap("Unauthorized: Only the owner or admin can set Stripe configuration");
@@ -580,4 +595,5 @@ actor {
       };
     };
   };
+
 };

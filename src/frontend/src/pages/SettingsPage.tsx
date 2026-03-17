@@ -15,6 +15,7 @@ import {
   LogOut,
   Settings,
   Shield,
+  Trash2,
   UserPlus,
   X,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import { UserRole } from "../backend";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useAssignUserRole,
+  useDeleteJob,
   useForceGrantAdminByToken,
   useGetCallerUserProfile,
   useIsOwner,
@@ -52,6 +54,7 @@ export default function SettingsPage() {
   const setStripeConfig = useSetStripeConfiguration();
   const assignRole = useAssignUserRole();
   const forceGrantAdmin = useForceGrantAdminByToken();
+  const deleteJob = useDeleteJob();
 
   // Stripe form
   const [stripeKey, setStripeKey] = useState("");
@@ -100,7 +103,7 @@ export default function SettingsPage() {
     setStripeError("");
     try {
       await setStripeConfig.mutateAsync({
-        secretKey: stripeKey,
+        secretKey: stripeKey.trim(),
         allowedCountries: ["US"],
       });
       setStripeSaved(true);
@@ -122,10 +125,10 @@ export default function SettingsPage() {
     setAddingUser(true);
     try {
       const user = Principal.fromText(newPrincipal.trim());
-      await assignRole.mutateAsync({ user, role: UserRole.user });
+      await assignRole.mutateAsync({ user, role: UserRole.admin });
       setGrantedUsers((prev) => [...prev, newPrincipal.trim()]);
       setNewPrincipal("");
-      toast.success("User granted access");
+      toast.success("Admin rights granted");
     } catch (e: unknown) {
       setUserError(
         e instanceof Error
@@ -170,6 +173,17 @@ export default function SettingsPage() {
       );
     } finally {
       setClaimingAdmin(false);
+    }
+  };
+
+  const handleDeleteJob = async (jobId: bigint) => {
+    if (!window.confirm("Delete this job record? This cannot be undone."))
+      return;
+    try {
+      await deleteJob.mutateAsync(jobId);
+      toast.success("Job record deleted");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete job");
     }
   };
 
@@ -298,9 +312,8 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                If you are the owner and your admin access is not showing, enter
-                your admin token below to restore full owner rights on this
-                device.
+                If your owner rights are not showing after login, enter your
+                admin token to restore full access.
               </p>
               {tokenError && (
                 <p
@@ -391,6 +404,60 @@ export default function SettingsPage() {
           </Card>
         )}
 
+        {/* Section 3b: Job Records — owner only, allows deleting test entries */}
+        {isOwner && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <BarChart2 className="h-4 w-4" />
+                Job Records
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {jobs.length === 0 ? (
+                <p
+                  className="text-sm text-muted-foreground text-center py-2"
+                  data-ocid="settings.empty_state"
+                >
+                  No job records found.
+                </p>
+              ) : (
+                jobs.map((job, idx) => {
+                  const jobTotal = job.laborLineItems.reduce(
+                    (sum, item) => sum + Number(item.totalAmount),
+                    0,
+                  );
+                  return (
+                    <div
+                      key={job.id.toString()}
+                      data-ocid={`settings.row.${idx + 1}`}
+                      className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium">
+                          Job #{job.id.toString()} — Client{" "}
+                          {job.clientId.toString().slice(0, 8)}…
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Total: ${(jobTotal / 100).toFixed(2)}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteJob(job.id)}
+                        data-ocid={`settings.delete_button.${idx + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Section 4: Grant Access — owner only */}
         {isOwner && (
           <Card>
@@ -403,9 +470,8 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="bg-muted/50 rounded-lg px-3 py-2">
                 <p className="text-xs text-muted-foreground">
-                  To grant a technician access: ask them to log in and copy
-                  their Principal ID from this Settings screen, then paste it
-                  below.
+                  Paste the technician’s Principal ID to grant them full admin
+                  rights.
                 </p>
               </div>
 
@@ -464,7 +530,7 @@ export default function SettingsPage() {
                   ) : (
                     <UserPlus className="h-4 w-4 mr-1" />
                   )}
-                  Grant Access
+                  Grant Admin Rights
                 </Button>
               </div>
             </CardContent>

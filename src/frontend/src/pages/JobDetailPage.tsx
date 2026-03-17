@@ -105,7 +105,7 @@ export default function JobDetailPage() {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
     {},
   );
-  const [taxRateStr, setTaxRateStr] = useState("8.875");
+  const [taxRateStr, setTaxRateStr] = useState("8.125");
 
   // Labor line item form
   const [showLaborForm, setShowLaborForm] = useState(false);
@@ -1099,12 +1099,12 @@ export default function JobDetailPage() {
             disabled={createCheckoutSession.isPending}
             onClick={async () => {
               try {
-                const url = await createCheckoutSession.mutateAsync({
+                const rawResponse = await createCheckoutSession.mutateAsync({
                   items: [
                     {
                       productName: `Service Job #${jobId}`,
                       currency: "usd",
-                      priceInCents: BigInt(total),
+                      priceInCents: BigInt(Math.round(total)),
                       quantity: 1n,
                       productDescription: "Appliance repair service",
                     },
@@ -1112,10 +1112,52 @@ export default function JobDetailPage() {
                   successUrl: window.location.href,
                   cancelUrl: window.location.href,
                 });
-                await navigator.clipboard.writeText(url);
-                toast.success("Payment link copied to clipboard");
-              } catch {
-                toast.error("Failed to create payment link");
+                // Parse Stripe JSON response — fix: don't use blanket catch that swallows Stripe errors
+                let paymentUrl: string;
+                let parsedResp: Record<string, unknown> | null = null;
+                try {
+                  parsedResp = JSON.parse(rawResponse) as Record<
+                    string,
+                    unknown
+                  >;
+                } catch {
+                  /* not JSON */
+                }
+                if (parsedResp?.error) {
+                  const stripeErr = parsedResp.error as Record<string, unknown>;
+                  throw new Error(
+                    String(
+                      stripeErr.message || stripeErr.code || "Stripe API error",
+                    ),
+                  );
+                }
+                if (typeof parsedResp?.url === "string") {
+                  paymentUrl = parsedResp.url;
+                } else if (rawResponse.startsWith("https://")) {
+                  paymentUrl = rawResponse;
+                } else {
+                  throw new Error(
+                    `No payment URL in response. Raw: ${rawResponse.slice(0, 300)}`,
+                  );
+                }
+                window.open(paymentUrl, "_blank");
+                try {
+                  await navigator.clipboard.writeText(paymentUrl);
+                  toast.success("Payment link opened and copied to clipboard");
+                } catch {
+                  toast.success("Payment link opened in new tab");
+                }
+              } catch (err: unknown) {
+                // Handle both standard Error instances and ICP agent rejection objects
+                const msg =
+                  err instanceof Error
+                    ? err.message
+                    : typeof err === "object" &&
+                        err !== null &&
+                        "message" in err
+                      ? String((err as { message: unknown }).message)
+                      : String(err);
+                toast.error(msg || "Failed to create payment link");
               }
             }}
             className="bg-green-700 hover:bg-green-800 text-white"

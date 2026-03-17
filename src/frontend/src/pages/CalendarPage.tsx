@@ -430,10 +430,12 @@ export default function CalendarPage() {
   const goToday = () => setWeekStart(getESTWeekStart(new Date()));
 
   const getJobsForDay = (day: Date): Job[] => {
-    return jobs.filter((job) => {
-      const jobDate = toESTDate(job.date);
-      return isSameESTDay(jobDate, day);
-    });
+    return jobs
+      .filter((job) => {
+        const jobDate = toESTDate(job.date);
+        return isSameESTDay(jobDate, day);
+      })
+      .sort((a, b) => Number(a.date) - Number(b.date));
   };
 
   const weekLabel = () => {

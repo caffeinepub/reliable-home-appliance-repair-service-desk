@@ -143,6 +143,14 @@ export interface JobPartLineItem {
     quantity: bigint;
     unitPrice: bigint;
 }
+export interface Invoice {
+    id: bigint;
+    jobId: bigint;
+    invoiceNumber: bigint;
+    issuedAt: bigint;
+    notes: string;
+    isPaid: boolean;
+}
 export interface Job {
     id: bigint;
     status: JobStatus;
@@ -244,11 +252,13 @@ export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
     createClient(client: Client): Promise<bigint>;
+    createInvoice(invoice: Invoice): Promise<bigint>;
     createJob(job: Job): Promise<bigint>;
     createLaborRate(laborRate: LaborRate): Promise<bigint>;
     createPart(part: Part): Promise<bigint>;
     createPaymentIntent(jobId: bigint, amountInCents: bigint): Promise<string>;
     deleteClient(clientId: bigint): Promise<void>;
+    deleteInvoice(invoiceId: bigint): Promise<void>;
     deleteJob(jobId: bigint): Promise<void>;
     deleteLaborRate(laborRateId: bigint): Promise<void>;
     deletePart(partId: bigint): Promise<void>;
@@ -256,6 +266,7 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getClient(_clientId: bigint): Promise<Client>;
     getDamageWaiver(jobId: bigint): Promise<DamageWaiver | null>;
+    getInvoice(invoiceId: bigint): Promise<Invoice>;
     getJob(_jobId: bigint): Promise<Job>;
     getPart(partId: bigint): Promise<Part>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
@@ -266,6 +277,7 @@ export interface backendInterface {
     forceGrantAdminByToken(token: string): Promise<boolean>;
     isStripeConfigured(): Promise<boolean>;
     listClients(): Promise<Array<Client>>;
+    listInvoices(): Promise<Array<Invoice>>;
     listJobs(): Promise<Array<Job>>;
     listLaborRates(): Promise<Array<LaborRate>>;
     listParts(): Promise<Array<Part>>;
@@ -280,6 +292,7 @@ export interface backendInterface {
     updateClient(client: Client): Promise<void>;
     updateDamageWaiver(jobId: bigint, waiver: DamageWaiver): Promise<void>;
     updateEstimate(jobId: bigint, estimate: Estimate): Promise<void>;
+    updateInvoice(invoice: Invoice): Promise<void>;
     updateJob(job: Job): Promise<void>;
     updateJobPayment(jobId: bigint, paymentIntentId: string): Promise<void>;
     updateJobSchedule(jobId: bigint, scheduledStart: Time | null, scheduledEnd: Time | null): Promise<void>;
@@ -1072,6 +1085,76 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.usePartOnJob(arg0, arg1, arg2);
+            return result;
+        }
+    }
+    async createInvoice(invoice: Invoice): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.createInvoice(invoice);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.createInvoice(invoice);
+            return result;
+        }
+    }
+    async getInvoice(invoiceId: bigint): Promise<Invoice> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getInvoice(invoiceId);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getInvoice(invoiceId);
+            return result;
+        }
+    }
+    async listInvoices(): Promise<Array<Invoice>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.listInvoices();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.listInvoices();
+            return result;
+        }
+    }
+    async updateInvoice(invoice: Invoice): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateInvoice(invoice);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateInvoice(invoice);
+            return result;
+        }
+    }
+    async deleteInvoice(invoiceId: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteInvoice(invoiceId);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteInvoice(invoiceId);
             return result;
         }
     }

@@ -144,6 +144,14 @@ export interface JobPartLineItem {
     quantity: bigint;
     unitPrice: bigint;
 }
+export interface Invoice {
+    id: bigint;
+    jobId: bigint;
+    invoiceNumber: bigint;
+    issuedAt: bigint;
+    notes: string;
+    isPaid: boolean;
+}
 export interface backendInterface {
     addJobPhoto(jobId: bigint, photo: ExternalBlob): Promise<void>;
     addJobPartLineItem(jobId: bigint, item: JobPartLineItem): Promise<void>;
@@ -153,15 +161,18 @@ export interface backendInterface {
     createClient(client: Client): Promise<bigint>;
     createJob(job: Job): Promise<bigint>;
     createLaborRate(laborRate: LaborRate): Promise<bigint>;
+    createInvoice(invoice: Invoice): Promise<bigint>;
     createPart(part: Part): Promise<bigint>;
     createPaymentIntent(jobId: bigint, amountInCents: bigint): Promise<string>;
     deleteClient(clientId: bigint): Promise<void>;
+    deleteInvoice(invoiceId: bigint): Promise<void>;
     deleteJob(jobId: bigint): Promise<void>;
     deleteLaborRate(laborRateId: bigint): Promise<void>;
     deletePart(partId: bigint): Promise<void>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getClient(_clientId: bigint): Promise<Client>;
+    getInvoice(invoiceId: bigint): Promise<Invoice>;
     getDamageWaiver(jobId: bigint): Promise<DamageWaiver | null>;
     getJob(_jobId: bigint): Promise<Job>;
     getPart(partId: bigint): Promise<Part>;
@@ -174,6 +185,7 @@ export interface backendInterface {
     isStripeConfigured(): Promise<boolean>;
     listClients(): Promise<Array<Client>>;
     listJobs(): Promise<Array<Job>>;
+    listInvoices(): Promise<Array<Invoice>>;
     listLaborRates(): Promise<Array<LaborRate>>;
     listParts(): Promise<Array<Part>>;
     removeJobPhoto(jobId: bigint, photoIndex: bigint): Promise<void>;
@@ -186,6 +198,7 @@ export interface backendInterface {
     transform(input: TransformationInput): Promise<TransformationOutput>;
     updateClient(client: Client): Promise<void>;
     updateDamageWaiver(jobId: bigint, waiver: DamageWaiver): Promise<void>;
+    updateInvoice(invoice: Invoice): Promise<void>;
     updateEstimate(jobId: bigint, estimate: Estimate): Promise<void>;
     updateJob(job: Job): Promise<void>;
     updateJobPayment(jobId: bigint, paymentIntentId: string): Promise<void>;

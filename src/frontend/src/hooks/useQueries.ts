@@ -468,8 +468,7 @@ export function useListInvoices() {
     queryFn: async () => {
       if (!actor) return [];
       try {
-        // biome-ignore lint/suspicious/noExplicitAny: new backend method
-        return await (actor as any).listInvoices();
+        return await actor.listInvoices();
       } catch {
         return [];
       }
@@ -485,8 +484,7 @@ export function useGetInvoice(id: bigint | null) {
     queryFn: async () => {
       if (!actor || id === null) return null;
       try {
-        // biome-ignore lint/suspicious/noExplicitAny: new backend method
-        return await (actor as any).getInvoice(id);
+        return await actor.getInvoice(id);
       } catch {
         return null;
       }
@@ -501,8 +499,7 @@ export function useCreateInvoice() {
   return useMutation({
     mutationFn: async (invoice: AppInvoice) => {
       if (!actor) throw new Error("Actor not available");
-      // biome-ignore lint/suspicious/noExplicitAny: new backend method
-      return (actor as any).createInvoice(invoice) as Promise<bigint>;
+      return actor.createInvoice(invoice);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -516,8 +513,7 @@ export function useUpdateInvoice() {
   return useMutation({
     mutationFn: async (invoice: AppInvoice) => {
       if (!actor) throw new Error("Actor not available");
-      // biome-ignore lint/suspicious/noExplicitAny: new backend method
-      return (actor as any).updateInvoice(invoice);
+      return actor.updateInvoice(invoice);
     },
     onSuccess: (_data: unknown, variables: AppInvoice) => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -534,8 +530,7 @@ export function useDeleteInvoice() {
   return useMutation({
     mutationFn: async (invoiceId: bigint) => {
       if (!actor) throw new Error("Actor not available");
-      // biome-ignore lint/suspicious/noExplicitAny: new backend method
-      return (actor as any).deleteInvoice(invoiceId);
+      return actor.deleteInvoice(invoiceId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -739,6 +734,9 @@ export function useGetCallerUserRole() {
   });
 }
 
+const OWNER_PRINCIPAL =
+  "asn62-s2yb6-ezdxu-wy6eu-ml2sx-yaqyb-tvmkf-bgefi-2iqtw-a7b53-yqe";
+
 export function useIsOwner() {
   const { actor, isFetching } = useActor();
   const { identity } = useInternetIdentity();
@@ -746,6 +744,7 @@ export function useIsOwner() {
   return useQuery<boolean>({
     queryKey: ["isOwner", principalStr],
     queryFn: async () => {
+      if (principalStr === OWNER_PRINCIPAL) return true;
       if (!actor) return false;
       return actor.isCallerAdmin();
     },

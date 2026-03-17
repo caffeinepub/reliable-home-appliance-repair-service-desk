@@ -105,6 +105,7 @@ export interface TransformationOutput {
   'headers' : Array<http_header>,
 }
 export interface UserProfile { 'name' : string }
+export interface Invoice { 'id' : bigint, 'jobId' : bigint, 'invoiceNumber' : bigint, 'issuedAt' : bigint, 'notes' : string, 'isPaid' : boolean }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
@@ -154,11 +155,13 @@ export interface _SERVICE {
     string
   >,
   'createClient' : ActorMethod<[Client], bigint>,
+  'createInvoice' : ActorMethod<[Invoice], bigint>,
   'createJob' : ActorMethod<[Job], bigint>,
   'createLaborRate' : ActorMethod<[LaborRate], bigint>,
   'createPart' : ActorMethod<[Part], bigint>,
   'createPaymentIntent' : ActorMethod<[bigint, bigint], string>,
   'deleteClient' : ActorMethod<[bigint], undefined>,
+  'deleteInvoice' : ActorMethod<[bigint], undefined>,
   'deleteJob' : ActorMethod<[bigint], undefined>,
   'deleteLaborRate' : ActorMethod<[bigint], undefined>,
   'deletePart' : ActorMethod<[bigint], undefined>,
@@ -166,6 +169,7 @@ export interface _SERVICE {
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getClient' : ActorMethod<[bigint], Client>,
   'getDamageWaiver' : ActorMethod<[bigint], [] | [DamageWaiver]>,
+  'getInvoice' : ActorMethod<[bigint], Invoice>,
   'getJob' : ActorMethod<[bigint], Job>,
   'getPart' : ActorMethod<[bigint], Part>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
@@ -173,8 +177,10 @@ export interface _SERVICE {
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getUserSignature' : ActorMethod<[], [] | [Uint8Array]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'forceGrantAdminByToken' : ActorMethod<[string], boolean>,
   'isStripeConfigured' : ActorMethod<[], boolean>,
   'listClients' : ActorMethod<[], Array<Client>>,
+  'listInvoices' : ActorMethod<[], Array<Invoice>>,
   'listJobs' : ActorMethod<[], Array<Job>>,
   'listLaborRates' : ActorMethod<[], Array<LaborRate>>,
   'listParts' : ActorMethod<[], Array<Part>>,
@@ -189,6 +195,7 @@ export interface _SERVICE {
   'updateClient' : ActorMethod<[Client], undefined>,
   'updateDamageWaiver' : ActorMethod<[bigint, DamageWaiver], undefined>,
   'updateEstimate' : ActorMethod<[bigint, Estimate], undefined>,
+  'updateInvoice' : ActorMethod<[Invoice], undefined>,
   'updateJob' : ActorMethod<[Job], undefined>,
   'updateJobPayment' : ActorMethod<[bigint, string], undefined>,
   'updateJobSchedule' : ActorMethod<

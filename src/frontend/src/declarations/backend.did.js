@@ -111,6 +111,7 @@ export const Part = IDL.Record({
   'unitCost' : IDL.Nat,
 });
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
+export const Invoice = IDL.Record({ 'id' : IDL.Nat, 'jobId' : IDL.Nat, 'invoiceNumber' : IDL.Nat, 'issuedAt' : IDL.Int, 'notes' : IDL.Text, 'isPaid' : IDL.Bool });
 export const StripeSessionStatus = IDL.Variant({
   'completed' : IDL.Record({
     'userPrincipal' : IDL.Opt(IDL.Text),
@@ -179,11 +180,13 @@ export const idlService = IDL.Service({
       [],
     ),
   'createClient' : IDL.Func([Client], [IDL.Nat], []),
+  'createInvoice' : IDL.Func([Invoice], [IDL.Nat], []),
   'createJob' : IDL.Func([Job], [IDL.Nat], []),
   'createLaborRate' : IDL.Func([LaborRate], [IDL.Nat], []),
   'createPart' : IDL.Func([Part], [IDL.Nat], []),
   'createPaymentIntent' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Text], []),
   'deleteClient' : IDL.Func([IDL.Nat], [], []),
+  'deleteInvoice' : IDL.Func([IDL.Nat], [], []),
   'deleteJob' : IDL.Func([IDL.Nat], [], []),
   'deleteLaborRate' : IDL.Func([IDL.Nat], [], []),
   'deletePart' : IDL.Func([IDL.Nat], [], []),
@@ -191,6 +194,7 @@ export const idlService = IDL.Service({
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getClient' : IDL.Func([IDL.Nat], [Client], ['query']),
   'getDamageWaiver' : IDL.Func([IDL.Nat], [IDL.Opt(DamageWaiver)], ['query']),
+  'getInvoice' : IDL.Func([IDL.Nat], [Invoice], ['query']),
   'getJob' : IDL.Func([IDL.Nat], [Job], ['query']),
   'getPart' : IDL.Func([IDL.Nat], [Part], ['query']),
   'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
@@ -202,8 +206,10 @@ export const idlService = IDL.Service({
     ),
   'getUserSignature' : IDL.Func([], [IDL.Opt(IDL.Vec(IDL.Nat8))], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'forceGrantAdminByToken' : IDL.Func([IDL.Text], [IDL.Bool], []),
   'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
   'listClients' : IDL.Func([], [IDL.Vec(Client)], ['query']),
+  'listInvoices' : IDL.Func([], [IDL.Vec(Invoice)], ['query']),
   'listJobs' : IDL.Func([], [IDL.Vec(Job)], ['query']),
   'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
   'listParts' : IDL.Func([], [IDL.Vec(Part)], ['query']),
@@ -222,6 +228,7 @@ export const idlService = IDL.Service({
   'updateClient' : IDL.Func([Client], [], []),
   'updateDamageWaiver' : IDL.Func([IDL.Nat, DamageWaiver], [], []),
   'updateEstimate' : IDL.Func([IDL.Nat, Estimate], [], []),
+  'updateInvoice' : IDL.Func([Invoice], [], []),
   'updateJob' : IDL.Func([Job], [], []),
   'updateJobPayment' : IDL.Func([IDL.Nat, IDL.Text], [], []),
   'updateJobSchedule' : IDL.Func(
@@ -332,6 +339,7 @@ export const idlFactory = ({ IDL }) => {
     'unitCost' : IDL.Nat,
   });
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
+  const Invoice = IDL.Record({ 'id' : IDL.Nat, 'jobId' : IDL.Nat, 'invoiceNumber' : IDL.Nat, 'issuedAt' : IDL.Int, 'notes' : IDL.Text, 'isPaid' : IDL.Bool });
   const StripeSessionStatus = IDL.Variant({
     'completed' : IDL.Record({
       'userPrincipal' : IDL.Opt(IDL.Text),
@@ -397,11 +405,13 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'createClient' : IDL.Func([Client], [IDL.Nat], []),
+    'createInvoice' : IDL.Func([Invoice], [IDL.Nat], []),
     'createJob' : IDL.Func([Job], [IDL.Nat], []),
     'createLaborRate' : IDL.Func([LaborRate], [IDL.Nat], []),
     'createPart' : IDL.Func([Part], [IDL.Nat], []),
     'createPaymentIntent' : IDL.Func([IDL.Nat, IDL.Nat], [IDL.Text], []),
     'deleteClient' : IDL.Func([IDL.Nat], [], []),
+    'deleteInvoice' : IDL.Func([IDL.Nat], [], []),
     'deleteJob' : IDL.Func([IDL.Nat], [], []),
     'deleteLaborRate' : IDL.Func([IDL.Nat], [], []),
     'deletePart' : IDL.Func([IDL.Nat], [], []),
@@ -409,6 +419,7 @@ export const idlFactory = ({ IDL }) => {
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getClient' : IDL.Func([IDL.Nat], [Client], ['query']),
     'getDamageWaiver' : IDL.Func([IDL.Nat], [IDL.Opt(DamageWaiver)], ['query']),
+    'getInvoice' : IDL.Func([IDL.Nat], [Invoice], ['query']),
     'getJob' : IDL.Func([IDL.Nat], [Job], ['query']),
     'getPart' : IDL.Func([IDL.Nat], [Part], ['query']),
     'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
@@ -420,8 +431,10 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getUserSignature' : IDL.Func([], [IDL.Opt(IDL.Vec(IDL.Nat8))], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'forceGrantAdminByToken' : IDL.Func([IDL.Text], [IDL.Bool], []),
     'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
     'listClients' : IDL.Func([], [IDL.Vec(Client)], ['query']),
+    'listInvoices' : IDL.Func([], [IDL.Vec(Invoice)], ['query']),
     'listJobs' : IDL.Func([], [IDL.Vec(Job)], ['query']),
     'listLaborRates' : IDL.Func([], [IDL.Vec(LaborRate)], ['query']),
     'listParts' : IDL.Func([], [IDL.Vec(Part)], ['query']),
@@ -440,6 +453,7 @@ export const idlFactory = ({ IDL }) => {
     'updateClient' : IDL.Func([Client], [], []),
     'updateDamageWaiver' : IDL.Func([IDL.Nat, DamageWaiver], [], []),
     'updateEstimate' : IDL.Func([IDL.Nat, Estimate], [], []),
+    'updateInvoice' : IDL.Func([Invoice], [], []),
     'updateJob' : IDL.Func([Job], [], []),
     'updateJobPayment' : IDL.Func([IDL.Nat, IDL.Text], [], []),
     'updateJobSchedule' : IDL.Func(
