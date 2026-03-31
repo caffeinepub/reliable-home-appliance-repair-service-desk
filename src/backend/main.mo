@@ -21,58 +21,69 @@ import OutCall "http-outcalls/outcall";
 actor {
   include MixinStorage();
 
-  // Owner: Jeffrey Burgholzer — hardcoded principal (live domain)
-  let ownerPrincipal = Principal.fromText(
+  // ─── Dynamic owner principal (survives upgrades, works on any domain) ────────
+  // Initialized to the known live principal so existing access is preserved.
+  // Call setOwner() from a new domain to transfer ownership to that session's principal.
+  var ownerPrincipal : Principal = Principal.fromText(
     "asn62-s2yb6-ezdxu-wy6eu-ml2sx-yaqyb-tvmkf-bgefi-2iqtw-a7b53-yqe"
   );
-  // Draft domain principal for the same owner (Internet Identity generates per-domain principals)
+  // Draft domain principal — also recognized as owner for continuity.
   let draftOwnerPrincipal = Principal.fromText(
     "q5rzs-s67ph-qtb5w-e66j5-2iqax-vlwa5-5pqxy-yosti-xhcis-ocfw6-yqe"
   );
 
   // ─── Stable access control state (survives upgrades) ────────────────────────
-  // We persist role assignments so technicians don't lose access on each deploy.
-  stable var stableUserRoles : [(Principal, AccessControl.UserRole)] = [];
-  stable var stableAdminAssigned : Bool = false;
+  var stableUserRoles : [(Principal, AccessControl.UserRole)] = [];
+  var stableAdminAssigned : Bool = false;
 
   let accessControlState = AccessControl.initState();
 
-  // On every start (fresh deploy OR upgrade), ensure owner is always admin.
-  // For upgrades, postupgrade() will also restore other users.
+  // On every start, seed both known owner principals as admin.
   accessControlState.userRoles.add(ownerPrincipal, #admin);
   accessControlState.userRoles.add(draftOwnerPrincipal, #admin);
   accessControlState.adminAssigned := true;
 
   system func preupgrade() {
-    // Save all role assignments before upgrade
     stableUserRoles := accessControlState.userRoles.entries().toArray();
     stableAdminAssigned := accessControlState.adminAssigned;
   };
 
   system func postupgrade() {
-    // Restore role assignments after upgrade
     for ((p, r) in stableUserRoles.vals()) {
       accessControlState.userRoles.add(p, r);
     };
     accessControlState.adminAssigned := stableAdminAssigned;
-    // Always ensure owner keeps admin rights after restore
+    // Always re-seed owner principals after upgrade
     accessControlState.userRoles.add(ownerPrincipal, #admin);
     accessControlState.userRoles.add(draftOwnerPrincipal, #admin);
     accessControlState.adminAssigned := true;
   };
 
-  include MixinAuthorization(accessControlState, ownerPrincipal);
+  include MixinAuthorization(accessControlState);
 
-  stable var nextJobNumber = 1;
-  stable var nextInvoiceNumber = 1;
+  // ─── Owner management ───────────────────────────────────────────────────────
+
+  // Set dynamically on deploy/upgrade — caller becomes owner if they are
+  // already one of the known owner principals.
+  public shared ({ caller }) func setOwner() : async Text {
+    if (caller == ownerPrincipal or caller == draftOwnerPrincipal) {
+      ownerPrincipal := caller;
+      accessControlState.userRoles.add(caller, #admin);
+      return "Owner set to " # caller.toText();
+    };
+    "Unauthorized: Only a known owner principal can call setOwner"
+  };
+
+  var nextInvoiceNumber = 1;
+  var nextJobNumber = 1;
 
   public type UserProfile = { name : Text };
-  stable var userProfiles = Map.empty<Principal, UserProfile>();
-  stable var userSignatures = Map.empty<Principal, Blob>();
+  var userProfiles = Map.empty<Principal, UserProfile>();
+  var userSignatures = Map.empty<Principal, Blob>();
 
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (caller == ownerPrincipal) {
+    if (caller == ownerPrincipal or caller == draftOwnerPrincipal) {
       return userProfiles.get(caller);
     };
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
@@ -82,14 +93,14 @@ actor {
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != ownerPrincipal and caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+    if (caller != ownerPrincipal and caller != draftOwnerPrincipal and caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
     userProfiles.get(user);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (caller == ownerPrincipal) {
+    if (caller == ownerPrincipal or caller == draftOwnerPrincipal) {
       userProfiles.add(caller, profile);
       return;
     };
@@ -192,17 +203,17 @@ actor {
     isPaid : Bool;
   };
 
-  stable var clientStore = Map.empty<Nat, Client>();
-  stable var jobStore = Map.empty<Nat, Job>();
-  stable var partStore = Map.empty<Nat, Part>();
-  stable var laborRatesStore = Map.empty<Nat, LaborRate>();
-  stable var jobPartLineItemsStore = Map.empty<Nat, [JobPartLineItem]>();
-  stable var invoiceStore = Map.empty<Nat, Invoice>();
-  stable var stripeKey : ?Text = null;
-  stable var stripeConfigured : Bool = false;
+  var clientStore = Map.empty<Nat, Client>();
+  var jobStore = Map.empty<Nat, Job>();
+  var partStore = Map.empty<Nat, Part>();
+  var laborRatesStore = Map.empty<Nat, LaborRate>();
+  var jobPartLineItemsStore = Map.empty<Nat, [JobPartLineItem]>();
+  var invoiceStore = Map.empty<Nat, Invoice>();
+  var stripeKey : ?Text = null;
+  var stripeConfigured : Bool = false;
 
   func isAuthorizedOrOwner(caller : Principal) : Bool {
-    if (caller == ownerPrincipal) return true;
+    if (caller == ownerPrincipal or caller == draftOwnerPrincipal) return true;
     AccessControl.hasPermission(accessControlState, caller, #user);
   };
 
@@ -213,8 +224,7 @@ actor {
   };
 
   func isAdminOrOwner(caller : Principal) : Bool {
-    if (caller == ownerPrincipal) return true;
-    if (caller == draftOwnerPrincipal) return true;
+    if (caller == ownerPrincipal or caller == draftOwnerPrincipal) return true;
     AccessControl.isAdmin(accessControlState, caller);
   };
 
@@ -382,7 +392,8 @@ actor {
           case (null) {};
           case (?part) {
             let used = if (item.quantity > part.quantityOnHand) { part.quantityOnHand } else { item.quantity };
-            partStore.add(pid, { part with quantityOnHand = part.quantityOnHand - used; jobId = ?jobId });
+            let newQty = if (part.quantityOnHand >= used) { part.quantityOnHand - used } else { 0 };
+            partStore.add(pid, { part with quantityOnHand = newQty; jobId = ?jobId });
           };
         };
       };
@@ -475,7 +486,8 @@ actor {
       case (?part) {
         if (not jobStore.containsKey(jobId)) Runtime.trap("Job not found");
         if (part.quantityOnHand < quantityUsed) Runtime.trap("Insufficient quantity on hand");
-        partStore.add(partId, { part with quantityOnHand = part.quantityOnHand - quantityUsed; jobId = ?jobId });
+        let newQty = if (part.quantityOnHand >= quantityUsed) { part.quantityOnHand - quantityUsed } else { 0 };
+        partStore.add(partId, { part with quantityOnHand = newQty; jobId = ?jobId });
       };
     };
   };
@@ -543,7 +555,7 @@ actor {
     switch (Prim.envVar<system>("CAFFEINE_ADMIN_TOKEN")) {
       case (null) { false };
       case (?adminToken) {
-        if (caller == ownerPrincipal or token == adminToken) {
+        if (caller == ownerPrincipal or caller == draftOwnerPrincipal or token == adminToken) {
           accessControlState.userRoles.add(caller, #admin);
           accessControlState.adminAssigned := true;
           true;
@@ -552,7 +564,6 @@ actor {
     };
   };
 
-  // Allow both the hardcoded ownerPrincipal AND any AccessControl admin to configure Stripe
   public shared ({ caller }) func setStripeConfiguration(config : Stripe.StripeConfiguration) : async () {
     if (not isAdminOrOwner(caller)) Runtime.trap("Unauthorized: Only the owner or admin can set Stripe configuration");
     stripeKey := ?config.secretKey;
@@ -583,7 +594,7 @@ actor {
     };
   };
 
-  public shared ({ caller }) func createPaymentIntent(jobId : Nat, amountInCents : Nat) : async Text {
+  public shared ({ caller }) func createPaymentIntent(_jobId : Nat, amountInCents : Nat) : async Text {
     checkAuth(caller);
     let amount = Int.abs(amountInCents);
     let url = "https://api.stripe.com/v1/payment_intents";

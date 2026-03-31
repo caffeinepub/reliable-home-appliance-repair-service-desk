@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import SignatureCapture from "../components/SignatureCapture";
 import type { JobPartLineItem } from "../hooks/useQueries";
-import { useGetJob } from "../hooks/useQueries";
+import { useGetJob, useGetJobPartLineItems } from "../hooks/useQueries";
 import { useGetClient } from "../hooks/useQueries";
 import {
   useCreateCheckoutSession,
@@ -53,6 +53,7 @@ export default function InvoicePreviewPage() {
   const { data: stripeConfigured } = useIsStripeConfigured();
   const createCheckoutSession = useCreateCheckoutSession();
   const { data: job, isLoading: jobLoading } = useGetJob(jobId);
+  const { data: fetchedPartLineItems } = useGetJobPartLineItems(jobId);
   const { data: client, isLoading: clientLoading } = useGetClient(
     job ? job.clientId : null,
   );
@@ -114,10 +115,7 @@ export default function InvoicePreviewPage() {
     );
   }
 
-  const partLineItems: JobPartLineItem[] =
-    ((job as unknown as Record<string, unknown>)?.partLineItems as
-      | JobPartLineItem[]
-      | undefined) ?? [];
+  const partLineItems: JobPartLineItem[] = fetchedPartLineItems ?? [];
 
   const partCost = partLineItems.reduce(
     (s, i) => s + Number(i.unitPrice) * Number(i.quantity),

@@ -471,7 +471,7 @@ export default function JobDetailPage() {
               <SelectTrigger data-ocid="jobs.client.select">
                 <SelectValue placeholder="Select a client…" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto touch-pan-y">
                 {clients.map((c) => (
                   <SelectItem key={c.id.toString()} value={c.id.toString()}>
                     {c.name}
@@ -694,7 +694,7 @@ export default function JobDetailPage() {
                         <SelectTrigger data-ocid="jobs.parts.select">
                           <SelectValue placeholder="Choose from inventory…" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto touch-pan-y">
                           {inventoryParts.map((p) => (
                             <SelectItem
                               key={p.id.toString()}
